@@ -1,0 +1,233 @@
+# Paigram Configuration Example
+
+app:
+  name: "Paigram User Center"
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug" # debug, release, test
+  cors:
+    enabled: true
+    allow_origins:
+      - "http://localhost:3000"
+      - "http://localhost:5173"
+    allow_methods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "PATCH"
+      - "DELETE"
+      - "HEAD"
+      - "OPTIONS"
+    allow_headers:
+      - "Origin"
+      - "Content-Type"
+      - "Accept"
+      - "Authorization"
+    expose_headers: []
+    allow_credentials: true
+    allow_wildcard: false
+    allow_private_network: false
+    max_age: 43200 # seconds
+
+database:
+  addr: "localhost:3306"
+  username: "root"
+  password: "password"
+  dbname: "paigram"
+  config: "charset=utf8mb4&parseTime=True&loc=Local"
+  migrations_dir: "initialize/migrate/sql"
+  max_idle_conns: 10
+  max_open_conns: 100
+  log_mode: "info"
+  log_zap: true
+  slow_threshold: 200
+  auto_migrate: true
+
+auth:
+  access_token_ttl: 3600         # 1 hour
+  refresh_token_ttl: 2592000     # 30 days (7 days = 604800)
+  session_update_age: 86400      # 24 hours - auto-refresh session after this age
+  session_fresh_age: 300         # 5 minutes - sensitive ops require session created within this time
+  email_verification_ttl: 86400  # 24 hours
+  password_reset_ttl: 3600       # 1 hour - password reset token expiry (default: 3600, matching better-auth)
+  oauth_state_ttl: 600           # 10 minutes
+  service_ticket_ttl: 300        # 5 minutes
+  service_ticket_issuer: "paigram-account-center"
+  service_ticket_signing_key: ""    # required in real deployments; inject via secrets/env, not a checked-in sample value
+  # bot_service_audience_allowlist enumerates the audience values that telegram-service
+  # is permitted to issue service tickets for. account-center does not gate ticket
+  # issuance directly (tickets are signed locally by telegram-service with the
+  # shared key above) but logs this list at startup as the operational record.
+  bot_service_audience_allowlist:
+    - paigram-genshin
+    # 未来新 game-service 加入时追加：
+    # - paigram-starrail
+    # - paigram-endfield
+  captcha:
+    turnstile:
+      enabled: false
+      site_key: ""
+      secret_key: ""
+      verify_url: "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+      expected_hostname: ""
+      require_on_register: true
+      require_on_login: false
+      login_failure_threshold: 3
+      login_failure_window: 900   # seconds
+      request_timeout: 5          # seconds
+  allowed_providers:
+    - google
+    - github
+    - telegram
+  oauth:
+    google:
+      client_id: "your-google-client-id"
+      client_secret: "your-google-client-secret"
+      redirect_url: "http://localhost:8080/api/v1/auth/oauth/google/callback"
+      auth_url: "https://accounts.google.com/o/oauth2/v2/auth"
+      token_url: "https://oauth2.googleapis.com/token"
+      user_info_url: "https://www.googleapis.com/oauth2/v2/userinfo"
+      scopes:
+        - openid
+        - email
+        - profile
+    github:
+      client_id: "your-github-client-id"
+      client_secret: "your-github-client-secret"
+      redirect_url: "http://localhost:8080/api/v1/auth/oauth/github/callback"
+      auth_url: "https://github.com/login/oauth/authorize"
+      token_url: "https://github.com/login/oauth/access_token"
+      user_info_url: "https://api.github.com/user"
+      scopes:
+        - user:email
+    telegram:
+      client_id: "your-telegram-client-id"
+      client_secret: "your-telegram-client-secret"
+      redirect_url: "http://localhost:8080/api/v1/auth/oauth/telegram/callback"
+      auth_url: "https://oauth.telegram.org/auth"
+      token_url: "https://oauth.telegram.org/token"
+      scopes:
+        - openid
+        - profile
+
+redis:
+  enabled: true
+  addr: "localhost:6379"
+  username: ""
+  password: ""
+  db: 0
+  prefix: "paigram:"
+  dial_timeout: 5
+  read_timeout: 3
+  write_timeout: 3
+  pool_size: 10
+  min_idle_conns: 5
+  max_retries: 3
+
+grpc:
+  enabled: true
+  port: 50051
+  max_connection_idle: 300       # seconds
+  max_connection_age: 3600       # seconds
+  max_connection_age_grace: 30   # seconds
+  keepalive_time: 600           # seconds
+  keepalive_timeout: 20         # seconds
+
+email:
+  enabled: true
+  provider: smtp  # Currently only SMTP is supported
+  
+  # SMTP Configuration
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  smtp_username: your-email@gmail.com
+  smtp_password: your-app-password
+  
+  # Sender Information
+  from_email: noreply@example.com
+  from_name: PaiGram
+  
+  # Security
+  use_tls: true  # Use TLS/STARTTLS
+  
+  # Async Queue Settings
+  use_async: true        # Enable async email sending
+  queue_size: 1000       # Maximum queue size (default: 1000)
+  
+  # Timeout Settings
+  timeout: 30  # SMTP connection timeout in seconds (default: 30)
+  
+  # Retry Settings
+  retry_attempts: 3  # Number of retry attempts (default: 3)
+  retry_delay: 5     # Base delay between retries in seconds (default: 5)
+                     # Uses exponential backoff: delay * 2^(attempt-1)
+  
+  # Template Settings
+  template_dir: ""  # Directory for email templates
+                    # If empty or not set: uses embedded templates
+                    # If set: loads templates from specified directory
+                    # Example: "templates/email" or "./config/email-templates"
+
+# How to use external email templates:
+# 1. Export default templates:
+#    go run ./cmd/export-templates/main.go ./templates/email
+#
+# 2. Set email.template_dir above to the output directory
+#
+# 3. Edit the HTML files in that directory
+#
+# 4. Restart service or call ReloadTemplates() in development
+
+# Email Features:
+# - Template Functions: add, sub, mul, div
+# - MIME Support: Proper multipart handling with random boundaries
+# - Attachment Support: Send files with base64 encoding
+# - Priority Queue: Critical > High > Normal > Low
+# - Rate Limiting: 10 emails/second per recipient, burst of 20
+# - Exponential Backoff: Retry with increasing delays (capped at 5 min)
+# - TLS Security: MinVersion TLS 1.2, certificate verification enabled
+# - Prometheus Metrics: emails_sent_total, email_send_duration_seconds, etc.
+# - Template Management: Load from files or use embedded templates with hot reload
+
+# Security Settings
+security:
+  # Bcrypt password hashing cost (default: 12, OWASP recommended minimum)
+  # Higher values = more secure but slower (10=74ms, 12=300ms, 14=1.2s)
+  # Valid range: 10-14 (values outside this range will be clamped)
+  bcrypt_cost: 12
+
+  # AES-256 master key used to encrypt 2FA TOTP secrets at rest.
+  # Accepts either a raw 32-byte ASCII string or a base64-encoded 32-byte key.
+  # SECURITY: do NOT commit a real production key to this file. Prefer the
+  # environment variable PAI_SECURITY_ENCRYPTION_KEY (preferred) or the legacy
+  # ENCRYPTION_KEY (kept for backwards compatibility) in production.
+  # Generate one with: `openssl rand -base64 32`
+  encryption_key: ""
+
+  # Suspicious Login Detection
+  suspicious_login_detection: true      # Enable analyzing logins for suspicious patterns
+  suspicious_login_email_alert: true    # Send email alerts when suspicious logins detected
+  security_settings_url: "http://localhost:8080/security"  # URL to account security page
+  
+  # Detection triggers:
+  # - Login from new device
+  # - Login from new IP address  
+  # - Login from new geographic location
+  # - Rapid logins from different locations (impossible travel)
+  #
+  # Suspicion levels:
+  # - Low: Single new factor (e.g., new device)
+  # - Medium: Two new factors (e.g., new device + new location)
+  # - High: Impossible travel or 3+ new factors
+
+# Sentry Error Reporting
+sentry:
+  enabled: false
+  dsn: ""
+  environment: "development"
+  release: ""  # Optional fallback when injected build version and Go build metadata are unavailable
+  debug: false
+  attach_stacktrace: true
+  sample_rate: 1.0
+  traces_sample_rate: 0.0
+  flush_timeout: 2

@@ -1,0 +1,878 @@
+package user
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
+	"paigram/internal/model"
+	"paigram/internal/response"
+	serviceUser "paigram/internal/service/user"
+	"paigram/internal/testutil"
+)
+
+func setupTestDB(t *testing.T) *gorm.DB {
+	db := testutil.OpenMySQLTestDB(t, "user",
+		&model.User{},
+		&model.UserProfile{},
+		&model.UserCredential{},
+		&model.UserEmail{},
+		&model.UserSession{},
+		&model.UserTwoFactor{},
+		&model.Role{},
+		&model.Permission{},
+		&model.UserRole{},
+		&model.RolePermission{},
+		&model.AuditEvent{},
+	)
+
+	return db
+}
+
+func setupTestHandler(db *gorm.DB) *Handler {
+	serviceGroup := serviceUser.NewServiceGroup(db)
+	return NewHandlerWithDB(&serviceGroup.UserService, db)
+}
+
+func setupListUsersContractTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+
+	statements := []string{
+		`CREATE TABLE users (id integer PRIMARY KEY AUTOINCREMENT, primary_login_type text NOT NULL, status text NOT NULL, primary_role_id integer, last_login_at datetime, created_at datetime NOT NULL, updated_at datetime NOT NULL, deleted_at datetime)`,
+		`CREATE TABLE user_profiles (id integer PRIMARY KEY AUTOINCREMENT, user_id integer NOT NULL, display_name text NOT NULL, avatar_url text, bio text, locale text, created_at datetime, updated_at datetime)`,
+		`CREATE TABLE roles (id integer PRIMARY KEY AUTOINCREMENT, name text NOT NULL, display_name text NOT NULL, description text, is_system numeric NOT NULL DEFAULT 0, created_at datetime, updated_at datetime, deleted_at datetime)`,
+		`CREATE TABLE user_roles (id integer PRIMARY KEY AUTOINCREMENT, user_id integer NOT NULL, role_id integer NOT NULL, granted_by integer NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL)`,
+	}
+	for _, stmt := range statements {
+		require.NoError(t, db.Exec(stmt).Error)
+	}
+
+	return db
+}
+
+func TestManagementSwaggerAnnotationsUseAdminUserNamespace(t *testing.T) {
+	userHandlerSource, err := os.ReadFile("user_handler.go")
+	require.NoError(t, err)
+	userSource := string(userHandlerSource)
+	assert.NotContains(t, userSource, "@Router /api/v1/users ")
+	assert.NotContains(t, userSource, "@Router /api/v1/users/")
+	assert.NotContains(t, userSource, "swagger:route PATCH /api/v1/users/")
+	assert.NotContains(t, userSource, "swagger:route POST /api/v1/users/")
+	assert.NotContains(t, userSource, "swagger:route GET /api/v1/users/")
+
+	loginLogSourceBytes, err := os.ReadFile(filepath.Join("login_logs.go"))
+	require.NoError(t, err)
+	loginLogSource := string(loginLogSourceBytes)
+	assert.NotContains(t, loginLogSource, "@Router /api/v1/users/")
+
+	loginMethodSourceBytes, err := os.ReadFile(filepath.Join("login_method_handler.go"))
+	require.NoError(t, err)
+	loginMethodSource := string(loginMethodSourceBytes)
+	assert.NotContains(t, loginMethodSource, "@Router /api/v1/users/")
+	assert.Contains(t, loginMethodSource, "/api/v1/admin/users/{id}/login-methods")
+}
+
+func TestHandler_CreateUser(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	// Create a test role for role assignment tests
+	role := model.Role{Name: "user", DisplayName: "User", Description: "default user role"}
+	require.NoError(t, db.Create(&role).Error)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	tests := []struct {
+		name       string
+		body       map[string]interface{}
+		wantStatus int
+		wantErr    bool
+	}{
+		{
+			name: "valid user creation",
+			body: map[string]interface{}{
+				"email":              "testuser@example.com",
+				"password":           "TestPass123!",
+				"display_name":       "Test User",
+				"primary_login_type": "email",
+				"avatar_url":         "https://example.com/avatar.jpg",
+				"bio":                "Test bio",
+				"locale":             "en_US",
+			},
+			wantStatus: http.StatusCreated,
+			wantErr:    false,
+		},
+		{
+			name: "valid user with custom locale",
+			body: map[string]interface{}{
+				"email":              "testuser2@example.com",
+				"password":           "TestPass123!",
+				"display_name":       "Test User 2",
+				"primary_login_type": "email",
+				"locale":             "zh_CN",
+			},
+			wantStatus: http.StatusCreated,
+			wantErr:    false,
+		},
+		{
+			name: "reject provider primary login type when create flow cannot provision provider credential",
+			body: map[string]interface{}{
+				"email":              "googleuser@example.com",
+				"password":           "TestPass123!",
+				"display_name":       "Google User",
+				"primary_login_type": "google",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "reject roles on create",
+			body: map[string]interface{}{
+				"email":              "testuser3@example.com",
+				"password":           "TestPass123!",
+				"display_name":       "Test User 3",
+				"primary_login_type": "email",
+				"roles":              []string{"user"},
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "missing email",
+			body: map[string]interface{}{
+				"password":           "TestPass123!",
+				"display_name":       "Test User",
+				"primary_login_type": "email",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "missing password",
+			body: map[string]interface{}{
+				"email":              "testuser4@example.com",
+				"display_name":       "Test User",
+				"primary_login_type": "email",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "missing display_name",
+			body: map[string]interface{}{
+				"email":              "testuser5@example.com",
+				"password":           "TestPass123!",
+				"primary_login_type": "email",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "missing primary_login_type",
+			body: map[string]interface{}{
+				"email":        "testuser6@example.com",
+				"password":     "TestPass123!",
+				"display_name": "Test User",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "invalid email format",
+			body: map[string]interface{}{
+				"email":              "not-an-email",
+				"password":           "TestPass123!",
+				"display_name":       "Test User",
+				"primary_login_type": "email",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "password too short",
+			body: map[string]interface{}{
+				"email":              "testuser7@example.com",
+				"password":           "short",
+				"display_name":       "Test User",
+				"primary_login_type": "email",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "reject legacy oauth primary_login_type",
+			body: map[string]interface{}{
+				"email":              "legacyoauth@example.com",
+				"password":           "TestPass123!",
+				"display_name":       "Legacy OAuth",
+				"primary_login_type": "oauth",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "invalid primary_login_type",
+			body: map[string]interface{}{
+				"email":              "testuser8@example.com",
+				"password":           "TestPass123!",
+				"primary_login_type": "invalid",
+				"display_name":       "Test User",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "invalid avatar_url",
+			body: map[string]interface{}{
+				"email":              "testuser9@example.com",
+				"password":           "TestPass123!",
+				"primary_login_type": "email",
+				"display_name":       "Test User",
+				"avatar_url":         "not-a-url",
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+		{
+			name: "reject nonexistent roles on create",
+			body: map[string]interface{}{
+				"email":              "testuser10@example.com",
+				"password":           "TestPass123!",
+				"display_name":       "Test User",
+				"primary_login_type": "email",
+				"roles":              []string{"nonexistent"},
+			},
+			wantStatus: http.StatusBadRequest,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bodyBytes, err := json.Marshal(tt.body)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPost, "/users", bytes.NewReader(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if !tt.wantErr {
+				var response map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				assert.NotNil(t, response["data"])
+
+				data := response["data"].(map[string]interface{})
+				assert.NotNil(t, data["id"])
+
+				// Verify email is in the response (from emails array)
+				if tt.body["email"] != nil {
+					emails := data["emails"].([]interface{})
+					assert.NotEmpty(t, emails)
+				}
+
+				// Verify locale if provided
+				if tt.body["locale"] != nil {
+					assert.Equal(t, tt.body["locale"], data["locale"])
+				}
+
+				// Verify roles if provided
+				if tt.body["roles"] != nil {
+					roles := data["roles"].([]interface{})
+					assert.Len(t, roles, len(tt.body["roles"].([]string)))
+				}
+			}
+		})
+	}
+}
+
+func TestHandler_CreateUserWritesUnifiedAuditEvent(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := bytes.NewBufferString(`{"email":"audit-create@example.com","password":"TestPass123!","display_name":"Audit Create","primary_login_type":"email"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", body)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Request.Header.Set("X-Request-ID", "req-admin-user-create")
+	c.Set("user_id", uint64(42))
+
+	handler.CreateUser(c)
+
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+
+	var event model.AuditEvent
+	require.NoError(t, db.Where("category = ? AND action = ?", "admin_user", "admin_user_create").Order("id DESC").First(&event).Error)
+	assert.Equal(t, "admin", event.ActorType)
+	assert.Equal(t, int64(42), event.ActorUserID.Int64)
+	assert.Equal(t, "user", event.TargetType)
+	assert.Equal(t, "success", event.Result)
+	assert.Equal(t, "req-admin-user-create", event.RequestID)
+	var metadata map[string]any
+	require.NoError(t, json.Unmarshal([]byte(event.MetadataJSON), &metadata))
+	owner, ok := metadata["owner"].(map[string]any)
+	require.True(t, ok)
+	targetID, err := strconv.ParseUint(event.TargetID, 10, 64)
+	require.NoError(t, err)
+	assert.Equal(t, float64(targetID), owner["user_id"])
+}
+
+func TestHandler_ListUsers(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	// Create test users
+	for i := 1; i <= 25; i++ {
+		user := model.User{
+			PrimaryLoginType: model.LoginTypeEmail,
+			Status:           model.UserStatusActive,
+		}
+		require.NoError(t, db.Create(&user).Error)
+
+		profile := model.UserProfile{
+			UserID:      user.ID,
+			DisplayName: "Test User",
+			Locale:      "en_US",
+		}
+		require.NoError(t, db.Create(&profile).Error)
+
+		email := model.UserEmail{
+			UserID:    user.ID,
+			Email:     fmt.Sprintf("test%d@example.com", i),
+			IsPrimary: true,
+		}
+		require.NoError(t, db.Create(&email).Error)
+
+		role := model.Role{Name: fmt.Sprintf("role-%d", i), DisplayName: fmt.Sprintf("Role %d", i), Description: "test role"}
+		require.NoError(t, db.Create(&role).Error)
+		require.NoError(t, db.Create(&model.UserRole{UserID: user.ID, RoleID: role.ID, GrantedBy: user.ID}).Error)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	tests := []struct {
+		name       string
+		query      string
+		wantStatus int
+		wantCount  int
+		wantPage   int
+		wantSize   int
+	}{
+		{
+			name:       "default pagination",
+			query:      "",
+			wantStatus: http.StatusOK,
+			wantCount:  20,
+			wantPage:   1,
+			wantSize:   20,
+		},
+		{
+			name:       "custom page size",
+			query:      "?page=1&page_size=10",
+			wantStatus: http.StatusOK,
+			wantCount:  10,
+			wantPage:   1,
+			wantSize:   10,
+		},
+		{
+			name:       "second page",
+			query:      "?page=2&page_size=10",
+			wantStatus: http.StatusOK,
+			wantCount:  10,
+			wantPage:   2,
+			wantSize:   10,
+		},
+		{
+			name:       "filter by status",
+			query:      "?status=active",
+			wantStatus: http.StatusOK,
+			wantCount:  20,
+			wantPage:   1,
+			wantSize:   20,
+		},
+		{
+			name:       "invalid pagination is normalized in metadata",
+			query:      "?page=0&page_size=0",
+			wantStatus: http.StatusOK,
+			wantCount:  20,
+			wantPage:   1,
+			wantSize:   20,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/users"+tt.query, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			var resp response.Response
+			err := json.Unmarshal(w.Body.Bytes(), &resp)
+			require.NoError(t, err)
+			data, ok := resp.Data.(map[string]interface{})
+			require.True(t, ok)
+			items, ok := data["items"].([]interface{})
+			require.True(t, ok)
+			pagination, ok := data["pagination"].(map[string]interface{})
+			require.True(t, ok)
+			assert.Equal(t, tt.wantCount, len(items))
+			assert.Equal(t, float64(25), pagination["total"])
+			assert.Equal(t, float64(tt.wantPage), pagination["page"])
+			assert.Equal(t, float64(tt.wantSize), pagination["page_size"])
+			first := items[0].(map[string]interface{})
+			assert.Contains(t, first, "avatar_url")
+			assert.NotContains(t, first, "primary_email")
+			assert.NotEmpty(t, first["roles"])
+		})
+	}
+}
+
+func TestHandler_ListUsersNormalizesPaginationMetadataAndUsesCanonicalEnvelope(t *testing.T) {
+	db := setupListUsersContractTestDB(t)
+	handler := setupTestHandler(db)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	for i := 1; i <= 25; i++ {
+		require.NoError(t, db.Exec(
+			`INSERT INTO users (id, primary_login_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+			i,
+			string(model.LoginTypeEmail),
+			string(model.UserStatusActive),
+			now.Add(time.Duration(i)*time.Minute),
+			now.Add(time.Duration(i)*time.Minute),
+		).Error)
+		require.NoError(t, db.Exec(
+			`INSERT INTO user_profiles (user_id, display_name, avatar_url, locale, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			i,
+			fmt.Sprintf("User %d", i),
+			fmt.Sprintf("https://example.com/avatar-%d.png", i),
+			"en_US",
+			now,
+			now,
+		).Error)
+		require.NoError(t, db.Exec(
+			`INSERT INTO roles (id, name, display_name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			i,
+			fmt.Sprintf("role-%d", i),
+			fmt.Sprintf("Role %d", i),
+			"test role",
+			now,
+			now,
+		).Error)
+		require.NoError(t, db.Exec(
+			`INSERT INTO user_roles (user_id, role_id, granted_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+			i,
+			i,
+			i,
+			now,
+			now,
+		).Error)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/users", handler.ListUsers)
+
+	req := httptest.NewRequest(http.MethodGet, "/users?page=0&page_size=0", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data, ok := resp.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.NotContains(t, data, "data")
+
+	items, ok := data["items"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, items, 20)
+
+	pagination, ok := data["pagination"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, float64(25), pagination["total"])
+	assert.Equal(t, float64(1), pagination["page"])
+	assert.Equal(t, float64(20), pagination["page_size"])
+	assert.Equal(t, float64(2), pagination["total_pages"])
+
+	first, ok := items[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Contains(t, first, "avatar_url")
+	assert.NotContains(t, first, "primary_email")
+	assert.NotEmpty(t, first["roles"])
+}
+
+func TestHandler_UpdateUser(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	// Create test user
+	user := model.User{
+		PrimaryLoginType: model.LoginTypeEmail,
+		Status:           model.UserStatusActive,
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	profile := model.UserProfile{
+		UserID:      user.ID,
+		DisplayName: "Original Name",
+		Locale:      "en_US",
+	}
+	require.NoError(t, db.Create(&profile).Error)
+
+	email := model.UserEmail{
+		UserID:    user.ID,
+		Email:     "test@example.com",
+		IsPrimary: true,
+	}
+	require.NoError(t, db.Create(&email).Error)
+
+	roleUser := model.Role{Name: "user", DisplayName: "User", Description: "basic role"}
+	roleAdmin := model.Role{Name: "admin", DisplayName: "Admin", Description: "admin role"}
+	require.NoError(t, db.Create(&roleUser).Error)
+	require.NoError(t, db.Create(&roleAdmin).Error)
+	require.NoError(t, db.Create(&model.UserRole{UserID: user.ID, RoleID: roleUser.ID, GrantedBy: user.ID}).Error)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	tests := []struct {
+		name       string
+		userID     uint64
+		body       interface{}
+		wantStatus int
+	}{
+		{
+			name:   "update display name",
+			userID: user.ID,
+			body: map[string]interface{}{
+				"display_name": "Updated Name",
+			},
+			wantStatus: http.StatusOK,
+		},
+		// Note: status, locale, and roles updates are not yet refactored to service layer
+		// Use dedicated endpoints: PATCH /users/:id/status for status changes
+		// These fields are ignored by the refactored UpdateUser endpoint
+		{
+			name:   "invalid user id",
+			userID: 99999,
+			body: map[string]interface{}{
+				"display_name": "Name",
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:   "reject roles on update",
+			userID: user.ID,
+			body: map[string]interface{}{
+				"roles": []string{"admin"},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bodyBytes, err := json.Marshal(tt.body)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodPatch, "/users/"+strconv.FormatUint(tt.userID, 10), bytes.NewReader(bodyBytes))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestHandler_GetUserAggregatesRolesPermissionsAndSecurity(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	user := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
+	require.NoError(t, db.Create(&user).Error)
+	require.NoError(t, db.Create(&model.UserProfile{UserID: user.ID, DisplayName: "Aggregate User", Locale: "en_US"}).Error)
+	require.NoError(t, db.Create(&model.UserEmail{UserID: user.ID, Email: "aggregate@example.com", IsPrimary: true}).Error)
+	now := time.Now().UTC()
+	require.NoError(t, db.Create(&model.UserSession{UserID: user.ID, AccessTokenHash: strings.Repeat("a", 64), RefreshTokenHash: strings.Repeat("b", 64), AccessExpiry: now.Add(time.Hour), RefreshExpiry: now.Add(24 * time.Hour)}).Error)
+	require.NoError(t, db.Create(&model.UserTwoFactor{UserID: user.ID, Secret: "secret", EnabledAt: now}).Error)
+
+	role := model.Role{Name: "auditor", DisplayName: "Auditor", Description: "auditor role"}
+	permission := model.Permission{Name: model.PermAuditRead, Resource: model.ResourceAudit, Action: model.ActionRead, Description: "read audit logs"}
+	require.NoError(t, db.Create(&role).Error)
+	require.NoError(t, db.Create(&permission).Error)
+	require.NoError(t, db.Create(&model.RolePermission{RoleID: role.ID, PermissionID: permission.ID}).Error)
+	require.NoError(t, db.Create(&model.UserRole{UserID: user.ID, RoleID: role.ID, GrantedBy: user.ID}).Error)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	req := httptest.NewRequest(http.MethodGet, "/users/"+strconv.FormatUint(user.ID, 10), nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp.Data.(map[string]interface{})
+	assert.Equal(t, []interface{}{"auditor"}, data["roles"])
+	assert.Equal(t, []interface{}{model.PermAuditRead}, data["permissions"])
+	assert.Equal(t, true, data["two_factor_enabled"])
+	assert.Equal(t, float64(1), data["active_session_count"])
+}
+
+func TestHandler_GetUserPermissionsReturnsNotFoundForMissingUser(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	req := httptest.NewRequest(http.MethodGet, "/users/99999/permissions", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "user not found")
+}
+
+func TestHandler_GetUserPermissionsReturnsStablePaginatedPermissionsWithMeta(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	user := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
+	require.NoError(t, db.Create(&user).Error)
+
+	roleA := model.Role{Name: "zeta", DisplayName: "Zeta"}
+	roleB := model.Role{Name: "alpha", DisplayName: "Alpha"}
+	require.NoError(t, db.Create(&roleA).Error)
+	require.NoError(t, db.Create(&roleB).Error)
+	require.NoError(t, db.Create(&model.UserRole{UserID: user.ID, RoleID: roleA.ID, GrantedBy: user.ID}).Error)
+	require.NoError(t, db.Create(&model.UserRole{UserID: user.ID, RoleID: roleB.ID, GrantedBy: user.ID}).Error)
+
+	permissions := []model.Permission{
+		{Name: "users:read", Resource: "users", Action: "read", Description: "read users"},
+		{Name: "audit:read", Resource: "audit", Action: "read", Description: "read audit"},
+		{Name: "audit:write", Resource: "audit", Action: "write", Description: "write audit"},
+	}
+	for i := range permissions {
+		require.NoError(t, db.Create(&permissions[i]).Error)
+	}
+
+	require.NoError(t, db.Create(&model.RolePermission{RoleID: roleA.ID, PermissionID: permissions[0].ID}).Error)
+	require.NoError(t, db.Create(&model.RolePermission{RoleID: roleA.ID, PermissionID: permissions[2].ID}).Error)
+	require.NoError(t, db.Create(&model.RolePermission{RoleID: roleB.ID, PermissionID: permissions[1].ID}).Error)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	var firstRun []map[string]any
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/users/"+strconv.FormatUint(user.ID, 10)+"/permissions?page=1&page_size=2", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp response.Response
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+		data, ok := resp.Data.(map[string]any)
+		require.True(t, ok)
+		items, ok := data["items"].([]any)
+		require.True(t, ok)
+		require.Len(t, items, 2)
+
+		current := make([]map[string]any, 0, len(items))
+		for _, raw := range items {
+			item, ok := raw.(map[string]any)
+			require.True(t, ok)
+			current = append(current, item)
+		}
+
+		if i == 0 {
+			firstRun = current
+		} else {
+			assert.Equal(t, firstRun, current)
+		}
+
+		pagination, ok := data["pagination"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, float64(3), pagination["total"])
+		assert.Equal(t, float64(1), pagination["page"])
+		assert.Equal(t, float64(2), pagination["page_size"])
+		assert.Equal(t, float64(2), pagination["total_pages"])
+
+		meta, ok := data["meta"].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, []any{"alpha", "zeta"}, meta["roles"])
+	}
+
+	require.Len(t, firstRun, 2)
+	assert.Equal(t, "audit", firstRun[0]["resource"])
+	assert.Equal(t, "read", firstRun[0]["action"])
+	assert.Equal(t, "audit:read", firstRun[0]["name"])
+	assert.Equal(t, "audit", firstRun[1]["resource"])
+	assert.Equal(t, "write", firstRun[1]["action"])
+	assert.Equal(t, "audit:write", firstRun[1]["name"])
+}
+
+func TestHandler_PatchPrimaryRoleSupportsClearAndReturnsUnprocessableEntity(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	user := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
+	role := model.Role{Name: "member", DisplayName: "Member"}
+	otherRole := model.Role{Name: "other", DisplayName: "Other"}
+	require.NoError(t, db.Create(&user).Error)
+	require.NoError(t, db.Create(&role).Error)
+	require.NoError(t, db.Create(&otherRole).Error)
+	require.NoError(t, db.Create(&model.UserRole{UserID: user.ID, RoleID: role.ID, GrantedBy: user.ID}).Error)
+	require.NoError(t, db.Model(&model.User{}).Where("id = ?", user.ID).Update("primary_role_id", role.ID).Error)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.PATCH("/users/:id/primary-role", func(c *gin.Context) {
+		c.Set("user_id", user.ID)
+		handler.PatchPrimaryRole(c)
+	})
+
+	t.Run("clear primary role with null", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, "/users/"+strconv.FormatUint(user.ID, 10)+"/primary-role", bytes.NewBufferString(`{"primary_role_id":null}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var updated model.User
+		require.NoError(t, db.First(&updated, user.ID).Error)
+		assert.False(t, updated.PrimaryRoleID.Valid)
+	})
+
+	t.Run("reject role not assigned with 422", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPatch, "/users/"+strconv.FormatUint(user.ID, 10)+"/primary-role", bytes.NewBufferString(`{"primary_role_id":`+strconv.FormatUint(otherRole.ID, 10)+`}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	})
+}
+
+func TestHandler_DeleteUser(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	handler.RegisterRoutes(router.Group("/users"))
+
+	tests := []struct {
+		name       string
+		setupUser  bool
+		hardDelete bool
+		wantStatus int
+	}{
+		{
+			name:       "soft delete user",
+			setupUser:  true,
+			hardDelete: false,
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "hard delete user",
+			setupUser:  true,
+			hardDelete: true,
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name:       "delete non-existent user",
+			setupUser:  false,
+			hardDelete: false,
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var userID uint64 = 99999
+
+			if tt.setupUser {
+				user := model.User{
+					PrimaryLoginType: model.LoginTypeEmail,
+					Status:           model.UserStatusActive,
+				}
+				require.NoError(t, db.Create(&user).Error)
+				userID = user.ID
+
+				profile := model.UserProfile{
+					UserID:      user.ID,
+					DisplayName: "Test User",
+					Locale:      "en_US",
+				}
+				require.NoError(t, db.Create(&profile).Error)
+			}
+
+			url := "/users/" + strconv.FormatUint(userID, 10)
+			if tt.hardDelete {
+				url += "?hard_delete=true"
+			}
+
+			req := httptest.NewRequest(http.MethodDelete, url, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+
+			if tt.setupUser && tt.wantStatus == http.StatusNoContent {
+				var deletedUser model.User
+				if tt.hardDelete {
+					err := db.Unscoped().First(&deletedUser, userID).Error
+					assert.Error(t, err) // Should not exist
+				} else {
+					err := db.Unscoped().First(&deletedUser, userID).Error
+					require.NoError(t, err)
+					assert.NotNil(t, deletedUser.DeletedAt) // Should be soft deleted
+				}
+			}
+		})
+	}
+}

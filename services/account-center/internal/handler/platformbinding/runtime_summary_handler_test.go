@@ -1,0 +1,175 @@
+package platformbinding
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+
+	serviceplatform "paigram/internal/service/platform"
+	serviceplatformbinding "paigram/internal/service/platformbinding"
+)
+
+type runtimeSummaryStub struct {
+	err         error
+	ownerUserID uint64
+	bindingID   uint64
+	called      bool
+}
+
+func (s *runtimeSummaryStub) GetRuntimeSummary(_ context.Context, ownerUserID, bindingID uint64) (*serviceplatformbinding.RuntimeSummary, error) {
+	s.called = true
+	s.ownerUserID = ownerUserID
+	s.bindingID = bindingID
+	return nil, s.err
+}
+
+func (s *runtimeSummaryStub) GetRuntimeSummaryAsAdmin(_ context.Context, bindingID uint64) (*serviceplatformbinding.RuntimeSummary, error) {
+	s.called = true
+	s.bindingID = bindingID
+	return nil, s.err
+}
+
+func TestMeHandlerGetRuntimeSummaryReturnsServiceUnavailableForProxyOutage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	runtimeSvc := &runtimeSummaryStub{err: serviceplatform.ErrPlatformSummaryProxyUnavailable}
+	h := NewMeHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	g := gin.New()
+	g.GET("/api/v1/me/platform-accounts/:bindingId/runtime-summary", func(c *gin.Context) {
+		c.Set("user_id", uint64(7))
+		h.GetRuntimeSummary(c)
+	})
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/me/platform-accounts/101/runtime-summary", nil)
+	g.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	require.True(t, runtimeSvc.called)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	errorBody, ok := body["error"].(map[string]any)
+	require.True(t, ok, "expected error body, got %T", body["error"])
+	require.Equal(t, "PLATFORM_SERVICE_UNAVAILABLE", errorBody["code"])
+	require.Equal(t, "platform service unavailable", errorBody["message"])
+}
+
+func TestAdminHandlerGetRuntimeSummaryReturnsServiceUnavailableForProxyOutage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	runtimeSvc := &runtimeSummaryStub{err: serviceplatform.ErrPlatformSummaryProxyUnavailable}
+	h := NewAdminHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	g := gin.New()
+	g.GET("/api/v1/admin/platform-accounts/:bindingId/runtime-summary", h.GetRuntimeSummary)
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/admin/platform-accounts/101/runtime-summary", nil)
+	g.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	require.True(t, runtimeSvc.called)
+
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	errorBody, ok := body["error"].(map[string]any)
+	require.True(t, ok, "expected error body, got %T", body["error"])
+	require.Equal(t, "PLATFORM_SERVICE_UNAVAILABLE", errorBody["code"])
+	require.Equal(t, "platform service unavailable", errorBody["message"])
+}
+
+func TestMeHandlerGetRuntimeSummaryReturnsConflictForBindingNotReady(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	runtimeSvc := &runtimeSummaryStub{err: serviceplatformbinding.ErrBindingRuntimeSummaryNotReady}
+	h := NewMeHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	g := gin.New()
+	g.GET("/api/v1/me/platform-accounts/:bindingId/runtime-summary", func(c *gin.Context) {
+		c.Set("user_id", uint64(7))
+		h.GetRuntimeSummary(c)
+	})
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/me/platform-accounts/101/runtime-summary", nil)
+	g.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "platform binding runtime summary is not ready", body["message"])
+}
+
+func TestAdminHandlerGetRuntimeSummaryReturnsConflictForBindingNotReady(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	runtimeSvc := &runtimeSummaryStub{err: serviceplatformbinding.ErrBindingRuntimeSummaryNotReady}
+	h := NewAdminHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	g := gin.New()
+	g.GET("/api/v1/admin/platform-accounts/:bindingId/runtime-summary", h.GetRuntimeSummary)
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/admin/platform-accounts/101/runtime-summary", nil)
+	g.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, "platform binding runtime summary is not ready", body["message"])
+}
+
+func TestMeHandlerGetRuntimeSummaryReturnsServiceUnavailableForRealGRPCOutage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	runtimeSvc := &runtimeSummaryStub{err: grpcstatus.Error(codes.Unavailable, "downstream unavailable")}
+	h := NewMeHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	g := gin.New()
+	g.GET("/api/v1/me/platform-accounts/:bindingId/runtime-summary", func(c *gin.Context) {
+		c.Set("user_id", uint64(7))
+		h.GetRuntimeSummary(c)
+	})
+
+	rec := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/me/platform-accounts/101/runtime-summary", nil)
+	g.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	errorBody, ok := body["error"].(map[string]any)
+	require.True(t, ok, "expected error body, got %T", body["error"])
+	require.Equal(t, "PLATFORM_SERVICE_UNAVAILABLE", errorBody["code"])
+	require.Equal(t, "platform service unavailable", errorBody["message"])
+}
+
+func TestRuntimeSummarySwaggerAnnotationsDocumentLiveRoutes(t *testing.T) {
+	meHandlerSource, err := os.ReadFile("me_handler.go")
+	require.NoError(t, err)
+	adminHandlerSource, err := os.ReadFile("admin_handler.go")
+	require.NoError(t, err)
+	swaggerModelsSource, err := os.ReadFile("swagger_models.go")
+	require.NoError(t, err)
+
+	meHandlerText := string(meHandlerSource)
+	adminHandlerText := string(adminHandlerSource)
+	swaggerModelsText := string(swaggerModelsSource)
+
+	require.Contains(t, meHandlerText, "//\t200: platformBindingRuntimeSummaryEnvelope")
+	require.Contains(t, meHandlerText, "//\t400: platformBindingErrorResponse")
+	require.Contains(t, meHandlerText, "//\t401: platformBindingErrorResponse")
+	require.Contains(t, meHandlerText, "//\t404: platformBindingErrorResponse")
+	require.Contains(t, meHandlerText, "//\t409: platformBindingErrorResponse")
+	require.Contains(t, meHandlerText, "//\t500: platformBindingErrorResponse")
+
+	require.Contains(t, adminHandlerText, "//\t200: platformBindingRuntimeSummaryEnvelope")
+	require.Contains(t, adminHandlerText, "//\t400: platformBindingErrorResponse")
+	require.Contains(t, adminHandlerText, "//\t401: platformBindingErrorResponse")
+	require.Contains(t, adminHandlerText, "//\t404: platformBindingErrorResponse")
+	require.Contains(t, adminHandlerText, "//\t409: platformBindingErrorResponse")
+	require.Contains(t, adminHandlerText, "//\t500: platformBindingErrorResponse")
+
+	require.True(t, strings.Contains(swaggerModelsText, "getMyPlatformBindingRuntimeSummary") && strings.Contains(swaggerModelsText, "getPlatformBindingRuntimeSummary"), "runtime-summary operations must be included in shared bindingId swagger parameters")
+}

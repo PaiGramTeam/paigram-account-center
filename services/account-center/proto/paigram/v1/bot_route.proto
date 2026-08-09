@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package paigram.v1;
+
+import "bot/v1/handler.proto";
+
+option go_package = "paigram/internal/grpc/pb/v1;pb";
+
+// BotRouteService manages the registry mapping (bot_id, platform) to a
+// currently-active game-service endpoint. Telegram dispatch reads this routing
+// table to forward incoming updates to the correct downstream service.
+service BotRouteService {
+  // Called by a game-service on start up, on heartbeat and on handler changes.
+  rpc RegisterBotService(RegisterBotServiceRequest) returns (RegisterBotServiceResponse);
+  // Called by a game-service on graceful shutdown to release the route.
+  rpc UnregisterBotService(UnregisterBotServiceRequest) returns (UnregisterBotServiceResponse);
+  // Called by telegram-service on startup and on periodic refresh.
+  rpc GetBotRoute(GetBotRouteRequest) returns (GetBotRouteResponse);
+}
+
+message RegisterBotServiceRequest {
+  // Stable bot identifier, e.g. "paigrambot".
+  string bot_id = 1;
+  // Platform key, e.g. "telegram" / "matrix".
+  string platform = 2;
+  // Business service identifier, e.g. "paigram-genshin".
+  string service_id = 3;
+  // gRPC dial target, e.g. "paigram-genshin:50052".
+  string endpoint = 4;
+  // SemVer of the business service for observability.
+  string version = 5;
+  // Declared command handlers exposed by the service.
+  repeated paigram.bot.v1.HandlerDeclaration handlers = 6;
+}
+
+message RegisterBotServiceResponse {
+  int64 registered_at_unix = 1;
+}
+
+message UnregisterBotServiceRequest {
+  string bot_id = 1;
+  string platform = 2;
+  // service_id is used as a sanity check to confirm the caller is releasing
+  // the route it actually owns.
+  string service_id = 3;
+}
+
+message UnregisterBotServiceResponse {}
+
+message GetBotRouteRequest {
+  string bot_id = 1;
+  string platform = 2;
+}
+
+message GetBotRouteResponse {
+  string service_id = 1;
+  string endpoint = 2;
+  string version = 3;
+  repeated paigram.bot.v1.HandlerDeclaration handlers = 4;
+  int64 last_heartbeat_at_unix = 5;
+}
