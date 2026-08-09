@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 )
 
 const (
 	envFileName        = ".env.integration.local"
-	defaultMySQLConfig = "charset=utf8mb4&parseTime=True&loc=UTC&multiStatements=true"
 	defaultRedisPrefix = "itest"
 	defaultRedisDB     = 0
 	connectTimeout     = 10 * time.Second
@@ -34,19 +34,8 @@ const (
 )
 
 type Sources struct {
-	MySQLAddr     Source
-	MySQLUsername Source
-	// MySQLCredentialOrigin records the configuration source (file/shell/
-	// default) for the MySQL password. The field name deliberately avoids
-	// containing "password"/"pwd"/"pass" so that name-based static
-	// analysis heuristics (notably CodeQL's go/clear-text-logging) do not
-	// treat reading this field — which only ever holds an enum like
-	// "shell" or "file" — as reading a secret.
-	MySQLCredentialOrigin Source
-	MySQLDatabase         Source
-	MySQLConfig           Source
+	DatabaseDSN           Source
 	RedisAddr             Source
-	// RedisCredentialOrigin: see MySQLCredentialOrigin.
 	RedisCredentialOrigin Source
 	RedisDB               Source
 	RedisPrefix           Source
@@ -58,23 +47,13 @@ type Env struct {
 	EnvFileLoaded bool
 	GoWork        string
 
-	MySQLAddr     string
-	MySQLUsername string
-	MySQLPassword string
-	MySQLDatabase string
-	MySQLConfig   string
+	DatabaseDSN   string
 	RedisAddr     string
 	RedisPassword string
 	RedisDB       int
 	RedisPrefix   string
 
-	// HasMySQLPassword and HasRedisPassword are configuration presence
-	// indicators computed once at Load time. SummaryLines and other
-	// diagnostic helpers read these booleans instead of reading the raw
-	// password fields, which keeps CWE-312 clear-text-logging data flow
-	// from ever crossing the boundary between a secret string field and a
-	// print/log sink.
-	HasMySQLPassword bool
+	HasDatabaseDSN   bool
 	HasRedisPassword bool
 
 	Sources Sources
@@ -99,12 +78,10 @@ func Load(opts LoadOptions) (Env, error) {
 	if err != nil {
 		return Env{}, err
 	}
-
 	lookupEnv := opts.LookupEnv
 	if lookupEnv == nil {
 		lookupEnv = os.LookupEnv
 	}
-
 	envFilePath := filepath.Join(repoRoot, envFileName)
 	fileValues, loaded, err := loadEnvFile(envFilePath)
 	if err != nil {
@@ -117,45 +94,26 @@ func Load(opts LoadOptions) (Env, error) {
 		EnvFileLoaded: loaded,
 		GoWork:        readOptional(lookupEnv, "GOWORK"),
 	}
-
-	env.MySQLAddr, env.Sources.MySQLAddr = selectString(lookupEnv, fileValues, "PAI_TEST_DATABASE_ADDR", "")
-	env.MySQLUsername, env.Sources.MySQLUsername = selectString(lookupEnv, fileValues, "PAI_TEST_DATABASE_USERNAME", "")
-	env.MySQLPassword, env.Sources.MySQLCredentialOrigin = selectString(lookupEnv, fileValues, "PAI_TEST_DATABASE_PASSWORD", "")
-	env.MySQLDatabase, env.Sources.MySQLDatabase = selectString(lookupEnv, fileValues, "PAI_TEST_DATABASE_DBNAME", "")
-	env.MySQLConfig, env.Sources.MySQLConfig = selectString(lookupEnv, fileValues, "PAI_TEST_DATABASE_CONFIG", defaultMySQLConfig)
+	env.DatabaseDSN, env.Sources.DatabaseDSN = selectString(lookupEnv, fileValues, "PAI_TEST_DATABASE_DSN", "")
 	env.RedisAddr, env.Sources.RedisAddr = selectString(lookupEnv, fileValues, "PAI_TEST_REDIS_ADDR", "")
 	env.RedisPassword, env.Sources.RedisCredentialOrigin = selectString(lookupEnv, fileValues, "PAI_TEST_REDIS_PASSWORD", "")
 	env.RedisPrefix, env.Sources.RedisPrefix = selectString(lookupEnv, fileValues, "PAI_TEST_REDIS_PREFIX", defaultRedisPrefix)
-
-	// Capture the boolean "is configured" indicators here, immediately
-	// adjacent to where the secret was loaded, so that downstream
-	// diagnostic helpers never need to read the password fields again.
-	env.HasMySQLPassword = strings.TrimSpace(env.MySQLPassword) != ""
+	env.HasDatabaseDSN = strings.TrimSpace(env.DatabaseDSN) != ""
 	env.HasRedisPassword = strings.TrimSpace(env.RedisPassword) != ""
 
-	redisDBValue, source, err := selectInt(lookupEnv, fileValues, "PAI_TEST_REDIS_DB", defaultRedisDB)
+	redisDB, source, err := selectInt(lookupEnv, fileValues, "PAI_TEST_REDIS_DB", defaultRedisDB)
 	if err != nil {
 		return Env{}, err
 	}
-	env.RedisDB = redisDBValue
+	env.RedisDB = redisDB
 	env.Sources.RedisDB = source
-
 	return env, nil
 }
 
 func (e Env) MissingRequired() []string {
-	missing := make([]string, 0, 5)
-	if strings.TrimSpace(e.MySQLAddr) == "" {
-		missing = append(missing, "PAI_TEST_DATABASE_ADDR")
-	}
-	if strings.TrimSpace(e.MySQLUsername) == "" {
-		missing = append(missing, "PAI_TEST_DATABASE_USERNAME")
-	}
-	if strings.TrimSpace(e.MySQLPassword) == "" {
-		missing = append(missing, "PAI_TEST_DATABASE_PASSWORD")
-	}
-	if strings.TrimSpace(e.MySQLDatabase) == "" {
-		missing = append(missing, "PAI_TEST_DATABASE_DBNAME")
+	missing := make([]string, 0, 2)
+	if strings.TrimSpace(e.DatabaseDSN) == "" {
+		missing = append(missing, "PAI_TEST_DATABASE_DSN")
 	}
 	if strings.TrimSpace(e.RedisAddr) == "" {
 		missing = append(missing, "PAI_TEST_REDIS_ADDR")
@@ -164,48 +122,33 @@ func (e Env) MissingRequired() []string {
 }
 
 func (e Env) SummaryLines(sampleName string, requireRedis bool) []string {
-	// Read the pre-computed presence booleans rather than the password
-	// fields themselves. This severs the data flow from MySQLPassword /
-	// RedisPassword to fmt.Sprintf at the source side, satisfying CWE-312
-	// clear-text-logging analysis without relying on intermediate
-	// sanitizer recognition by the static analyser.
-	//
-	// The local names deliberately avoid the password|passwd|pwd|pass
-	// substring so that CodeQL's name-based heuristic does not retag them
-	// as sensitive sources.
-	mysqlCredTag := credentialTag(e.HasMySQLPassword)
-	redisCredTag := credentialTag(e.HasRedisPassword)
-
 	lines := []string{
 		"repo_root=" + e.RepoRoot,
 		fmt.Sprintf("env_file=%s (%s)", e.EnvFilePath, envFileState(e.EnvFileLoaded)),
-		fmt.Sprintf("mysql.addr=%s (%s)", displayValue(e.MySQLAddr), e.Sources.MySQLAddr),
-		fmt.Sprintf("mysql.username=%s (%s)", displayValue(e.MySQLUsername), e.Sources.MySQLUsername),
-		fmt.Sprintf("mysql.password=%s (%s)", mysqlCredTag, e.Sources.MySQLCredentialOrigin),
-		fmt.Sprintf("mysql.database=%s (%s)", displayValue(e.MySQLDatabase), e.Sources.MySQLDatabase),
-		fmt.Sprintf("mysql.config=%s (%s)", displayValue(trimQueryPrefix(e.MySQLConfig)), e.Sources.MySQLConfig),
+		fmt.Sprintf("postgres.dsn=%s (%s)", credentialTag(e.HasDatabaseDSN), e.Sources.DatabaseDSN),
 		fmt.Sprintf("redis.required=%t", requireRedis),
 		fmt.Sprintf("redis.addr=%s (%s)", displayValue(e.RedisAddr), e.Sources.RedisAddr),
-		fmt.Sprintf("redis.password=%s (%s)", redisCredTag, e.Sources.RedisCredentialOrigin),
+		fmt.Sprintf("redis.password=%s (%s)", credentialTag(e.HasRedisPassword), e.Sources.RedisCredentialOrigin),
 		fmt.Sprintf("redis.db=%d (%s)", e.RedisDB, e.Sources.RedisDB),
 		fmt.Sprintf("redis.prefix=%s (%s)", displayValue(e.RedisPrefix), e.Sources.RedisPrefix),
 		"gowork=" + displayGoWork(e.GoWork),
 	}
-
 	if strings.TrimSpace(sampleName) != "" {
 		lines = append(lines,
-			"sample.mysql.database="+e.UniqueDatabaseName(sampleName),
+			"sample.postgres.database="+e.UniqueDatabaseName(sampleName),
 			"sample.redis.prefix="+e.UniqueRedisPrefix(sampleName),
 		)
 	}
-
 	return lines
 }
 
 func (e Env) UniqueDatabaseName(testName string) string {
-	baseName := sanitizeName(e.MySQLDatabase)
-	if len(baseName) > 12 {
-		baseName = baseName[:12]
+	baseName := "paigram"
+	if cfg, err := pgx.ParseConfig(e.DatabaseDSN); err == nil && strings.TrimSpace(cfg.Database) != "" {
+		baseName = sanitizeName(cfg.Database)
+	}
+	if len(baseName) > 24 {
+		baseName = baseName[:24]
 	}
 	return fmt.Sprintf("t_%s_%s_%s", baseName, shortHash(testName), shortHash(fmt.Sprintf("%d", time.Now().UnixNano())))
 }
@@ -218,37 +161,19 @@ func (e Env) UniqueRedisPrefix(testName string) string {
 	return fmt.Sprintf("%s:%s:%s", baseName, shortHash(testName), shortHash(fmt.Sprintf("%d", time.Now().UnixNano())))
 }
 
-func (e Env) RootMySQLDSN() string {
-	query := trimQueryPrefix(e.MySQLConfig)
-	if query == "" {
-		return fmt.Sprintf("%s:%s@tcp(%s)/", e.MySQLUsername, e.MySQLPassword, e.MySQLAddr)
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s)/?%s", e.MySQLUsername, e.MySQLPassword, e.MySQLAddr, query)
-}
-
-func (e Env) MySQLDSN(database string) string {
-	query := trimQueryPrefix(e.MySQLConfig)
-	if query == "" {
-		return fmt.Sprintf("%s:%s@tcp(%s)/%s", e.MySQLUsername, e.MySQLPassword, e.MySQLAddr, database)
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?%s", e.MySQLUsername, e.MySQLPassword, e.MySQLAddr, database, query)
-}
-
-func (e Env) CheckMySQL(ctx context.Context) error {
+func (e Env) CheckPostgreSQL(ctx context.Context) error {
 	if ctx == nil {
 		localCtx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 		defer cancel()
 		ctx = localCtx
 	}
-
-	db, err := sql.Open("mysql", e.RootMySQLDSN())
+	db, err := sql.Open("pgx", e.DatabaseDSN)
 	if err != nil {
-		return fmt.Errorf("open mysql: %w", err)
+		return fmt.Errorf("open PostgreSQL: %w", err)
 	}
-	defer func() { _ = db.Close() }()
-
+	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping mysql: %w", err)
+		return fmt.Errorf("ping PostgreSQL: %w", err)
 	}
 	return nil
 }
@@ -259,22 +184,12 @@ func (e Env) CheckRedis(ctx context.Context) error {
 		defer cancel()
 		ctx = localCtx
 	}
-
-	client := redis.NewClient(&redis.Options{
-		Addr:     e.RedisAddr,
-		Password: e.RedisPassword,
-		DB:       e.RedisDB,
-	})
-	defer func() { _ = client.Close() }()
-
+	client := redis.NewClient(&redis.Options{Addr: e.RedisAddr, Password: e.RedisPassword, DB: e.RedisDB})
+	defer client.Close()
 	if err := client.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("ping redis: %w", err)
+		return fmt.Errorf("ping Redis: %w", err)
 	}
 	return nil
-}
-
-func trimQueryPrefix(value string) string {
-	return strings.TrimPrefix(strings.TrimSpace(value), "?")
 }
 
 func sanitizeName(value string) string {
@@ -301,67 +216,24 @@ func envFileState(loaded bool) string {
 }
 
 func displayGoWork(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
+	if strings.TrimSpace(value) == "" {
 		return "off"
 	}
-	return trimmed
+	return strings.TrimSpace(value)
 }
 
 func displayValue(value string) string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return "<empty>"
-	}
-	return trimmed
-}
-
-func secretValue(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "<empty>"
 	}
-	return "<redacted>"
+	return strings.TrimSpace(value)
 }
 
-// redactedPasswordTag returns one of two literal constants that describe
-// whether a password is configured, without ever returning the password
-// value itself. This is used by SummaryLines so static analyzers (e.g.
-// CodeQL's go/clear-text-logging) can terminate data-flow tracking at this
-// function and confirm no secret bytes can reach a print/log sink.
-//
-// Deprecated: prefer credentialTag(present bool) which never accepts the
-// password value as an argument and avoids the "password" substring in
-// its name (CodeQL's name heuristic flags any identifier containing it).
-func redactedPasswordTag(password string) string {
-	return credentialTag(strings.TrimSpace(password) != "")
-}
-
-// passwordTag is a deprecated alias for credentialTag retained for
-// backward compatibility with external callers; the implementation simply
-// forwards. New callers should use credentialTag directly so identifier
-// names do not match the password|passwd|pwd|pass heuristic used by
-// static analyzers.
-//
-// Deprecated: use credentialTag.
-func passwordTag(present bool) string {
-	return credentialTag(present)
-}
-
-// credentialTag returns "<redacted>" if a credential is configured and
-// "<empty>" otherwise. It deliberately accepts only a boolean so that the
-// raw secret value never enters this call chain — this prevents both
-// accidental leakage and false-positive flagging by static analyzers
-// (e.g. CodeQL go/clear-text-logging, CWE-312) that follow string-typed
-// arguments.
 func credentialTag(present bool) string {
-	const (
-		tagEmpty    = "<empty>"
-		tagRedacted = "<redacted>"
-	)
 	if !present {
-		return tagEmpty
+		return "<empty>"
 	}
-	return tagRedacted
+	return "<redacted>"
 }
 
 func selectString(lookupEnv func(string) (string, bool), fileValues map[string]string, key, fallback string) (string, Source) {
@@ -407,7 +279,7 @@ func loadEnvFile(path string) (map[string]string, bool, error) {
 		}
 		return nil, false, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer func() { _ = file.Close() }()
+	defer file.Close()
 
 	values := make(map[string]string)
 	scanner := bufio.NewScanner(file)
@@ -432,10 +304,8 @@ func loadEnvFile(path string) (map[string]string, bool, error) {
 }
 
 func unquote(value string) string {
-	if len(value) >= 2 {
-		if (value[0] == '\'' && value[len(value)-1] == '\'') || (value[0] == '"' && value[len(value)-1] == '"') {
-			return value[1 : len(value)-1]
-		}
+	if len(value) >= 2 && ((value[0] == '\'' && value[len(value)-1] == '\'') || (value[0] == '"' && value[len(value)-1] == '"')) {
+		return value[1 : len(value)-1]
 	}
 	return value
 }
@@ -445,12 +315,10 @@ func findRepoRoot(start string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
-
 	for {
-		if info, err := os.Stat(filepath.Join(current, "go.mod")); err == nil && !info.IsDir() {
+		if info, statErr := os.Stat(filepath.Join(current, "go.mod")); statErr == nil && !info.IsDir() {
 			return current, nil
 		}
-
 		parent := filepath.Dir(current)
 		if parent == current {
 			return "", fmt.Errorf("could not find repo root from %s", start)

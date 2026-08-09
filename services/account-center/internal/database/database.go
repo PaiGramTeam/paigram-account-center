@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
-	gormmysql "gorm.io/driver/mysql"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -44,8 +44,7 @@ func Connect(cfg config.DatabaseConfig, security config.SecurityConfig) (*gorm.D
 
 		gormCfg := &gorm.Config{Logger: gormLogger}
 
-		dsn := buildDSN(cfg)
-		db, err := gorm.Open(gormmysql.Open(dsn), gormCfg)
+		db, err := gorm.Open(gormpostgres.Open(cfg.DSN), gormCfg)
 		if err != nil {
 			initErr = fmt.Errorf("open database: %w", err)
 			return
@@ -65,13 +64,19 @@ func Connect(cfg config.DatabaseConfig, security config.SecurityConfig) (*gorm.D
 		if cfg.MaxOpenConns > 0 {
 			sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 		}
+		if cfg.ConnMaxLifetime > 0 {
+			sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+		}
+		if cfg.ConnMaxIdleTime > 0 {
+			sqlDB.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+		}
 
 		if cfg.AutoMigrate || cfg.AutoSeed {
 			// Run initialization in a separate connection to avoid connection closing issues
 			if cfg.AutoMigrate {
 				log.Println("Running database migrations...")
 				// Create a separate connection for migrations
-				migrationDB, err := sql.Open("mysql", dsn)
+				migrationDB, err := sql.Open("pgx", cfg.DSN)
 				if err != nil {
 					initErr = fmt.Errorf("open migration database: %w", err)
 					return
@@ -129,36 +134,10 @@ func Reset() {
 }
 
 func validateConfig(cfg config.DatabaseConfig) error {
-	var missing []string
-	if strings.TrimSpace(cfg.Addr) == "" {
-		missing = append(missing, "database.addr")
-	}
-	if strings.TrimSpace(cfg.Username) == "" {
-		missing = append(missing, "database.username")
-	}
-	if strings.TrimSpace(cfg.Password) == "" {
-		missing = append(missing, "database.password")
-	}
-	if strings.TrimSpace(cfg.Dbname) == "" {
-		missing = append(missing, "database.dbname")
-	}
-
-	if len(missing) > 0 {
-		return fmt.Errorf("missing required database config: %s", strings.Join(missing, ", "))
+	if strings.TrimSpace(cfg.DSN) == "" {
+		return fmt.Errorf("missing required database config: database.dsn")
 	}
 	return nil
-}
-
-func buildDSN(cfg config.DatabaseConfig) string {
-	query := strings.TrimSpace(cfg.Config)
-	if query == "" {
-		return fmt.Sprintf("%s:%s@tcp(%s)/%s", cfg.Username, cfg.Password, cfg.Addr, cfg.Dbname)
-	}
-
-	if after, ok := strings.CutPrefix(query, "?"); ok {
-		query = after
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?%s", cfg.Username, cfg.Password, cfg.Addr, cfg.Dbname, query)
 }
 
 func newGormLogger(cfg config.DatabaseConfig) (logger.Interface, error) {

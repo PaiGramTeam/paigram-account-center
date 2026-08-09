@@ -25,7 +25,7 @@ func (f *fakePlatformHealthChecker) Check(_ context.Context, endpoint string) ru
 }
 
 func TestPlatformServiceCreatePlatformService(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_admin_create", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_admin_create", &model.PlatformService{})
 	svc := NewServiceGroup(db).PlatformService
 	checker := &fakePlatformHealthChecker{result: runtimeProbeResult{State: RuntimeStateHealthy, CheckedAt: time.Now().UTC()}}
 	svc.SetHealthChecker(checker)
@@ -49,7 +49,7 @@ func TestPlatformServiceCreatePlatformService(t *testing.T) {
 }
 
 func TestPlatformServiceCreatePlatformServiceTrimsPersistedFields(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_trimmed_create", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_trimmed_create", &model.PlatformService{})
 	svc := NewServiceGroup(db).PlatformService
 	checker := &fakePlatformHealthChecker{result: runtimeProbeResult{State: RuntimeStateHealthy, CheckedAt: time.Now().UTC()}}
 	svc.SetHealthChecker(checker)
@@ -85,7 +85,7 @@ func TestPlatformServiceCreatePlatformServiceTrimsPersistedFields(t *testing.T) 
 }
 
 func TestPlatformServiceCheckPlatformServiceDisabledSkipsProbe(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_admin_check_disabled", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_admin_check_disabled", &model.PlatformService{})
 	row := model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -112,7 +112,7 @@ func TestPlatformServiceCheckPlatformServiceDisabledSkipsProbe(t *testing.T) {
 }
 
 func TestPlatformServiceDeletePlatformServiceRejectsReferencedPlatform(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_admin_delete_referenced", &model.PlatformService{}, &model.User{}, &model.PlatformAccountRef{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_admin_delete_referenced", &model.PlatformService{}, &model.User{}, &model.PlatformAccountRef{})
 	row := model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -142,7 +142,7 @@ func TestPlatformServiceDeletePlatformServiceRejectsReferencedPlatform(t *testin
 }
 
 func TestPlatformServiceUpdatePlatformServiceRejectsIdentityChanges(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_update_identity", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_update_identity", &model.PlatformService{})
 	row := model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",

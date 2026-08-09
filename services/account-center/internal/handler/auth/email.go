@@ -889,7 +889,7 @@ func (h *Handler) VerifyEmail(c *gin.Context) {
 		//   - "verification token expired"  → user must request a new email
 		//
 		// These come from in-handler `fmt.Errorf` calls above (NOT from
-		// gorm/MySQL), so surfacing them does not leak internals. Anything
+		// gorm/PostgreSQL), so surfacing them does not leak internals. Anything
 		// else falls through to the generic message + structured log.
 		// Regression: TestVerifyEmail_InvalidToken_ReturnsBadRequest /
 		// TestVerifyEmail_ExpiredToken_ReturnsBadRequest.

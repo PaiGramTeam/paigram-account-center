@@ -6,6 +6,7 @@ import (
 
 	"paigram/internal/config"
 	"paigram/internal/handler"
+	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 )
 
@@ -16,6 +17,14 @@ type RouterGroup struct {
 
 // Init registers the phase-two /me routes.
 func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
+	registerRoutes(r, rg)
+}
+
+func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	registerRoutes(r, rg)
+}
+
+func registerRoutes[T httpserver.RouteGroup[T]](r *RouterGroup, rg T) {
 	fresh := middleware.RequireFreshSession(r.AuthConfig)
 	me := rg.Group("/me")
 	{

@@ -1,14 +1,14 @@
 // Package safeerror provides a small boundary helper for handler code that
 // needs to surface error information to API clients without leaking internal
-// implementation details (gorm/MySQL error strings, stack traces, etc.).
+// implementation details (GORM/PostgreSQL error strings, stack traces, etc.).
 //
 // The contract is intentionally narrow:
 //
 //   - Service-layer code that wants a SPECIFIC user-facing message returns an
 //     *AppError. Handlers can extract that message safely with UserMessage.
-//   - Every other error (wrapped MySQL/gorm errors, transport failures, etc.)
+//   - Every other error (wrapped PostgreSQL/GORM errors, transport failures, etc.)
 //     collapses to a generic "internal server error" string at the boundary,
-//     so we never echo `Error 1062: Duplicate entry 'x' for key 'users.email'`
+//     so we never echo raw constraint names or database values.
 //     or similar database internals to a client.
 //
 // IMPORTANT: handlers MUST log the original err (with structured fields)

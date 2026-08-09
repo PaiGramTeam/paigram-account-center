@@ -27,12 +27,12 @@ type ServiceCredential struct {
 	ClientID    string         `gorm:"primaryKey;size:96"                       json:"client_id"`
 	DisplayName string         `gorm:"size:255;not null"                        json:"display_name"`
 	SecretHash  string         `gorm:"size:255;not null"                        json:"-"`
-	Audiences   datatypes.JSON `gorm:"type:json;not null"                       json:"audiences"`
-	Scopes      datatypes.JSON `gorm:"type:json;not null"                       json:"scopes"`
+	Audiences   datatypes.JSON `gorm:"type:jsonb;not null"                       json:"audiences"`
+	Scopes      datatypes.JSON `gorm:"type:jsonb;not null"                       json:"scopes"`
 	Status      string         `gorm:"size:32;index;not null;default:'active'"  json:"status"`
 	OwnerUserID uint64         `gorm:"index;not null"                           json:"owner_user_id"`
 	Description string         `gorm:"type:text"                                json:"description"`
-	LastUsedAt  sql.NullTime   `gorm:"type:datetime(3)"                         json:"-"`
+	LastUsedAt  sql.NullTime   `gorm:"type:timestamptz"                         json:"-"`
 	CreatedAt   time.Time      `                                                json:"created_at"`
 	UpdatedAt   time.Time      `                                                json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index"                                    json:"-"`

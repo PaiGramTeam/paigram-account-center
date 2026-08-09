@@ -13,8 +13,8 @@ type Permission struct {
 	Resource    string         `gorm:"size:100;not null;index" json:"resource"`
 	Action      string         `gorm:"size:50;not null;index" json:"action"`
 	Description string         `gorm:"size:512" json:"description"`
-	CreatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
+	CreatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Roles []Role `gorm:"many2many:role_permissions;" json:"-"`
@@ -27,8 +27,8 @@ type Role struct {
 	DisplayName string         `gorm:"size:255;not null" json:"display_name"`
 	Description string         `gorm:"size:512" json:"description"`
 	IsSystem    bool           `gorm:"default:false;not null;index" json:"is_system"`
-	CreatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)" json:"created_at"`
-	UpdatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
+	CreatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 
 	Permissions []Permission `gorm:"many2many:role_permissions;" json:"permissions,omitempty"`
@@ -41,8 +41,8 @@ type UserRole struct {
 	UserID    uint64    `gorm:"index:idx_user_role,priority:1;not null" json:"user_id"`
 	RoleID    uint64    `gorm:"index:idx_user_role,priority:2;not null" json:"role_id"`
 	GrantedBy uint64    `gorm:"index" json:"granted_by"`
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP(3)" json:"created_at"`
-	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP(3)" json:"updated_at"`
+	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 
 	User User `gorm:"foreignKey:UserID" json:"-"`
 	Role Role `gorm:"foreignKey:RoleID" json:"-"`
@@ -52,7 +52,7 @@ type UserRole struct {
 type RolePermission struct {
 	RoleID       uint64    `gorm:"primaryKey;index:idx_role_permission,priority:1;not null"`
 	PermissionID uint64    `gorm:"primaryKey;index:idx_role_permission,priority:2;not null"`
-	CreatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	CreatedAt    time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
 
 	Role       Role       `gorm:"foreignKey:RoleID"`
 	Permission Permission `gorm:"foreignKey:PermissionID"`

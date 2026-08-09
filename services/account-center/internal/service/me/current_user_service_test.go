@@ -21,7 +21,7 @@ import (
 
 func setupMeServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testutil.OpenMySQLTestDB(t, "me_service",
+	return testutil.OpenPostgreSQLTestDB(t, "me_service",
 		&model.User{},
 		&model.UserProfile{},
 		&model.UserCredential{},
@@ -250,7 +250,7 @@ func sha256Hex(value string) string {
 }
 
 func TestCurrentUserServiceGetDashboardSummaryAggregatesBindingsProfilesAndConsumers(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "me_dashboard_summary",
+	db := testutil.OpenPostgreSQLTestDB(t, "me_dashboard_summary",
 		&model.User{},
 		&model.PlatformAccountBinding{},
 		&model.PlatformAccountProfile{},

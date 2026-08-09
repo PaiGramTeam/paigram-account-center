@@ -29,10 +29,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := env.CheckMySQL(ctx); err != nil {
-		fail("mysql connectivity", err)
+	if err := env.CheckPostgreSQL(ctx); err != nil {
+		fail("PostgreSQL connectivity", err)
 	}
-	fmt.Println("mysql.check=ok")
+	fmt.Println("postgres.check=ok")
 
 	if err := env.CheckRedis(ctx); err != nil {
 		fail("redis connectivity", err)

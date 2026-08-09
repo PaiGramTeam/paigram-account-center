@@ -12,8 +12,8 @@ type PlatformService struct {
 	DiscoveryType        string `gorm:"size:32;not null"`
 	Endpoint             string `gorm:"size:255;not null"`
 	Enabled              bool   `gorm:"not null;default:true"`
-	SupportedActionsJSON string `gorm:"type:json;not null"`
-	CredentialSchemaJSON string `gorm:"type:json;not null"`
+	SupportedActionsJSON string `gorm:"type:jsonb;not null"`
+	CredentialSchemaJSON string `gorm:"type:jsonb;not null"`
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }

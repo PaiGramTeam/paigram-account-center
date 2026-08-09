@@ -37,12 +37,12 @@ func newTestDB(t *testing.T) *gorm.DB {
 	// We do NOT call AutoMigrate on model.BotIdentity / model.AuditLog
 	// because GORM follows the BotIdentity struct's `User User` and
 	// `Bot Bot` association fields and tries to also migrate model.User
-	// and model.Bot. Both carry MySQL-only column defaults
-	// (CURRENT_TIMESTAMP(3)) that SQLite rejects. Instead we issue raw
+	// and model.Bot. Their schema includes database-specific types and
+	// defaults, so this focused SQLite harness uses raw
 	// CREATE TABLE statements that mirror the production schema
 	// (initialize/migrate/sql/000001_init_schema.up.sql) using
-	// SQLite-portable types. Production MySQL schema is verified by the
-	// integration tests (plan A6) — this harness only validates the
+	// SQLite-portable types. Production PostgreSQL schema is verified by the
+	// integration tests; this harness only validates the
 	// service's query/transaction logic.
 	dsn := fmt.Sprintf("file:%s-%d?mode=memory&cache=shared", t.Name(), dbCounter.Add(1))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
@@ -51,10 +51,10 @@ func newTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 
-	// bot_identities — UNIQUE indexes match the production InnoDB schema
-	// in initialize/migrate/sql/000001_init_schema.up.sql:335-336. Both
+	// bot_identities has the same two whole-table UNIQUE constraints as the
+	// production schema. Both
 	// production UNIQUE keys cover ALL rows (no `WHERE deleted_at IS NULL`
-	// partial-index filter) because InnoDB has no partial-index syntax.
+	// partial-index filter).
 	// We mirror that so the test harness reproduces the soft-delete
 	// collision behavior exercised by the revive path in UpsertLink.
 	//
@@ -303,7 +303,7 @@ func TestUpsertLink_AfterUnlink_RevivesIdempotently(t *testing.T) {
 // idempotent-refresh branch instead. The test still has value as an
 // end-to-end "N concurrent calls with same triple all succeed without
 // error, exactly 1 row, exactly 1 audit" smoke. The race-loss branch
-// itself is exercised by production MySQL where InnoDB row-locking
+// itself is exercised by production PostgreSQL where row-level locking
 // permits true parallel INSERT attempts.
 func TestUpsertLink_ConcurrentSameTriple_IdempotentSuccess(t *testing.T) {
 	db := newTestDB(t)

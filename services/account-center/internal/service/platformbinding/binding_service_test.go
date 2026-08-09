@@ -20,7 +20,7 @@ import (
 func setupPlatformBindingTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db := testutil.OpenMySQLTestDB(t, "platformbinding")
+	db := testutil.OpenPostgreSQLTestDB(t, "platformbinding")
 	require.NoError(t, db.Exec(readPlatformBindingMigration(t, "000001_init_schema.up.sql")).Error)
 	return db
 }

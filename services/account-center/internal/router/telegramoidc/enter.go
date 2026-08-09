@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"paigram/internal/handler"
+	"paigram/internal/httpserver"
 )
 
 // RouterGroup wires the Telegram OIDC handler onto a gin router subtree.
@@ -27,6 +28,14 @@ type RouterGroup struct{}
 // endpoints — wrapping them in AuthMiddleware would create a chicken-and-egg
 // deadlock (no session cookie exists yet when the browser first hits /start).
 func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
+	registerPublic(r, rg)
+}
+
+func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
+	registerPublic(r, rg)
+}
+
+func registerPublic[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	h := handler.ApiGroupApp.TelegramOIDCApiGroup.OIDC
 	auth := rg.Group("/auth/telegram")
 	{

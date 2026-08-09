@@ -1,373 +1,332 @@
--- 1.0 release initial schema.
---
--- This migration consolidates all pre-1.0 incremental migrations into a single
--- initial schema definition. It is intentionally the only migration file in the
--- repository. Future schema changes must be added as new numbered migrations on
--- top of this file.
+-- PostgreSQL 1.0 release schema.
 
--- -----------------------------------------------------------------------------
--- Identity & users
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS users (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
     primary_login_type VARCHAR(32) NOT NULL DEFAULT 'email',
     status VARCHAR(32) NOT NULL DEFAULT 'pending',
-    primary_role_id BIGINT UNSIGNED NULL,
-    last_login_at DATETIME(3) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    KEY idx_users_status (status),
-    KEY idx_users_primary_role_id (primary_role_id),
-    KEY idx_users_primary_role_assignment (id, primary_role_id),
-    KEY idx_users_last_login_at (last_login_at),
-    KEY idx_users_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    primary_role_id BIGINT,
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ
+);
+CREATE INDEX idx_users_status ON users (status);
+CREATE INDEX idx_users_primary_role_id ON users (primary_role_id);
+CREATE UNIQUE INDEX idx_users_primary_role_assignment ON users (id, primary_role_id);
+CREATE INDEX idx_users_last_login_at ON users (last_login_at);
+CREATE INDEX idx_users_deleted_at ON users (deleted_at);
 
-CREATE TABLE IF NOT EXISTS user_profiles (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+CREATE TABLE user_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
     display_name VARCHAR(255) NOT NULL,
-    avatar_url VARCHAR(512) NULL,
-    bio TEXT NULL,
+    avatar_url VARCHAR(512),
+    bio TEXT,
     locale VARCHAR(10) NOT NULL DEFAULT 'en_US',
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
 
-CREATE TABLE IF NOT EXISTS user_credentials (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE user_credentials (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     provider VARCHAR(64) NOT NULL,
     provider_account_id VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NULL,
-    access_token TEXT NULL COMMENT 'AES-256-GCM encrypted OAuth access token',
-    refresh_token TEXT NULL COMMENT 'AES-256-GCM encrypted OAuth refresh token',
-    token_expiry DATETIME(3) NULL,
-    scopes VARCHAR(512) NULL,
-    last_sync_at DATETIME(3) NULL,
-    metadata TEXT NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uniq_provider_account (provider, provider_account_id),
-    UNIQUE KEY uniq_user_provider (user_id, provider),
-    KEY idx_user_credentials_provider_user (provider, user_id),
+    password_hash VARCHAR(255),
+    access_token TEXT,
+    refresh_token TEXT,
+    token_expiry TIMESTAMPTZ,
+    scopes VARCHAR(512),
+    last_sync_at TIMESTAMPTZ,
+    metadata TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uniq_provider_account UNIQUE (provider, provider_account_id),
+    CONSTRAINT uniq_user_provider UNIQUE (user_id, provider),
     CONSTRAINT fk_user_credentials_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
+CREATE INDEX idx_user_credentials_provider_user ON user_credentials (provider, user_id);
 
-CREATE TABLE IF NOT EXISTS user_emails (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE user_emails (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     email VARCHAR(255) NOT NULL,
-    is_primary TINYINT(1) NOT NULL DEFAULT 0,
-    verified_at DATETIME(3) NULL,
-    verification_token VARCHAR(255) NULL,
-    verification_expiry DATETIME(3) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uniq_email (email),
-    KEY idx_user_primary (user_id, is_primary),
-    KEY idx_verification_token (verification_token),
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    verified_at TIMESTAMPTZ,
+    verification_token VARCHAR(255),
+    verification_expiry TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uniq_email UNIQUE (email),
     CONSTRAINT fk_user_emails_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
+CREATE INDEX idx_user_primary ON user_emails (user_id, is_primary);
+CREATE INDEX idx_verification_token ON user_emails (verification_token);
 
-CREATE TABLE IF NOT EXISTS user_oauth_states (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE user_oauth_states (
+    id BIGSERIAL PRIMARY KEY,
     provider VARCHAR(64) NOT NULL,
     state VARCHAR(255) NOT NULL,
     purpose VARCHAR(64) NOT NULL DEFAULT 'login',
-    user_id BIGINT UNSIGNED NULL,
-    redirect_to VARCHAR(512) NULL,
-    nonce VARCHAR(255) NULL,
-    code_verifier VARCHAR(255) NULL COMMENT 'PKCE code verifier for secure authorization code exchange',
+    user_id BIGINT,
+    redirect_to VARCHAR(512),
+    nonce VARCHAR(255),
+    code_verifier VARCHAR(255),
     client_ip VARCHAR(64) NOT NULL DEFAULT '',
     user_agent VARCHAR(255) NOT NULL DEFAULT '',
-    expires_at DATETIME(3) NOT NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uniq_state (state),
-    KEY idx_provider_expires (provider, expires_at),
-    KEY idx_oauth_state_code_verifier (code_verifier),
-    KEY idx_user_oauth_states_purpose (purpose),
-    KEY idx_user_oauth_states_user_id (user_id),
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uniq_state UNIQUE (state),
     CONSTRAINT fk_user_oauth_states_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
+CREATE INDEX idx_provider_expires ON user_oauth_states (provider, expires_at);
+CREATE INDEX idx_oauth_state_code_verifier ON user_oauth_states (code_verifier);
+CREATE INDEX idx_user_oauth_states_purpose ON user_oauth_states (purpose);
+CREATE INDEX idx_user_oauth_states_user_id ON user_oauth_states (user_id);
 
-CREATE TABLE IF NOT EXISTS user_sessions (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE user_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     access_token_hash VARCHAR(64) NOT NULL,
     refresh_token_hash VARCHAR(64) NOT NULL,
-    access_expiry DATETIME(3) NOT NULL,
-    refresh_expiry DATETIME(3) NOT NULL,
-    user_agent VARCHAR(512) NULL,
-    client_ip VARCHAR(128) NULL,
-    revoked_at DATETIME(3) NULL,
-    revoked_reason VARCHAR(255) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uniq_access_token_hash (access_token_hash),
-    UNIQUE KEY uniq_refresh_token_hash (refresh_token_hash),
-    KEY idx_user_sessions_user (user_id),
-    KEY idx_refresh_expiry (refresh_expiry),
-    KEY idx_access_expiry (access_expiry),
+    access_expiry TIMESTAMPTZ NOT NULL,
+    refresh_expiry TIMESTAMPTZ NOT NULL,
+    user_agent VARCHAR(512),
+    client_ip VARCHAR(128),
+    revoked_at TIMESTAMPTZ,
+    revoked_reason VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uniq_access_token_hash UNIQUE (access_token_hash),
+    CONSTRAINT uniq_refresh_token_hash UNIQUE (refresh_token_hash),
     CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+);
+CREATE INDEX idx_user_sessions_user ON user_sessions (user_id);
+CREATE INDEX idx_refresh_expiry ON user_sessions (refresh_expiry);
+CREATE INDEX idx_access_expiry ON user_sessions (access_expiry);
 
-CREATE TABLE IF NOT EXISTS login_audits (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NULL,
+CREATE TABLE login_audits (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT,
     provider VARCHAR(64) NOT NULL,
-    success TINYINT(1) NOT NULL,
-    client_ip VARCHAR(128) NULL,
-    user_agent VARCHAR(512) NULL,
-    message VARCHAR(512) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    KEY idx_login_audits_user (user_id),
-    KEY idx_login_audits_provider (provider)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    success BOOLEAN NOT NULL,
+    client_ip VARCHAR(128),
+    user_agent VARCHAR(512),
+    message VARCHAR(512),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_login_audits_user ON login_audits (user_id);
+CREATE INDEX idx_login_audits_provider ON login_audits (provider);
 
-CREATE TABLE IF NOT EXISTS user_two_factors (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    secret VARCHAR(255) NOT NULL COMMENT 'Encrypted TOTP secret',
-    backup_codes TEXT COMMENT 'JSON array of encrypted backup codes',
-    enabled_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    last_used_at DATETIME(3),
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uk_user_id (user_id),
-    KEY idx_two_factor_enabled_at (enabled_at),
-    CONSTRAINT fk_user_two_factor_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE user_two_factors (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    secret VARCHAR(255) NOT NULL,
+    backup_codes TEXT,
+    enabled_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_user_id UNIQUE (user_id),
+    CONSTRAINT fk_user_two_factor_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_two_factor_enabled_at ON user_two_factors (enabled_at);
 
-CREATE TABLE IF NOT EXISTS user_devices (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE user_devices (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     device_id VARCHAR(255) NOT NULL,
     device_name VARCHAR(255),
-    device_type VARCHAR(64) COMMENT 'mobile, desktop, tablet, etc.',
+    device_type VARCHAR(64),
     os VARCHAR(64),
     browser VARCHAR(64),
     ip VARCHAR(128),
-    location VARCHAR(255) COMMENT 'City, Country',
-    last_active_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    trust_expiry DATETIME(3) COMMENT 'For trusted device feature',
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uk_device_id (device_id),
-    KEY idx_user_devices (user_id),
-    KEY idx_last_active (last_active_at),
-    CONSTRAINT fk_user_device_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    location VARCHAR(255),
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    trust_expiry TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_device_id UNIQUE (device_id),
+    CONSTRAINT fk_user_device_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_user_devices ON user_devices (user_id);
+CREATE INDEX idx_last_active ON user_devices (last_active_at);
 
-CREATE TABLE IF NOT EXISTS login_logs (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE login_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     login_type VARCHAR(32) NOT NULL,
     ip VARCHAR(128),
     user_agent VARCHAR(512),
     device VARCHAR(255),
     location VARCHAR(255),
-    status VARCHAR(32) NOT NULL COMMENT 'success, failed',
+    status VARCHAR(32) NOT NULL,
     failure_reason VARCHAR(255),
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    KEY idx_user_login_logs (user_id, created_at),
-    KEY idx_login_type (login_type),
-    KEY idx_login_logs_status (status),
-    KEY idx_login_logs_created_at (created_at),
-    CONSTRAINT fk_login_log_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_login_log_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_user_login_logs ON login_logs (user_id, created_at);
+CREATE INDEX idx_login_type ON login_logs (login_type);
+CREATE INDEX idx_login_logs_status ON login_logs (status);
+CREATE INDEX idx_login_logs_created_at ON login_logs (created_at);
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     action VARCHAR(128) NOT NULL,
     resource VARCHAR(128),
-    resource_id BIGINT UNSIGNED,
+    resource_id BIGINT,
     old_value TEXT,
     new_value TEXT,
     ip VARCHAR(128),
     user_agent VARCHAR(512),
-    details TEXT COMMENT 'JSON details',
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    KEY idx_user_audit_logs (user_id, created_at),
-    KEY idx_audit_logs_action (action),
-    KEY idx_audit_logs_resource (resource_id),
-    KEY idx_audit_logs_created_at (created_at),
-    CONSTRAINT fk_audit_log_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    details TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_audit_log_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_user_audit_logs ON audit_logs (user_id, created_at);
+CREATE INDEX idx_audit_logs_action ON audit_logs (action);
+CREATE INDEX idx_audit_logs_resource ON audit_logs (resource_id);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs (created_at);
 
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE password_reset_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     token VARCHAR(255) NOT NULL,
-    expires_at DATETIME(3) NOT NULL,
-    used_at DATETIME(3),
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    UNIQUE KEY uk_token (token),
-    KEY idx_user_password_reset (user_id),
-    KEY idx_password_reset_expires_at (expires_at),
-    CONSTRAINT fk_password_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_token UNIQUE (token),
+    CONSTRAINT fk_password_reset_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+CREATE INDEX idx_user_password_reset ON password_reset_tokens (user_id);
+CREATE INDEX idx_password_reset_expires_at ON password_reset_tokens (expires_at);
 
--- -----------------------------------------------------------------------------
--- Authority (roles, permissions, casbin)
--- -----------------------------------------------------------------------------
+CREATE TABLE permissions (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    resource VARCHAR(100) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    description VARCHAR(512),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ
+);
+CREATE INDEX idx_permissions_resource ON permissions (resource);
+CREATE INDEX idx_permissions_action ON permissions (action);
+CREATE INDEX idx_permissions_deleted_at ON permissions (deleted_at);
 
-CREATE TABLE IF NOT EXISTS permissions (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE COMMENT 'Unique permission identifier (e.g., user:create)',
-    resource VARCHAR(100) NOT NULL COMMENT 'Resource type (e.g., user, role, bot)',
-    action VARCHAR(50) NOT NULL COMMENT 'Action type (e.g., create, read, update, delete)',
-    description VARCHAR(512) COMMENT 'Human-readable description',
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    KEY idx_permissions_resource (resource),
-    KEY idx_permissions_action (action),
-    KEY idx_permissions_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS roles (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE COMMENT 'Unique role identifier (e.g., admin, moderator)',
-    display_name VARCHAR(255) NOT NULL COMMENT 'Human-readable role name',
-    description VARCHAR(512) COMMENT 'Role description',
-    is_system BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'System roles cannot be deleted',
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    KEY idx_roles_is_system (is_system),
-    KEY idx_roles_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS role_permissions (
-    role_id BIGINT UNSIGNED NOT NULL,
-    permission_id BIGINT UNSIGNED NOT NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (role_id, permission_id),
-    KEY idx_role_permission (role_id, permission_id),
-    CONSTRAINT fk_role_permissions_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS user_roles (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    role_id BIGINT UNSIGNED NOT NULL,
-    granted_by BIGINT UNSIGNED COMMENT 'User ID who granted this role',
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    UNIQUE KEY idx_user_role (user_id, role_id),
-    KEY idx_user_roles_user_id (user_id),
-    KEY idx_user_roles_role_id (role_id),
-    KEY idx_user_roles_granted_by (granted_by),
-    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- users.primary_role_id closes the cycle with user_roles. We must add the FK
--- after both tables exist.
-ALTER TABLE users
-    ADD CONSTRAINT fk_users_primary_role_assignment
-        FOREIGN KEY (id, primary_role_id) REFERENCES user_roles (user_id, role_id)
-        ON DELETE RESTRICT ON UPDATE CASCADE;
-
-CREATE TABLE IF NOT EXISTS casbin_rule (
-    id bigint unsigned NOT NULL AUTO_INCREMENT,
-    ptype varchar(100) DEFAULT NULL,
-    v0 varchar(100) DEFAULT NULL,
-    v1 varchar(100) DEFAULT NULL,
-    v2 varchar(100) DEFAULT NULL,
-    v3 varchar(100) DEFAULT NULL,
-    v4 varchar(100) DEFAULT NULL,
-    v5 varchar(100) DEFAULT NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY idx_casbin_rule (ptype, v0, v1, v2, v3, v4, v5)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Casbin policy rules';
-
--- -----------------------------------------------------------------------------
--- Bots, bot identities, OAuth service credentials
---
--- Path D collapses the f27c395 quartet (machine_identities,
--- machine_identity_secrets, machine_tokens, signing_keys) and the legacy
--- BotAuthService tables (bot_tokens) into a single service_credentials row
--- per OAuth 2.0 client_credentials principal. See
--- docs/superpowers/specs/2026-06-05-auth-amendment-path-d.md §2.1 / §2.2.
---
--- `bots` stays as a thin identity table because bot_identities still FK-
--- references it; Path D §10 Q5 made this an explicit decision so that
--- future telegram-service and genshin-service may both hold credentials
--- but represent the same logical bot.
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS bots (
-    id VARCHAR(64) NOT NULL PRIMARY KEY,
+CREATE TABLE roles (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
     display_name VARCHAR(255) NOT NULL,
-    description TEXT NULL,
+    description VARCHAR(512),
+    is_system BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ
+);
+CREATE INDEX idx_roles_is_system ON roles (is_system);
+CREATE INDEX idx_roles_deleted_at ON roles (deleted_at);
+
+CREATE TABLE role_permissions (
+    role_id BIGINT NOT NULL,
+    permission_id BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (role_id, permission_id),
+    CONSTRAINT fk_role_permissions_role FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX idx_role_permission ON role_permissions (role_id, permission_id);
+
+CREATE TABLE user_roles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    granted_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT idx_user_role UNIQUE (user_id, role_id),
+    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX idx_user_roles_user_id ON user_roles (user_id);
+CREATE INDEX idx_user_roles_role_id ON user_roles (role_id);
+CREATE INDEX idx_user_roles_granted_by ON user_roles (granted_by);
+
+ALTER TABLE users ADD CONSTRAINT fk_users_primary_role_assignment
+    FOREIGN KEY (id, primary_role_id) REFERENCES user_roles (user_id, role_id)
+    ON DELETE RESTRICT ON UPDATE CASCADE;
+
+CREATE TABLE casbin_rule (
+    id BIGSERIAL PRIMARY KEY,
+    ptype VARCHAR(100),
+    v0 VARCHAR(100),
+    v1 VARCHAR(100),
+    v2 VARCHAR(100),
+    v3 VARCHAR(100),
+    v4 VARCHAR(100),
+    v5 VARCHAR(100),
+    CONSTRAINT idx_casbin_rule UNIQUE NULLS NOT DISTINCT (ptype, v0, v1, v2, v3, v4, v5)
+);
+
+CREATE TABLE bots (
+    id VARCHAR(64) PRIMARY KEY,
+    display_name VARCHAR(255) NOT NULL,
+    description TEXT,
     type VARCHAR(32) NOT NULL DEFAULT 'OTHER',
     status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-    owner_user_id BIGINT UNSIGNED NOT NULL,
+    owner_user_id BIGINT NOT NULL,
     allow_legacy_binding_write BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    KEY idx_bots_owner (owner_user_id),
-    KEY idx_bots_status (status),
-    KEY idx_bots_deleted_at (deleted_at),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
     CONSTRAINT fk_bots_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Thin bot identity. OAuth credentials live in service_credentials.';
+);
+CREATE INDEX idx_bots_owner ON bots (owner_user_id);
+CREATE INDEX idx_bots_status ON bots (status);
+CREATE INDEX idx_bots_deleted_at ON bots (deleted_at);
 
-CREATE TABLE IF NOT EXISTS bot_identities (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE bot_identities (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     bot_id VARCHAR(64) NOT NULL,
     external_user_id VARCHAR(191) NOT NULL,
-    external_username VARCHAR(255) NULL,
-    linked_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_bot_identities_bot_external (bot_id, external_user_id),
-    UNIQUE KEY uk_bot_identities_user_bot (user_id, bot_id),
-    KEY idx_bot_identities_user_id (user_id),
-    KEY idx_bot_identities_deleted_at (deleted_at),
+    external_username VARCHAR(255),
+    linked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT uk_bot_identities_bot_external UNIQUE (bot_id, external_user_id),
+    CONSTRAINT uk_bot_identities_user_bot UNIQUE (user_id, bot_id),
     CONSTRAINT fk_bot_identities_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_bot_identities_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Bot external user identity mapping';
+);
+CREATE INDEX idx_bot_identities_user_id ON bot_identities (user_id);
+CREATE INDEX idx_bot_identities_deleted_at ON bot_identities (deleted_at);
 
-CREATE TABLE IF NOT EXISTS service_credentials (
-    client_id     VARCHAR(96)     NOT NULL,
-    display_name  VARCHAR(255)    NOT NULL,
-    secret_hash   VARCHAR(255)    NOT NULL,
-    audiences     JSON            NOT NULL,
-    scopes        JSON            NOT NULL,
-    status        VARCHAR(32)     NOT NULL DEFAULT 'active',
-    owner_user_id BIGINT UNSIGNED NOT NULL,
-    description   TEXT            NULL,
-    last_used_at  DATETIME(3)     NULL,
-    created_at    DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at    DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at    DATETIME(3)     NULL,
-    PRIMARY KEY (client_id),
-    KEY idx_service_credentials_status (status),
-    KEY idx_service_credentials_owner (owner_user_id),
-    KEY idx_service_credentials_deleted_at (deleted_at),
-    CONSTRAINT fk_service_credentials_owner
-        FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='OAuth 2.0 client_credentials registry (RFC 6749 §4.4)';
+CREATE TABLE service_credentials (
+    client_id VARCHAR(96) PRIMARY KEY,
+    display_name VARCHAR(255) NOT NULL,
+    secret_hash VARCHAR(255) NOT NULL,
+    audiences JSONB NOT NULL,
+    scopes JSONB NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    owner_user_id BIGINT NOT NULL,
+    description TEXT,
+    last_used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT fk_service_credentials_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE INDEX idx_service_credentials_status ON service_credentials (status);
+CREATE INDEX idx_service_credentials_owner ON service_credentials (owner_user_id);
+CREATE INDEX idx_service_credentials_deleted_at ON service_credentials (deleted_at);
 
--- -----------------------------------------------------------------------------
--- Platform services & legacy account refs
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS platform_services (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+CREATE TABLE platform_services (
+    id BIGSERIAL PRIMARY KEY,
     platform_key VARCHAR(64) NOT NULL,
     display_name VARCHAR(128) NOT NULL,
     service_key VARCHAR(128) NOT NULL,
@@ -375,203 +334,192 @@ CREATE TABLE IF NOT EXISTS platform_services (
     discovery_type VARCHAR(32) NOT NULL,
     endpoint VARCHAR(255) NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    supported_actions_json JSON NOT NULL,
-    credential_schema_json JSON NOT NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id),
-    UNIQUE KEY uniq_platform_services_platform_key (platform_key),
-    UNIQUE KEY uniq_platform_services_service_key (service_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Platform service registry';
+    supported_actions_json JSONB NOT NULL,
+    credential_schema_json JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uniq_platform_services_platform_key UNIQUE (platform_key),
+    CONSTRAINT uniq_platform_services_service_key UNIQUE (service_key)
+);
 
-CREATE TABLE IF NOT EXISTS platform_account_refs (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE platform_account_refs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     platform VARCHAR(64) NOT NULL,
     platform_service_key VARCHAR(128) NOT NULL,
     platform_account_id VARCHAR(191) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
-    meta_json JSON NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_platform_account_refs_platform_account (platform, platform_account_id),
-    KEY idx_platform_account_refs_user_platform (user_id, platform),
-    KEY idx_platform_account_refs_status (status),
-    KEY idx_platform_account_refs_deleted_at (deleted_at),
+    meta_json JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT uk_platform_account_refs_platform_account UNIQUE (platform, platform_account_id),
     CONSTRAINT fk_platform_account_refs_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Legacy platform account references';
+);
+CREATE INDEX idx_platform_account_refs_user_platform ON platform_account_refs (user_id, platform);
+CREATE INDEX idx_platform_account_refs_status ON platform_account_refs (status);
+CREATE INDEX idx_platform_account_refs_deleted_at ON platform_account_refs (deleted_at);
 
-CREATE TABLE IF NOT EXISTS bot_account_grants (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE bot_account_grants (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
     bot_id VARCHAR(64) NOT NULL,
-    platform_account_ref_id BIGINT UNSIGNED NOT NULL,
-    scopes JSON NOT NULL,
-    granted_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    revoked_at DATETIME(3) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_bot_account_grants_bot_account (bot_id, platform_account_ref_id),
-    KEY idx_bot_account_grants_user_id (user_id),
-    KEY idx_bot_account_grants_platform_account_ref_id (platform_account_ref_id),
-    KEY idx_bot_account_grants_revoked_at (revoked_at),
-    KEY idx_bot_account_grants_deleted_at (deleted_at),
+    platform_account_ref_id BIGINT NOT NULL,
+    scopes JSONB NOT NULL,
+    granted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT uk_bot_account_grants_bot_account UNIQUE (bot_id, platform_account_ref_id),
     CONSTRAINT fk_bot_account_grants_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_bot_account_grants_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_bot_account_grants_ref FOREIGN KEY (platform_account_ref_id) REFERENCES platform_account_refs (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Legacy bot grants over platform account references';
+);
+CREATE INDEX idx_bot_account_grants_user_id ON bot_account_grants (user_id);
+CREATE INDEX idx_bot_account_grants_platform_account_ref_id ON bot_account_grants (platform_account_ref_id);
+CREATE INDEX idx_bot_account_grants_revoked_at ON bot_account_grants (revoked_at);
+CREATE INDEX idx_bot_account_grants_deleted_at ON bot_account_grants (deleted_at);
 
--- -----------------------------------------------------------------------------
--- Unified platform account bindings, profiles and consumer grants
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS platform_account_bindings (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    owner_user_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE platform_account_bindings (
+    id BIGSERIAL PRIMARY KEY,
+    owner_user_id BIGINT NOT NULL,
     platform VARCHAR(64) NOT NULL,
-    external_account_key VARCHAR(191) NULL,
+    external_account_key VARCHAR(191),
     platform_service_key VARCHAR(128) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'pending_bind',
-    status_reason_code VARCHAR(64) NULL,
-    status_reason_message VARCHAR(255) NULL,
-    primary_profile_id BIGINT UNSIGNED NULL,
-    last_validated_at DATETIME(3) NULL,
-    last_synced_at DATETIME(3) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    active_external_account_marker TINYINT GENERATED ALWAYS AS (IF(deleted_at IS NULL AND external_account_key IS NOT NULL, 1, NULL)) STORED,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_platform_account_bindings_active_external_account (platform, external_account_key, active_external_account_marker),
-    KEY idx_platform_account_bindings_owner (owner_user_id),
-    KEY idx_platform_account_bindings_status (status),
-    KEY idx_platform_account_bindings_primary_profile_id (primary_profile_id),
-    KEY idx_platform_account_bindings_primary_profile_assignment (id, primary_profile_id),
-    KEY idx_platform_account_bindings_deleted_at (deleted_at),
+    status_reason_code VARCHAR(64),
+    status_reason_message VARCHAR(255),
+    primary_profile_id BIGINT,
+    last_validated_at TIMESTAMPTZ,
+    last_synced_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    active_external_account_marker SMALLINT GENERATED ALWAYS AS (
+        CASE WHEN deleted_at IS NULL AND external_account_key IS NOT NULL THEN 1 ELSE NULL END
+    ) STORED,
     CONSTRAINT fk_platform_account_bindings_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Unified platform account ownership bindings';
+);
+CREATE UNIQUE INDEX uk_platform_account_bindings_active_external_account
+    ON platform_account_bindings (platform, external_account_key, active_external_account_marker);
+CREATE INDEX idx_platform_account_bindings_owner ON platform_account_bindings (owner_user_id);
+CREATE INDEX idx_platform_account_bindings_status ON platform_account_bindings (status);
+CREATE INDEX idx_platform_account_bindings_primary_profile_id ON platform_account_bindings (primary_profile_id);
+CREATE UNIQUE INDEX idx_platform_account_bindings_primary_profile_assignment ON platform_account_bindings (id, primary_profile_id);
+CREATE INDEX idx_platform_account_bindings_deleted_at ON platform_account_bindings (deleted_at);
 
-CREATE TABLE IF NOT EXISTS platform_account_profiles (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    binding_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE platform_account_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    binding_id BIGINT NOT NULL,
     platform_profile_key VARCHAR(191) NOT NULL,
     game_biz VARCHAR(64) NOT NULL,
     region VARCHAR(64) NOT NULL,
     player_uid VARCHAR(64) NOT NULL,
     nickname VARCHAR(255) NOT NULL,
-    level BIGINT NULL,
+    level BIGINT,
     is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-    source_updated_at DATETIME(3) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    primary_profile_marker TINYINT GENERATED ALWAYS AS (IF(is_primary, 1, NULL)) STORED,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_platform_account_profiles_binding_key (binding_id, platform_profile_key),
-    UNIQUE KEY uk_platform_account_profiles_primary_per_binding (binding_id, primary_profile_marker),
-    UNIQUE KEY uk_platform_account_profiles_binding_row (binding_id, id),
-    KEY idx_platform_account_profiles_binding_id (binding_id),
-    KEY idx_platform_account_profiles_player_uid (player_uid),
+    source_updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    primary_profile_marker SMALLINT GENERATED ALWAYS AS (CASE WHEN is_primary THEN 1 ELSE NULL END) STORED,
+    CONSTRAINT uk_platform_account_profiles_binding_key UNIQUE (binding_id, platform_profile_key),
+    CONSTRAINT uk_platform_account_profiles_binding_row UNIQUE (binding_id, id),
     CONSTRAINT fk_platform_account_profiles_binding FOREIGN KEY (binding_id) REFERENCES platform_account_bindings (id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Projected profiles discovered under a platform account binding';
+);
+CREATE UNIQUE INDEX uk_platform_account_profiles_primary_per_binding
+    ON platform_account_profiles (binding_id, primary_profile_marker);
+CREATE INDEX idx_platform_account_profiles_binding_id ON platform_account_profiles (binding_id);
+CREATE INDEX idx_platform_account_profiles_player_uid ON platform_account_profiles (player_uid);
 
-ALTER TABLE platform_account_bindings
-    ADD CONSTRAINT fk_platform_account_bindings_primary_profile
-        FOREIGN KEY (id, primary_profile_id) REFERENCES platform_account_profiles (binding_id, id)
-        ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE platform_account_bindings ADD CONSTRAINT fk_platform_account_bindings_primary_profile
+    FOREIGN KEY (id, primary_profile_id) REFERENCES platform_account_profiles (binding_id, id)
+    ON DELETE RESTRICT ON UPDATE CASCADE;
 
-CREATE TABLE IF NOT EXISTS consumer_grants (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    binding_id BIGINT UNSIGNED NOT NULL,
+CREATE TABLE consumer_grants (
+    id BIGSERIAL PRIMARY KEY,
+    binding_id BIGINT NOT NULL,
     consumer VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
-    scopes_json LONGTEXT NOT NULL,
-    ticket_version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-    granted_by BIGINT UNSIGNED NULL,
-    granted_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    revoked_at DATETIME(3) NULL,
-    last_invalidated_at DATETIME(3) NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_consumer_grants_binding_consumer (binding_id, consumer),
-    KEY idx_consumer_grants_binding_id (binding_id),
-    KEY idx_consumer_grants_status (status),
-    KEY idx_consumer_grants_granted_by (granted_by),
+    scopes_json TEXT NOT NULL,
+    ticket_version BIGINT NOT NULL DEFAULT 1,
+    granted_by BIGINT,
+    granted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMPTZ,
+    last_invalidated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_consumer_grants_binding_consumer UNIQUE (binding_id, consumer),
     CONSTRAINT fk_consumer_grants_binding FOREIGN KEY (binding_id) REFERENCES platform_account_bindings (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_consumer_grants_granted_by FOREIGN KEY (granted_by) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Consumer access grants for platform account bindings';
+);
+CREATE INDEX idx_consumer_grants_binding_id ON consumer_grants (binding_id);
+CREATE INDEX idx_consumer_grants_status ON consumer_grants (status);
+CREATE INDEX idx_consumer_grants_granted_by ON consumer_grants (granted_by);
 
--- -----------------------------------------------------------------------------
--- System config, legal documents, audit events
--- -----------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS system_config_entries (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE system_config_entries (
+    id BIGSERIAL PRIMARY KEY,
     config_domain VARCHAR(64) NOT NULL,
-    payload_json JSON NOT NULL,
-    version BIGINT UNSIGNED NOT NULL DEFAULT 1,
-    updated_by BIGINT UNSIGNED NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    UNIQUE KEY uk_system_config_entries_domain (config_domain),
-    KEY idx_system_config_entries_updated_by (updated_by),
-    KEY idx_system_config_entries_deleted_at (deleted_at),
-    CONSTRAINT fk_system_config_entries_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    payload_json JSONB NOT NULL,
+    version BIGINT NOT NULL DEFAULT 1,
+    updated_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT uk_system_config_entries_domain UNIQUE (config_domain),
+    CONSTRAINT fk_system_config_entries_updated_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
+);
+CREATE INDEX idx_system_config_entries_updated_by ON system_config_entries (updated_by);
+CREATE INDEX idx_system_config_entries_deleted_at ON system_config_entries (deleted_at);
 
-CREATE TABLE IF NOT EXISTS legal_documents (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE legal_documents (
+    id BIGSERIAL PRIMARY KEY,
     document_type VARCHAR(32) NOT NULL,
     version VARCHAR(64) NOT NULL,
     title VARCHAR(255) NOT NULL,
-    content LONGTEXT NOT NULL,
+    content TEXT NOT NULL,
     published BOOLEAN NOT NULL DEFAULT FALSE,
-    published_at DATETIME(3) NULL,
-    updated_by BIGINT UNSIGNED NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-    deleted_at DATETIME(3) NULL,
-    UNIQUE KEY uk_legal_document_type_version (document_type, version),
-    KEY idx_legal_documents_published (published),
-    KEY idx_legal_documents_updated_by (updated_by),
-    KEY idx_legal_documents_deleted_at (deleted_at),
-    CONSTRAINT fk_legal_documents_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    published_at TIMESTAMPTZ,
+    updated_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT uk_legal_document_type_version UNIQUE (document_type, version),
+    CONSTRAINT fk_legal_documents_updated_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
+);
+CREATE INDEX idx_legal_documents_published ON legal_documents (published);
+CREATE INDEX idx_legal_documents_updated_by ON legal_documents (updated_by);
+CREATE INDEX idx_legal_documents_deleted_at ON legal_documents (deleted_at);
 
-CREATE TABLE IF NOT EXISTS audit_events (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE audit_events (
+    id BIGSERIAL PRIMARY KEY,
     category VARCHAR(64) NOT NULL,
     actor_type VARCHAR(32) NOT NULL,
-    actor_user_id BIGINT UNSIGNED NULL,
+    actor_user_id BIGINT,
     action VARCHAR(128) NOT NULL,
-    target_type VARCHAR(64) NULL,
-    target_id VARCHAR(191) NULL,
-    binding_id BIGINT UNSIGNED NULL,
+    target_type VARCHAR(64),
+    target_id VARCHAR(191),
+    binding_id BIGINT,
     result VARCHAR(32) NOT NULL,
-    reason_code VARCHAR(64) NULL,
-    request_id VARCHAR(128) NULL,
-    ip VARCHAR(128) NULL,
-    user_agent VARCHAR(512) NULL,
-    metadata_json JSON NULL,
-    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    KEY idx_audit_events_category (category),
-    KEY idx_audit_events_actor_type (actor_type),
-    KEY idx_audit_events_actor_user_id (actor_user_id),
-    KEY idx_audit_events_action (action),
-    KEY idx_audit_events_target_type (target_type),
-    KEY idx_audit_events_target_id (target_id),
-    KEY idx_audit_events_binding_id (binding_id),
-    KEY idx_audit_events_result (result),
-    KEY idx_audit_events_reason_code (reason_code),
-    KEY idx_audit_events_request_id (request_id),
-    KEY idx_audit_events_created_at (created_at),
-    CONSTRAINT fk_audit_events_actor_user FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT fk_audit_events_binding FOREIGN KEY (binding_id) REFERENCES platform_account_bindings(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    reason_code VARCHAR(64),
+    request_id VARCHAR(128),
+    ip VARCHAR(128),
+    user_agent VARCHAR(512),
+    metadata_json JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_audit_events_actor_user FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT fk_audit_events_binding FOREIGN KEY (binding_id) REFERENCES platform_account_bindings (id) ON DELETE SET NULL
+);
+CREATE INDEX idx_audit_events_category ON audit_events (category);
+CREATE INDEX idx_audit_events_actor_type ON audit_events (actor_type);
+CREATE INDEX idx_audit_events_actor_user_id ON audit_events (actor_user_id);
+CREATE INDEX idx_audit_events_action ON audit_events (action);
+CREATE INDEX idx_audit_events_target_type ON audit_events (target_type);
+CREATE INDEX idx_audit_events_target_id ON audit_events (target_id);
+CREATE INDEX idx_audit_events_binding_id ON audit_events (binding_id);
+CREATE INDEX idx_audit_events_result ON audit_events (result);
+CREATE INDEX idx_audit_events_reason_code ON audit_events (reason_code);
+CREATE INDEX idx_audit_events_request_id ON audit_events (request_id);
+CREATE INDEX idx_audit_events_created_at ON audit_events (created_at);

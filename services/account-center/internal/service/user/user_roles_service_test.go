@@ -13,7 +13,7 @@ import (
 
 func setupUserRoleServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testutil.OpenMySQLTestDB(t, "user_role_service",
+	return testutil.OpenPostgreSQLTestDB(t, "user_role_service",
 		&model.User{},
 		&model.Role{},
 		&model.UserRole{},

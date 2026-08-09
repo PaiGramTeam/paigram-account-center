@@ -90,7 +90,7 @@ func seedServiceCredentialAndIssueToken(t *testing.T, db *gorm.DB, signingKey []
 }
 
 func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -169,7 +169,7 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 }
 
 func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_scope_reject",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_scope_reject",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -209,7 +209,7 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 }
 
 func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_revoked",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_revoked",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -244,7 +244,7 @@ func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) 
 }
 
 func TestBotAccessServiceUpsertPlatformBindingDeniedForNormalBot(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_legacy_gate",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_legacy_gate",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -289,7 +289,7 @@ func TestBotAccessServiceUpsertPlatformBindingDeniedForNormalBot(t *testing.T) {
 }
 
 func TestBotAccessServiceAllowsLegacyBindingWriteWithCapability(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_legacy_allowed",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_legacy_allowed",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -333,7 +333,7 @@ func TestBotAccessServiceAllowsLegacyBindingWriteWithCapability(t *testing.T) {
 }
 
 func TestBotAccessServiceRejectsMissingAuthorization(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_noauth",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_noauth",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -361,7 +361,7 @@ func TestBotAccessServiceRejectsMissingAuthorization(t *testing.T) {
 // machine token vs bot-type" test that no longer applies under Path D's
 // single-credential model.
 func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_missing_machine_scope",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_missing_machine_scope",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},
@@ -391,7 +391,7 @@ func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
 }
 
 func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "bot_access_grpc_no_grant",
+	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_no_grant",
 		&model.User{},
 		&model.UserEmail{},
 		&model.Bot{},

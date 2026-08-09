@@ -22,7 +22,7 @@ var testSigningKey = []byte("0123456789abcdef0123456789abcdef")
 // the service_credentials table directly via DDL. We do not call
 // AutoMigrate on &model.ServiceCredential{} because GORM would walk its
 // `Owner User` association and try to migrate the User model too —
-// User's MySQL-specific column defaults (CURRENT_TIMESTAMP(3)) are not
+// User's production column defaults are not
 // valid sqlite, so the migration would fail.
 func setupCredentialsTestDB(t *testing.T) *gorm.DB {
 	t.Helper()

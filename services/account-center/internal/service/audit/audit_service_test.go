@@ -41,7 +41,7 @@ func TestBuildAuditEventViewIncludesBindingIDAndStructuredMetadata(t *testing.T)
 }
 
 func TestRecordStoresCanonicalAuditMetadata(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "audit_service", &model.AuditEvent{})
+	db := testutil.OpenPostgreSQLTestDB(t, "audit_service", &model.AuditEvent{})
 
 	actorUserID := uint64(12)
 	ownerUserID := uint64(34)

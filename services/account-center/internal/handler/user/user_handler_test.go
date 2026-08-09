@@ -26,7 +26,7 @@ import (
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
-	db := testutil.OpenMySQLTestDB(t, "user",
+	db := testutil.OpenPostgreSQLTestDB(t, "user",
 		&model.User{},
 		&model.UserProfile{},
 		&model.UserCredential{},

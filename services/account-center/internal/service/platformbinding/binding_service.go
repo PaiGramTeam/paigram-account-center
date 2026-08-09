@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	mysql "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"paigram/internal/model"
@@ -325,8 +325,8 @@ func isDuplicateBindingError(err error) bool {
 		return true
 	}
 
-	var mysqlErr *mysql.MySQLError
-	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+	var postgresErr *pgconn.PgError
+	return errors.As(err, &postgresErr) && postgresErr.Code == "23505"
 }
 
 func bindingStatusFromRuntimeSummary(status string, fallback model.PlatformAccountBindingStatus) model.PlatformAccountBindingStatus {

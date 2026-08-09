@@ -41,11 +41,11 @@ type PlatformAccountBinding struct {
 	StatusReasonCode    string                       `gorm:"size:64"`
 	StatusReasonMessage string                       `gorm:"size:255"`
 	// PrimaryProfileID is validated in SQL against the composite (binding_id, id) key on platform_account_profiles.
-	PrimaryProfileID sql.NullInt64  `gorm:"type:bigint unsigned;index:idx_platform_account_bindings_primary_profile_id"`
-	LastValidatedAt  sql.NullTime   `gorm:"type:datetime(3)"`
-	LastSyncedAt     sql.NullTime   `gorm:"type:datetime(3)"`
-	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	PrimaryProfileID sql.NullInt64  `gorm:"type:bigint;index:idx_platform_account_bindings_primary_profile_id"`
+	LastValidatedAt  sql.NullTime   `gorm:"type:timestamptz"`
+	LastSyncedAt     sql.NullTime   `gorm:"type:timestamptz"`
+	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 
 	Owner          User                     `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:OwnerUserID;references:ID"`
@@ -69,9 +69,9 @@ type PlatformAccountProfile struct {
 	Nickname           string        `gorm:"size:255;not null"`
 	Level              sql.NullInt64 `gorm:"type:bigint"`
 	IsPrimary          bool          `gorm:"not null;default:false"`
-	SourceUpdatedAt    sql.NullTime  `gorm:"type:datetime(3)"`
-	CreatedAt          time.Time     `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt          time.Time     `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	SourceUpdatedAt    sql.NullTime  `gorm:"type:timestamptz"`
+	CreatedAt          time.Time     `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt          time.Time     `gorm:"not null;default:CURRENT_TIMESTAMP"`
 
 	Binding PlatformAccountBinding `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BindingID;references:ID"`
 }
@@ -88,12 +88,12 @@ type ConsumerGrant struct {
 	Status            ConsumerGrantStatus `gorm:"size:32;not null;default:'active';index:idx_consumer_grants_status"`
 	ScopesJSON        string              `gorm:"type:text;not null"`
 	TicketVersion     uint64              `gorm:"not null;default:1"`
-	GrantedBy         sql.NullInt64       `gorm:"type:bigint unsigned;index:idx_consumer_grants_granted_by"`
-	GrantedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	RevokedAt         sql.NullTime        `gorm:"type:datetime(3)"`
-	LastInvalidatedAt sql.NullTime        `gorm:"type:datetime(3)"`
-	CreatedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	GrantedBy         sql.NullInt64       `gorm:"type:bigint;index:idx_consumer_grants_granted_by"`
+	GrantedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	RevokedAt         sql.NullTime        `gorm:"type:timestamptz"`
+	LastInvalidatedAt sql.NullTime        `gorm:"type:timestamptz"`
+	CreatedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP"`
 
 	Binding PlatformAccountBinding `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BindingID;references:ID"`
 	Grantor *User                  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;foreignKey:GrantedBy;references:ID"`

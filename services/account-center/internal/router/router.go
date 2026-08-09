@@ -12,6 +12,7 @@ import (
 	"paigram/internal/email"
 	"paigram/internal/handler"
 	authhandler "paigram/internal/handler/auth"
+	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 	"paigram/internal/observability"
 	"paigram/internal/response"
@@ -78,7 +79,17 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 			"If running behind a reverse proxy, set app.trusted_proxies to its real IP/CIDR.")
 	}
 
-	registerSwagger(engine)
+	runtime, err := httpserver.Attach(engine, httpserver.Options{
+		Title:   appCfg.Name + " API",
+		Version: "1.0.0",
+		OpenAPI: httpserver.OpenAPIOptions{
+			Enabled: cfg.OpenAPI.Enabled,
+			Path:    cfg.OpenAPI.Path,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("attach Huma runtime: %w", err)
+	}
 
 	// swagger:route GET /healthz health healthCheck
 	//
@@ -97,8 +108,7 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 		})
 	})
 
-	api := engine.Group("/api")
-	v1 := api.Group("/v1")
+	v1 := runtime.V1
 
 	// Initialize handler groups with dependencies (also seeds loginrisk + geolocation subgroups).
 	if err := handler.InitializeApiGroups(db, cache, authCfg, cfg.Security, cfg.TelegramOIDC); err != nil {
@@ -109,7 +119,7 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 		&service.ServiceGroupApp.GeolocationServiceGroup,
 		&service.ServiceGroupApp.LoginRiskServiceGroup,
 	)
-	RouterGroupApp.OAuthRouterGroup.InitPublic(v1)
+	RouterGroupApp.OAuthRouterGroup.RegisterPublic(v1)
 	// Phase 5 Sub-project 1: mount /auth/telegram/start + /auth/telegram/callback
 	// on the unauthenticated v1 group. Both handlers ARE session establishment
 	// endpoints; wrapping them in AuthMiddleware would create a chicken-and-egg
@@ -117,7 +127,7 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 	// TelegramOIDCApiGroup.OIDC pointer is nil and these routes are NOT mounted.
 	// Spec: docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.5
 	if handler.ApiGroupApp.TelegramOIDCApiGroup.OIDC != nil {
-		RouterGroupApp.TelegramOIDCRouterGroup.InitPublic(v1)
+		RouterGroupApp.TelegramOIDCRouterGroup.RegisterPublic(v1)
 	}
 
 	// Public routes - no authentication required
@@ -197,16 +207,16 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 				Store:   rateLimitStore,
 			}))
 			{
-				authHandler.RegisterOAuthRoutes(oauth)
+				authHandler.RegisterOAuth(oauth)
 			}
 		} else {
 			// No rate limiting - register routes normally
-			authHandler.RegisterRoutes(authGroup)
+			authHandler.Register(authGroup)
 		}
 	}
 
 	// Protected routes - require authentication
-	protected := v1.Group("")
+	protected := v1.Group("").WithAccess(httpserver.Access{Authenticated: true})
 	protected.Use(middleware.AuthMiddleware(cache, authCfg))
 
 	// Apply rate limiting to authenticated endpoints if enabled

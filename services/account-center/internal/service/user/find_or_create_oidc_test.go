@@ -23,12 +23,12 @@ var findOrCreateDBCounter atomic.Uint64
 
 // newFindOrCreateTestDB returns a SQLite-in-memory *gorm.DB with the
 // minimum table set required by UserService.FindOrCreateOIDC. We mirror
-// the production MySQL schema's UNIQUE indexes on user_credentials so
+// the production PostgreSQL schema's UNIQUE indexes on user_credentials so
 // the credential lookup behaves the same as it does in production.
 //
 // We do NOT use gorm.AutoMigrate on model.User / model.UserCredential
-// because those structs carry `default:CURRENT_TIMESTAMP(3)` column
-// tags that SQLite rejects (MySQL fractional-second syntax). Raw DDL
+// because those structs carry database-specific column
+// tags that SQLite rejects (PostgreSQL fractional-second syntax). Raw DDL
 // keeps the harness portable while still exercising the real GORM
 // query paths.
 func newFindOrCreateTestDB(t *testing.T) *gorm.DB {
@@ -44,7 +44,7 @@ func newFindOrCreateTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	// SQLite has no real row-level locking; cap pool size at 1 so the
 	// in-transaction Create() statements serialize through one connection
-	// the way they do in production MySQL.
+	// the way they do in production PostgreSQL.
 	sqlDB.SetMaxOpenConns(1)
 
 	require.NoError(t, db.Exec(`
@@ -215,9 +215,9 @@ func TestFindOrCreateOIDC_UnknownProviderUsesOAuthLoginType(t *testing.T) {
 // serialised second goroutine often enters the "lookup found existing"
 // fast path instead). The branch is asserted at the contract level:
 // concurrent callers see exactly one user and one credential. The real
-// production race target is MySQL InnoDB where row-level locking
+// production race target is PostgreSQL where row-level locking
 // permits true parallel INSERT attempts; A7 integration tests will
-// exercise this path against real MySQL.
+// exercise this path against real PostgreSQL.
 func TestFindOrCreateOIDC_RaceLossSameSubject_SingleUser(t *testing.T) {
 	db := newFindOrCreateTestDB(t)
 	svc := &UserService{db: db}

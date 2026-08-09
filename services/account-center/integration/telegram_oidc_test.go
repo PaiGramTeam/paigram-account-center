@@ -3,13 +3,13 @@
 package integration
 
 // Phase 5 Sub-project 1 Task A7 — integration coverage for the Telegram OIDC
-// login + bot_identities link flow against real MySQL + Redis.
+// login + bot_identities link flow against real PostgreSQL + Redis.
 //
 // Why integration rather than unit: the parts these tests exercise — the
 // SELECT FOR UPDATE row lock on user_oauth_states, the composite UNIQUE
 // indexes on bot_identities, and the gorm.DeletedAt soft-delete plus
 // production UNIQUE-vs-soft-delete semantics — only behave correctly on
-// real MySQL. SQLite's locking model and UNIQUE handling diverge enough
+// real PostgreSQL. SQLite's locking model and UNIQUE handling diverge enough
 // that the unit-test rig in internal/handler/telegramoidc/handler_test.go
 // cannot reproduce the contracts spec §6.2 / §6.3 / §8.1 enforce.
 //
@@ -344,18 +344,18 @@ func TestIntegration_TelegramOIDC_HappyPath(t *testing.T) {
 	assert.True(t, stateRow.ConsumedAt.Valid, "state must be marked consumed after success")
 }
 
-// --- 3b: UNIQUE violation on real MySQL ------------------------------------
+// --- 3b: UNIQUE violation on real PostgreSQL ------------------------------------
 
-// TestIntegration_TelegramOIDC_UniqueViolation_RealMySQL fires two
+// TestIntegration_TelegramOIDC_UniqueViolation_RealPostgreSQL fires two
 // concurrent callbacks that decode to the same Telegram subject — exactly
 // the race spec §8.1 calls out as the contract enforced by the
-// (bot_id, external_user_id) UNIQUE index on production MySQL.
+// (bot_id, external_user_id) UNIQUE index on production PostgreSQL.
 //
 // Expected outcome: exactly ONE row remains in bot_identities for the
 // pair (paigrambot, 987654321), owned by the pre-seeded user A. Neither
 // concurrent attempt (both running as a freshly-provisioned user B) gets
 // a duplicate row in.
-func TestIntegration_TelegramOIDC_UniqueViolation_RealMySQL(t *testing.T) {
+func TestIntegration_TelegramOIDC_UniqueViolation_RealPostgreSQL(t *testing.T) {
 	s := newTelegramOIDCStack(t)
 
 	// Pre-seed user A holding (paigrambot, 987654321). Both concurrent

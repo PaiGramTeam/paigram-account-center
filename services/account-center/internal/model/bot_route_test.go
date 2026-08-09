@@ -18,7 +18,7 @@ func TestBotRoute_TableName(t *testing.T) {
 }
 
 func TestBotRoute_UpsertIdempotent(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "botroute_model", &model.BotRoute{}, &model.BotRouteAudit{})
+	db := testutil.OpenPostgreSQLTestDB(t, "botroute_model", &model.BotRoute{}, &model.BotRouteAudit{})
 
 	first := &model.BotRoute{
 		BotID:        "paigrambot",
@@ -67,7 +67,7 @@ func TestBotRoute_UpsertIdempotent(t *testing.T) {
 }
 
 func TestBotRoute_UpsertAllowsDistinctPlatforms(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "botroute_model", &model.BotRoute{}, &model.BotRouteAudit{})
+	db := testutil.OpenPostgreSQLTestDB(t, "botroute_model", &model.BotRoute{}, &model.BotRouteAudit{})
 
 	telegram := &model.BotRoute{
 		BotID:        "paigrambot",

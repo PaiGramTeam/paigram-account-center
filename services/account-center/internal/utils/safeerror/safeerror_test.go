@@ -16,12 +16,12 @@ func TestUserMessage_KnownAppError(t *testing.T) {
 }
 
 func TestUserMessage_UnknownGormError(t *testing.T) {
-	// Mimics a raw MySQL duplicate-key error string that must NOT reach the
+	// Mimics a raw PostgreSQL unique-constraint error that must not reach the
 	// client; this is precisely what V13 was filed against.
-	err := errors.New("Error 1062: Duplicate entry 'x' for key 'users.email'")
+	err := errors.New(`ERROR: duplicate key value violates unique constraint "users_email_key" (SQLSTATE 23505)`)
 	got := safeerror.UserMessage(err)
 	if got != "internal server error" {
-		t.Fatalf("UserMessage(raw mysql) = %q, want %q (must not echo db text)", got, "internal server error")
+		t.Fatalf("UserMessage(raw postgres) = %q, want %q (must not echo db text)", got, "internal server error")
 	}
 }
 

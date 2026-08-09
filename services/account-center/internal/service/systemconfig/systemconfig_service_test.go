@@ -106,7 +106,7 @@ func TestLegalServiceListsDraftsAndHistoricalRevisions(t *testing.T) {
 
 func openSystemConfigTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db := testutil.OpenMySQLTestDB(t, "systemconfig", &model.SystemConfigEntry{}, &model.LegalDocument{}, &model.AuditEvent{})
+	db := testutil.OpenPostgreSQLTestDB(t, "systemconfig", &model.SystemConfigEntry{}, &model.LegalDocument{}, &model.AuditEvent{})
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(4)

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
 	"paigram/internal/model"
@@ -65,7 +65,7 @@ func (s *UserService) FindOrCreateOIDC(ctx context.Context, provider, subject, d
 // detect that via isUniqueViolation and re-lookup the credential under
 // the same tx; the winning user_id is returned so legitimate
 // double-clicks (or load-balanced retries) succeed idempotently rather
-// than surfacing reason=internal to the user. Production MySQL InnoDB is
+// than surfacing reason=internal to the user. Production PostgreSQL is
 // the real race target; the SQLite test harness serializes via
 // SetMaxOpenConns(1) but the recovery code path is still asserted by
 // TestFindOrCreateOIDC_RaceLossSameSubject_SingleUser.
@@ -165,9 +165,8 @@ func loginTypeForOIDCProvider(provider string) model.LoginType {
 }
 
 // isUniqueViolation returns true if err indicates a UNIQUE-constraint
-// failure. MySQL surfaces a typed *mysql.MySQLError with errno 1062
-// (ER_DUP_ENTRY) — preferred over text matching to avoid false positives
-// on error messages that happen to contain the literal "1062". SQLite
+// failure. PostgreSQL surfaces a typed *pgconn.PgError with SQLSTATE 23505,
+// which is preferred over text matching to avoid false positives. SQLite
 // (via glebarez/sqlite, used in unit tests) lacks a typed error, so we
 // fall back to a case-insensitive substring match on the well-known
 // message. Mirrors botlink/service.go's isUniqueViolation; kept local
@@ -177,9 +176,9 @@ func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
-	var mysqlErr *mysql.MySQLError
-	if errors.As(err, &mysqlErr) {
-		return mysqlErr.Number == 1062
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) {
+		return postgresErr.Code == "23505"
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique constraint failed") || strings.Contains(msg, "unique")

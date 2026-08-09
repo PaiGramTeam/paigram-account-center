@@ -18,7 +18,7 @@ import (
 
 func setupBotRouteServiceTestDB(t *testing.T, prefix string) *gorm.DB {
 	t.Helper()
-	return testutil.OpenMySQLTestDB(t, prefix, &model.BotRoute{}, &model.BotRouteAudit{})
+	return testutil.OpenPostgreSQLTestDB(t, prefix, &model.BotRoute{}, &model.BotRouteAudit{})
 }
 
 func newTestService(db *gorm.DB) *botroute.Service {

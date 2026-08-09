@@ -16,7 +16,7 @@ import (
 
 func setupInitializerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testutil.OpenMySQLTestDB(t, "initializer",
+	return testutil.OpenPostgreSQLTestDB(t, "initializer",
 		&model.Permission{},
 		&model.Role{},
 		&model.RolePermission{},

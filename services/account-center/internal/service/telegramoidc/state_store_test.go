@@ -28,7 +28,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared&_pragma=foreign_keys(1)"), &gorm.Config{})
 	require.NoError(t, err)
 	// SQLite has no real SELECT FOR UPDATE; concurrent write txns deadlock.
-	// Production runs on MySQL where clause.Locking{Strength:"UPDATE"} is
+	// Production runs on PostgreSQL where clause.Locking{Strength:"UPDATE"} is
 	// honored. For tests we cap the pool at 1 so concurrent Consume calls
 	// serialize through the same connection — this still exercises the
 	// "second consume sees ConsumedAt.Valid=true and returns

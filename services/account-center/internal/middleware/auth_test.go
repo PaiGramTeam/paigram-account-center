@@ -30,7 +30,7 @@ var authTestDBCounter atomic.Uint64
 // parallel reruns (count=N) do not share state.
 //
 // Raw DDL is used rather than AutoMigrate because model.User declares
-// MySQL-only `default:CURRENT_TIMESTAMP(3)` column defaults that
+// database-specific column defaults that
 // SQLite cannot parse. The model.UserSession schema is mirrored
 // directly from service/session.newTestDB for consistency.
 func setupAuthMiddlewareDB(t *testing.T) *gorm.DB {

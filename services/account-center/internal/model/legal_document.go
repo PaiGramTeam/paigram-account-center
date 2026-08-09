@@ -15,10 +15,10 @@ type LegalDocument struct {
 	Title        string         `gorm:"size:255;not null"`
 	Content      string         `gorm:"type:longtext;not null"`
 	Published    bool           `gorm:"not null;default:false;index"`
-	PublishedAt  sql.NullTime   `gorm:"type:datetime(3)"`
-	UpdatedBy    sql.NullInt64  `gorm:"type:bigint unsigned;index"`
-	CreatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	PublishedAt  sql.NullTime   `gorm:"type:timestamptz"`
+	UpdatedBy    sql.NullInt64  `gorm:"type:bigint;index"`
+	CreatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 

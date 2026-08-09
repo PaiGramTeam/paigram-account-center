@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"paigram/internal/handler"
+	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 )
 
@@ -21,6 +22,14 @@ type RouterGroup struct{}
 // requests pass through gin-side middleware. Token issuance has its
 // own (client_id, client_secret) authentication.
 func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
+	registerPublic(r, rg)
+}
+
+func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
+	registerPublic(r, rg)
+}
+
+func registerPublic[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	tokenHandler := &handler.ApiGroupApp.OAuthApiGroup.TokenHandler
 	rg.POST("/oauth/token", tokenHandler.Token)
 }
@@ -28,6 +37,14 @@ func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
 // InitAdmin mounts the admin CRUD endpoints behind the admin-role gate
 // and the casbin permission check.
 func (r *RouterGroup) InitAdmin(rg *gin.RouterGroup) {
+	registerAdmin(r, rg)
+}
+
+func (r *RouterGroup) RegisterAdmin(rg *httpserver.Group) {
+	registerAdmin(r, rg)
+}
+
+func registerAdmin[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	adminGate := middleware.RequireRoleMiddleware("admin")
 	permissionCheck := middleware.CasbinMiddleware()
 	credentialsHandler := &handler.ApiGroupApp.OAuthApiGroup.CredentialsHandler

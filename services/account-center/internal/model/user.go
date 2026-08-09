@@ -44,10 +44,10 @@ type User struct {
 	ID               uint64         `gorm:"primaryKey"`
 	PrimaryLoginType LoginType      `gorm:"size:32;not null;index"`
 	Status           UserStatus     `gorm:"size:32;not null;default:'pending';index"`
-	PrimaryRoleID    sql.NullInt64  `gorm:"type:bigint unsigned;index"`
-	LastLoginAt      sql.NullTime   `gorm:"type:datetime(3);index"`
-	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	PrimaryRoleID    sql.NullInt64  `gorm:"type:bigint;index"`
+	LastLoginAt      sql.NullTime   `gorm:"type:timestamptz;index"`
+	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 
 	Profile     UserProfile      `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
@@ -79,9 +79,9 @@ type UserCredential struct {
 	RefreshToken          string       `gorm:"type:text"` // AES-256-GCM encrypted OAuth refresh token
 	AccessTokenEncrypted  string       `gorm:"-"`         // Legacy migration-only column, not persisted by current model
 	RefreshTokenEncrypted string       `gorm:"-"`         // Legacy migration-only column, not persisted by current model
-	TokenExpiry           sql.NullTime `gorm:"type:datetime(3)"`
+	TokenExpiry           sql.NullTime `gorm:"type:timestamptz"`
 	Scopes                string       `gorm:"size:512"`
-	LastSyncAt            sql.NullTime `gorm:"type:datetime(3)"`
+	LastSyncAt            sql.NullTime `gorm:"type:timestamptz"`
 	Metadata              string       `gorm:"type:text"`
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
@@ -93,9 +93,9 @@ type UserEmail struct {
 	UserID             uint64       `gorm:"index;not null"`
 	Email              string       `gorm:"size:255;not null;index"`
 	IsPrimary          bool         `gorm:"default:false"`
-	VerifiedAt         sql.NullTime `gorm:"type:datetime(3)"`
+	VerifiedAt         sql.NullTime `gorm:"type:timestamptz"`
 	VerificationToken  string       `gorm:"size:255;index"`
-	VerificationExpiry sql.NullTime `gorm:"type:datetime(3)"`
+	VerificationExpiry sql.NullTime `gorm:"type:timestamptz"`
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -111,7 +111,7 @@ type UserOAuthState struct {
 	Provider     string        `gorm:"size:64;index"`
 	State        string        `gorm:"size:255;uniqueIndex"`
 	Purpose      string        `gorm:"size:64;not null;default:'login';index"`
-	UserID       sql.NullInt64 `gorm:"type:bigint unsigned;index"`
+	UserID       sql.NullInt64 `gorm:"type:bigint;index"`
 	RedirectTo   string        `gorm:"size:512"`
 	Nonce        string        `gorm:"size:255"`
 	CodeVerifier string        `gorm:"size:255;index"` // PKCE code verifier
@@ -124,7 +124,7 @@ type UserOAuthState struct {
 	// Metadata is a purpose-specific JSON blob. For purpose='telegram_oidc' it
 	// stores {"bot_id": "<botID>"}. Nullable so existing OAuth purposes that
 	// do not need this extension continue to work.
-	Metadata  datatypes.JSON `gorm:"type:json;column:metadata"`
+	Metadata  datatypes.JSON `gorm:"type:jsonb;column:metadata"`
 	ExpiresAt time.Time      `gorm:"index"`
 	// ConsumedAt marks single-use OAuth states as redeemed. NULL means
 	// available; non-NULL means already consumed and must not be redeemed
@@ -145,7 +145,7 @@ type UserSession struct {
 	ClientIP         string    `gorm:"size:128"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
-	RevokedAt        sql.NullTime `gorm:"type:datetime(3)"`
+	RevokedAt        sql.NullTime `gorm:"type:timestamptz"`
 	RevokedReason    string       `gorm:"size:255"`
 }
 

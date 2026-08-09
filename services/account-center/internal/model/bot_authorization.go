@@ -12,10 +12,10 @@ type BotAuthorization struct {
 	UserID       uint64         `json:"user_id" gorm:"uniqueIndex:idx_user_bot;not null"`
 	BotID        string         `json:"bot_id" gorm:"size:64;uniqueIndex:idx_user_bot;not null"`
 	Scopes       string         `json:"scopes" gorm:"size:1024;not null"` // JSON array of authorized scopes
-	AuthorizedAt time.Time      `json:"authorized_at" gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	LastUsedAt   *time.Time     `json:"last_used_at" gorm:"type:datetime(3)"`
-	ExpiresAt    *time.Time     `json:"expires_at" gorm:"type:datetime(3);index"`
-	RevokedAt    *time.Time     `json:"revoked_at" gorm:"type:datetime(3);index"`
+	AuthorizedAt time.Time      `json:"authorized_at" gorm:"not null;default:CURRENT_TIMESTAMP"`
+	LastUsedAt   *time.Time     `json:"last_used_at" gorm:"type:timestamptz"`
+	ExpiresAt    *time.Time     `json:"expires_at" gorm:"type:timestamptz;index"`
+	RevokedAt    *time.Time     `json:"revoked_at" gorm:"type:timestamptz;index"`
 	RevokedBy    *uint64        `json:"revoked_by" gorm:"index"`
 	RevokeReason string         `json:"revoke_reason" gorm:"size:255"`
 	CreatedAt    time.Time      `json:"created_at"`

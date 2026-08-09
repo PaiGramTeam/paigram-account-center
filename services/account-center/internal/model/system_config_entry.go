@@ -11,11 +11,11 @@ import (
 type SystemConfigEntry struct {
 	ID           uint64         `gorm:"primaryKey"`
 	ConfigDomain string         `gorm:"size:64;uniqueIndex;not null"`
-	PayloadJSON  string         `gorm:"type:json;not null"`
+	PayloadJSON  string         `gorm:"type:jsonb;not null"`
 	Version      uint64         `gorm:"not null;default:1"`
-	UpdatedBy    sql.NullInt64  `gorm:"type:bigint unsigned;index"`
-	CreatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	UpdatedBy    sql.NullInt64  `gorm:"type:bigint;index"`
+	CreatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 

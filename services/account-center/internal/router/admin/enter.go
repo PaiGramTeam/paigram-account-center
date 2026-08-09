@@ -5,6 +5,7 @@ import (
 	"gorm.io/gorm"
 
 	"paigram/internal/handler"
+	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 )
 
@@ -13,6 +14,14 @@ type RouterGroup struct{}
 
 // Init registers /admin management routes on the provided router group.
 func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
+	registerRoutes(r, rg)
+}
+
+func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	registerRoutes(r, rg)
+}
+
+func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	adminGate := middleware.RequireRoleMiddleware("admin")
 	permissionCheck := middleware.CasbinMiddleware()
 	userHandler := &handler.ApiGroupApp.UserApiGroup.Handler

@@ -73,7 +73,7 @@ type testRig struct {
 // (botlink.UpsertLink), user_sessions (session.Issue).
 //
 // Raw DDL rather than gorm.AutoMigrate because several models carry
-// `default:CURRENT_TIMESTAMP(3)` (MySQL fractional-second syntax) that
+// database-specific timestamp defaults that
 // SQLite rejects. The DDL mirrors the production schema's UNIQUE indexes
 // so race / collision paths exercise the same constraints.
 func newTestDB(t *testing.T) *gorm.DB {
@@ -502,7 +502,7 @@ func TestCallback_AlreadyLinkedOther(t *testing.T) {
 //
 // SQLite SetMaxOpenConns(1) (see newTestDB) serialises both goroutines on
 // the same connection — the consume tx commits or rolls back atomically,
-// matching production MySQL row-lock semantics.
+// matching production PostgreSQL row-lock semantics.
 func TestCallback_RaceDoubleConsume(t *testing.T) {
 	rig := setupRig(t)
 	startW := httptest.NewRecorder()

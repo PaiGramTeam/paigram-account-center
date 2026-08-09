@@ -358,8 +358,8 @@ func TestHandleOAuthCallbackBindAuthMissingTakesPrecedenceOverUserAgentMismatch(
 		RedirectTo:   "https://app.example.com/settings/login-methods",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
-		ClientIP:     testHTTPRequestClientIP,            // matches httptest default
-		UserAgent:    "IntegrationSecurityRoutes/1.0",    // intentionally != callback UA
+		ClientIP:     testHTTPRequestClientIP,         // matches httptest default
+		UserAgent:    "IntegrationSecurityRoutes/1.0", // intentionally != callback UA
 		ExpiresAt:    time.Now().UTC().Add(5 * time.Minute),
 	}
 	require.NoError(t, db.Create(&state).Error)
@@ -386,23 +386,23 @@ func ensureUserOAuthStatesTable(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS user_oauth_states (
-			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			id BIGSERIAL PRIMARY KEY,
 			provider VARCHAR(64) NOT NULL,
 			state VARCHAR(255) NOT NULL,
 			purpose VARCHAR(64) NOT NULL,
-			user_id BIGINT UNSIGNED NULL,
+			user_id BIGINT NULL,
 			redirect_to VARCHAR(512) NULL,
 			nonce VARCHAR(255) NULL,
 			code_verifier VARCHAR(255) NULL,
 			client_ip VARCHAR(64) NOT NULL DEFAULT '',
 			user_agent VARCHAR(255) NOT NULL DEFAULT '',
-			expires_at DATETIME(3) NOT NULL,
-			created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-			UNIQUE KEY uniq_state (state),
-			KEY idx_provider_expires (provider, expires_at),
-			KEY idx_user_oauth_states_purpose (purpose),
-			KEY idx_user_oauth_states_user_id (user_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT uniq_state UNIQUE (state)
+		);
+		CREATE INDEX IF NOT EXISTS idx_provider_expires ON user_oauth_states (provider, expires_at);
+		CREATE INDEX IF NOT EXISTS idx_user_oauth_states_purpose ON user_oauth_states (purpose);
+		CREATE INDEX IF NOT EXISTS idx_user_oauth_states_user_id ON user_oauth_states (user_id);
 	`).Error)
 }
 

@@ -24,7 +24,7 @@ import (
 
 func setupAuthorityHandlerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testutil.OpenMySQLTestDB(t, "authority_handler",
+	return testutil.OpenPostgreSQLTestDB(t, "authority_handler",
 		&model.Permission{},
 		&model.Role{},
 		&model.RolePermission{},

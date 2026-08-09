@@ -44,7 +44,7 @@ func (f *fakeSummaryProxy) GetCredentialSummary(_ context.Context, endpoint, tic
 }
 
 func TestPlatformServiceGetEnabledPlatform(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -64,7 +64,7 @@ func TestPlatformServiceGetEnabledPlatform(t *testing.T) {
 }
 
 func TestPlatformServiceListEnabledPlatforms(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_list", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_list", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "zenless",
 		DisplayName:          "Zenless Zone Zero",
@@ -206,7 +206,7 @@ func TestPlatformServiceConfigureAuthAllowsEmptySigningKeyForReadOnlyRoutes(t *t
 }
 
 func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_grant_invalidation", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -278,7 +278,7 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 }
 
 func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_grant_invalidation_rejected", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation_rejected", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -331,7 +331,7 @@ func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t
 }
 
 func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_grant_invalidation_actor", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation_actor", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -393,7 +393,7 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 }
 
 func TestPlatformServiceListPlatformViews(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_views", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_views", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -429,7 +429,7 @@ func (s *grantInvalidationPlatformServiceStub) InvalidateConsumerGrant(_ context
 }
 
 func TestPlatformServiceGetPlatformSchemaView(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_schema_view", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_schema_view", &model.PlatformService{})
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -454,7 +454,7 @@ func TestPlatformServiceGetPlatformSchemaView(t *testing.T) {
 }
 
 func TestPlatformServiceGetPlatformAccountSummaryIssuesScopedTicketAndCallsProxy(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(
+	db := testutil.OpenPostgreSQLTestDB(
 		t,
 		"platform_registry_summary_proxy",
 		&model.PlatformService{},
@@ -517,7 +517,7 @@ func TestPlatformServiceGetPlatformAccountSummaryIssuesScopedTicketAndCallsProxy
 }
 
 func TestPlatformServiceGetPlatformAccountSummaryReturnsBindingProjectionWithoutLegacyRef(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "platform_registry_binding_summary", &model.User{}, &model.PlatformAccountBinding{}, &model.PlatformAccountProfile{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_binding_summary", &model.User{}, &model.PlatformAccountBinding{}, &model.PlatformAccountProfile{})
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)
 	binding := model.PlatformAccountBinding{
@@ -549,7 +549,7 @@ func TestPlatformServiceGetPlatformAccountSummaryReturnsBindingProjectionWithout
 }
 
 func TestPlatformServiceGetPlatformAccountSummaryReturnsServiceUnavailableWhenRegistryMissing(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(
+	db := testutil.OpenPostgreSQLTestDB(
 		t,
 		"platform_registry_missing_summary",
 		&model.PlatformService{},
@@ -583,7 +583,7 @@ func TestPlatformServiceGetPlatformAccountSummaryReturnsServiceUnavailableWhenRe
 }
 
 func TestPlatformServiceGetPlatformAccountSummaryPrefersGenericProxy(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(
+	db := testutil.OpenPostgreSQLTestDB(
 		t,
 		"platform_registry_generic_summary_proxy",
 		&model.PlatformService{},
@@ -636,7 +636,7 @@ func TestPlatformServiceGetPlatformAccountSummaryPrefersGenericProxy(t *testing.
 }
 
 func TestPlatformServiceGetPlatformAccountSummaryReturnsGenericProxyError(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(
+	db := testutil.OpenPostgreSQLTestDB(
 		t,
 		"platform_registry_generic_summary_error",
 		&model.PlatformService{},

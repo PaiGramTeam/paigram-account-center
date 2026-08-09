@@ -387,7 +387,7 @@ func TestMeListProfilesNormalizesInvalidPaginationParams(t *testing.T) {
 func setupPlatformBindingHandlerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db := testutil.OpenMySQLTestDB(t, "platformbinding_handler")
+	db := testutil.OpenPostgreSQLTestDB(t, "platformbinding_handler")
 	require.NoError(t, db.Exec(readPlatformBindingHandlerMigration(t, "000001_init_schema.up.sql")).Error)
 	return db
 }

@@ -51,7 +51,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	err = crypto.SetEncryptionKey(testKey)
 	require.NoError(t, err)
 
-	db := testutil.OpenMySQLTestDB(t, "auth_email",
+	db := testutil.OpenPostgreSQLTestDB(t, "auth_email",
 		&model.User{},
 		&model.Role{},
 		&model.UserRole{},

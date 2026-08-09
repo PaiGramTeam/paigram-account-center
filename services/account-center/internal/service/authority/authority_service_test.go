@@ -37,7 +37,7 @@ func (f *fakeCasbinSyncer) DeleteAuthorityPolicies(roleID uint) error {
 
 func setupAuthorityServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testutil.OpenMySQLTestDB(t, "authority_service",
+	return testutil.OpenPostgreSQLTestDB(t, "authority_service",
 		&model.Permission{},
 		&model.Role{},
 		&model.RolePermission{},

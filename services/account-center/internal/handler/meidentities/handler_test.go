@@ -29,7 +29,7 @@ var dbCounter atomic.Uint64
 
 // newTestDB ports the schema-shaping pattern from botlink/service_test.go.
 // We cannot AutoMigrate model.BotIdentity because its `User` / `Bot`
-// associations drag MySQL-only CURRENT_TIMESTAMP(3) defaults into the
+// associations drag database-specific timestamp defaults into the
 // migration that SQLite rejects. Raw DDL mirrors the production schema in
 // initialize/migrate/sql/000001_init_schema.up.sql closely enough to
 // exercise the handler's read/delete paths.
@@ -82,7 +82,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 // used in internal/handler/me/enter_test.go (testContextWithUser).
 //
 // Real auth (AuthMiddleware + SessionValidation) is exercised in the
-// integration tests (plan A6); this harness only validates handler logic.
+// integration tests; this harness only validates handler logic.
 func authedRouter(t *testing.T, userID uint64, h *meidentities.Handler) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	migrate "github.com/golang-migrate/migrate/v4"
-	mysqlmigrate "github.com/golang-migrate/migrate/v4/database/mysql"
+	postgresmigrate "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"paigram/internal/config"
@@ -31,12 +31,12 @@ func Run(sqlDB *sql.DB, cfg config.DatabaseConfig) (err error) {
 		return fmt.Errorf("access migrations dir %q: %w", absDir, statErr)
 	}
 
-	driver, err := mysqlmigrate.WithInstance(sqlDB, &mysqlmigrate.Config{})
+	driver, err := postgresmigrate.WithInstance(sqlDB, &postgresmigrate.Config{})
 	if err != nil {
-		return fmt.Errorf("initialise mysql migration driver: %w", err)
+		return fmt.Errorf("initialise postgres migration driver: %w", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance("file://"+filepath.ToSlash(absDir), cfg.Dbname, driver)
+	m, err := migrate.NewWithDatabaseInstance("file://"+filepath.ToSlash(absDir), "postgres", driver)
 	if err != nil {
 		return fmt.Errorf("create migration instance: %w", err)
 	}

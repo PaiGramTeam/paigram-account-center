@@ -23,9 +23,9 @@ type BotIdentity struct {
 	BotID            string         `gorm:"size:64;uniqueIndex:uk_bot_identities_bot_external,priority:1;uniqueIndex:uk_bot_identities_user_bot,priority:2;not null"`
 	ExternalUserID   string         `gorm:"size:191;uniqueIndex:uk_bot_identities_bot_external,priority:2;not null"`
 	ExternalUsername sql.NullString `gorm:"size:255"`
-	LinkedAt         time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	LinkedAt         time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 
 	User User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
@@ -47,9 +47,9 @@ type PlatformAccountRef struct {
 	PlatformAccountID  string                   `gorm:"size:191;not null;uniqueIndex:uk_platform_account_refs_platform_account,priority:2"`
 	DisplayName        string                   `gorm:"size:255;not null"`
 	Status             PlatformAccountRefStatus `gorm:"size:32;not null;default:'active';index"`
-	MetaJSON           sql.NullString           `gorm:"type:json"`
-	CreatedAt          time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt          time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	MetaJSON           sql.NullString           `gorm:"type:jsonb"`
+	CreatedAt          time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt          time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt          gorm.DeletedAt           `gorm:"index"`
 
 	User User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
@@ -67,11 +67,11 @@ type BotAccountGrant struct {
 	UserID               uint64         `gorm:"not null;index"`
 	BotID                string         `gorm:"size:64;not null;uniqueIndex:uk_bot_account_grants_bot_account,priority:1"`
 	PlatformAccountRefID uint64         `gorm:"not null;uniqueIndex:uk_bot_account_grants_bot_account,priority:2;index:idx_bot_account_grants_platform_account_ref_id"`
-	Scopes               string         `gorm:"type:json;not null"`
-	GrantedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	RevokedAt            sql.NullTime   `gorm:"type:datetime(3);index"`
-	CreatedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
+	Scopes               string         `gorm:"type:jsonb;not null"`
+	GrantedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	RevokedAt            sql.NullTime   `gorm:"type:timestamptz;index"`
+	CreatedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt            gorm.DeletedAt `gorm:"index"`
 
 	User               User               `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`

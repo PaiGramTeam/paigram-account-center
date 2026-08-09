@@ -30,18 +30,20 @@ app:
     max_age: 43200 # seconds
 
 database:
-  addr: "localhost:3306"
-  username: "root"
-  password: "password"
-  dbname: "paigram"
-  config: "charset=utf8mb4&parseTime=True&loc=Local"
+  dsn: "postgres://paigram:password@localhost:5432/paigram?sslmode=disable"
   migrations_dir: "initialize/migrate/sql"
   max_idle_conns: 10
   max_open_conns: 100
+  conn_max_lifetime: 1h
+  conn_max_idle_time: 30m
   log_mode: "info"
   log_zap: true
   slow_threshold: 200
   auto_migrate: true
+
+openapi:
+  enabled: true
+  path: "/openapi"
 
 auth:
   access_token_ttl: 3600         # 1 hour

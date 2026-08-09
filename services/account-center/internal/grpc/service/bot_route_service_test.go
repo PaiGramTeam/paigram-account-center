@@ -39,7 +39,7 @@ func contextWithScopes(clientID string, scopes ...string) context.Context {
 
 func newGRPCBotRouteService(t *testing.T, prefix string) *BotRouteService {
 	t.Helper()
-	db := testutil.OpenMySQLTestDB(t, prefix, &model.BotRoute{}, &model.BotRouteAudit{})
+	db := testutil.OpenPostgreSQLTestDB(t, prefix, &model.BotRoute{}, &model.BotRouteAudit{})
 	return NewBotRouteService(botroute.NewService(db, nil))
 }
 

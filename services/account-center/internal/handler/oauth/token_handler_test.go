@@ -37,7 +37,7 @@ type tokenHandlerFixture struct {
 // The service_credentials table is created directly via DDL rather than
 // AutoMigrate: GORM would walk ServiceCredential's `Owner User`
 // association and try to migrate the User model, whose column defaults
-// use MySQL-specific datetime(3) syntax that sqlite cannot parse.
+// use database-specific types and defaults that SQLite cannot parse.
 func newTokenHandlerFixture(t *testing.T) *tokenHandlerFixture {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

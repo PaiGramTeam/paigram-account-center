@@ -17,11 +17,11 @@ type BotRoute struct {
 	Platform        string       `gorm:"column:platform;size:32;not null;uniqueIndex:uk_bot_routes_bot_platform,priority:2"`
 	ServiceID       string       `gorm:"column:service_id;size:64;not null"`
 	Endpoint        string       `gorm:"column:endpoint;size:255;not null"`
-	HandlersJSON    []byte       `gorm:"column:handlers_json;type:json;not null"`
+	HandlersJSON    []byte       `gorm:"column:handlers_json;type:jsonb;not null"`
 	Version         string       `gorm:"column:version;size:32;not null"`
-	LastHeartbeatAt sql.NullTime `gorm:"column:last_heartbeat_at;type:datetime(3)"`
-	CreatedAt       time.Time    `gorm:"column:created_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3)"`
-	UpdatedAt       time.Time    `gorm:"column:updated_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3)"`
+	LastHeartbeatAt sql.NullTime `gorm:"column:last_heartbeat_at;type:timestamptz"`
+	CreatedAt       time.Time    `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt       time.Time    `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 }
 
 // TableName pins the table name; this matches the migration in
@@ -36,9 +36,9 @@ type BotRouteAudit struct {
 	BotID     string    `gorm:"column:bot_id;size:64;not null;index:idx_bot_route_audit_bot,priority:1"`
 	Platform  string    `gorm:"column:platform;size:32;not null"`
 	Action    string    `gorm:"column:action;size:16;not null"`
-	Payload   []byte    `gorm:"column:payload;type:json;not null"`
+	Payload   []byte    `gorm:"column:payload;type:jsonb;not null"`
 	Actor     string    `gorm:"column:actor;size:64;not null"`
-	CreatedAt time.Time `gorm:"column:created_at;type:datetime(3);not null;default:CURRENT_TIMESTAMP(3);index:idx_bot_route_audit_bot,priority:2"`
+	CreatedAt time.Time `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP;index:idx_bot_route_audit_bot,priority:2"`
 }
 
 func (BotRouteAudit) TableName() string { return "bot_route_audit" }

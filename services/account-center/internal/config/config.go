@@ -17,6 +17,7 @@ import (
 type Config struct {
 	App          AppConfig          `mapstructure:"app"`
 	Database     DatabaseConfig     `mapstructure:"database"`
+	OpenAPI      OpenAPIConfig      `mapstructure:"openapi"`
 	Auth         AuthConfig         `mapstructure:"auth"`
 	Frontend     FrontendConfig     `mapstructure:"frontend"`
 	Redis        RedisConfig        `mapstructure:"redis"`
@@ -104,21 +105,24 @@ type CORSConfig struct {
 	MaxAgeSeconds       int      `mapstructure:"max_age"`
 }
 
-// DatabaseConfig holds MySQL connection configuration.
+// DatabaseConfig holds PostgreSQL connection and pool configuration.
 type DatabaseConfig struct {
-	Addr          string `mapstructure:"addr"`
-	Username      string `mapstructure:"username"`
-	Password      string `mapstructure:"password"`
-	Dbname        string `mapstructure:"dbname"`
-	Config        string `mapstructure:"config"`
-	MigrationsDir string `mapstructure:"migrations_dir"`
-	MaxIdleConns  int    `mapstructure:"max_idle_conns"`
-	MaxOpenConns  int    `mapstructure:"max_open_conns"`
-	LogMode       string `mapstructure:"log_mode"`
-	LogZap        bool   `mapstructure:"log_zap"`
-	SlowThreshold int    `mapstructure:"slow_threshold"`
-	AutoMigrate   bool   `mapstructure:"auto_migrate"`
-	AutoSeed      bool   `mapstructure:"auto_seed"`
+	DSN             string        `mapstructure:"dsn"`
+	MigrationsDir   string        `mapstructure:"migrations_dir"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
+	LogMode         string        `mapstructure:"log_mode"`
+	LogZap          bool          `mapstructure:"log_zap"`
+	SlowThreshold   int           `mapstructure:"slow_threshold"`
+	AutoMigrate     bool          `mapstructure:"auto_migrate"`
+	AutoSeed        bool          `mapstructure:"auto_seed"`
+}
+
+type OpenAPIConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Path    string `mapstructure:"path"`
 }
 
 // AuthConfig holds configuration for authentication flows.
@@ -512,15 +516,19 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.cors.allow_private_network", false)
 	v.SetDefault("app.cors.max_age", 43200)
 
-	v.SetDefault("database.config", "charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai")
+	v.SetDefault("database.dsn", "")
 	v.SetDefault("database.migrations_dir", "initialize/migrate/sql")
 	v.SetDefault("database.max_idle_conns", 10)
 	v.SetDefault("database.max_open_conns", 100)
+	v.SetDefault("database.conn_max_lifetime", "1h")
+	v.SetDefault("database.conn_max_idle_time", "30m")
 	v.SetDefault("database.log_mode", "info")
 	v.SetDefault("database.log_zap", true)
 	v.SetDefault("database.slow_threshold", 1000)
 	v.SetDefault("database.auto_migrate", true)
 	v.SetDefault("database.auto_seed", true)
+	v.SetDefault("openapi.enabled", true)
+	v.SetDefault("openapi.path", "/openapi")
 
 	v.SetDefault("auth.access_token_ttl", 900)
 	v.SetDefault("auth.refresh_token_ttl", 604800)

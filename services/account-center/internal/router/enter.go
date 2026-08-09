@@ -1,10 +1,10 @@
 package router
 
 import (
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"paigram/internal/config"
+	"paigram/internal/httpserver"
 	routerAdmin "paigram/internal/router/admin"
 	routerAdminAudit "paigram/internal/router/adminaudit"
 	routerAdminSystem "paigram/internal/router/adminsystem"
@@ -48,32 +48,32 @@ type RouterGroup struct {
 var RouterGroupApp = new(RouterGroup)
 
 // InitializeRouterGroups sets up all router groups with dependencies.
-func InitializeRouterGroups(rg *gin.RouterGroup, db *gorm.DB, authCfg config.AuthConfig) {
+func InitializeRouterGroups(rg *httpserver.Group, db *gorm.DB, authCfg config.AuthConfig) {
 	RouterGroupApp.MeRouterGroup.AuthConfig = authCfg
 
 	// Initialize admin router group
-	RouterGroupApp.AdminRouterGroup.Init(rg, db)
+	RouterGroupApp.AdminRouterGroup.Register(rg, db)
 
 	// Initialize phase-two router groups
-	RouterGroupApp.MeRouterGroup.Init(rg, db)
-	RouterGroupApp.AdminSystemRouterGroup.Init(rg, db)
-	RouterGroupApp.AdminAuditRouterGroup.Init(rg, db)
+	RouterGroupApp.MeRouterGroup.Register(rg, db)
+	RouterGroupApp.AdminSystemRouterGroup.Register(rg, db)
+	RouterGroupApp.AdminAuditRouterGroup.Register(rg, db)
 
 	// Phase 5 Sub-project 1: /me/bot-identities on the same protected
 	// /me/* tree. AuthMiddleware (post-A4.1-A) accepts either the
 	// Authorization: Bearer token or the ac_session cookie, so OIDC-issued
 	// sessions reach this handler with userID set without extra glue.
-	RouterGroupApp.MeIdentitiesRouterGroup.Init(rg, db)
+	RouterGroupApp.MeIdentitiesRouterGroup.Register(rg, db)
 
 	// Initialize platform router group
-	RouterGroupApp.PlatformRouterGroup.Init(rg, db)
+	RouterGroupApp.PlatformRouterGroup.Register(rg, db)
 
 	// Initialize platform binding router group
-	RouterGroupApp.PlatformBindingRouterGroup.Init(rg, db)
+	RouterGroupApp.PlatformBindingRouterGroup.Register(rg, db)
 
 	// Initialize OAuth admin routes (token endpoint is mounted in
 	// router.go::New on the public router because it has its own
 	// (client_id, client_secret) authentication and must not pass
 	// through the session-cookie middleware).
-	RouterGroupApp.OAuthRouterGroup.InitAdmin(rg)
+	RouterGroupApp.OAuthRouterGroup.RegisterAdmin(rg)
 }

@@ -8,6 +8,7 @@ import (
 
 	"paigram/internal/config"
 	"paigram/internal/email"
+	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 	"paigram/internal/service/geolocation"
 	"paigram/internal/service/loginrisk"
@@ -69,6 +70,14 @@ func NewHandler(db *gorm.DB, cfg config.AuthConfig, frontendCfg config.FrontendC
 
 // RegisterRoutes binds authentication routes to the router group.
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
+	registerRoutes(h, rg)
+}
+
+func (h *Handler) Register(rg *httpserver.Group) {
+	registerRoutes(h, rg)
+}
+
+func registerRoutes[T httpserver.RouteGroup[T]](h *Handler, rg T) {
 	rg.POST("/register", h.RegisterEmail)
 	rg.POST("/login", h.LoginWithEmail)
 	rg.POST("/refresh", h.RefreshToken)
@@ -78,11 +87,19 @@ func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.POST("/reset-password", h.ResetPassword)
 
 	oauth := rg.Group("/oauth")
-	h.RegisterOAuthRoutes(oauth)
+	registerOAuthRoutes(h, oauth)
 }
 
 // RegisterOAuthRoutes binds OAuth-specific routes to the router group.
 func (h *Handler) RegisterOAuthRoutes(rg *gin.RouterGroup) {
+	registerOAuthRoutes(h, rg)
+}
+
+func (h *Handler) RegisterOAuth(rg *httpserver.Group) {
+	registerOAuthRoutes(h, rg)
+}
+
+func registerOAuthRoutes[T httpserver.RouteGroup[T]](h *Handler, rg T) {
 	rg.POST("/:provider/init", h.InitiateOAuth)
 	rg.POST("/:provider/callback", middleware.OptionalAuthMiddleware(h.sessionCache), h.HandleOAuthCallback)
 }

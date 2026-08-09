@@ -16,7 +16,7 @@ import (
 func setupBotAccessServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	return testutil.OpenMySQLTestDB(t, "botaccess_service",
+	return testutil.OpenPostgreSQLTestDB(t, "botaccess_service",
 		&model.User{},
 		&model.Bot{},
 		&model.BotIdentity{},

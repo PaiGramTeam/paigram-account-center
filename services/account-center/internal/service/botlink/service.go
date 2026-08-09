@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -96,7 +96,7 @@ func (s *Service) UpsertLinkTx(ctx context.Context, tx *gorm.DB, in UpsertLinkIn
 	tx = tx.WithContext(ctx)
 
 	// Step 1: unscoped lookup by (bot_id, external_user_id). Unscoped()
-	// surfaces soft-deleted rows because production InnoDB UNIQUE keys
+	// surfaces soft-deleted rows because production UNIQUE constraints
 	// cover ALL rows; a soft-deleted row would still collide on INSERT
 	// without this branch.
 	var existing model.BotIdentity
@@ -345,18 +345,17 @@ func (s *Service) writeAudit(tx *gorm.DB, userID uint64, action string, in Upser
 }
 
 // isUniqueViolation returns true if err indicates a UNIQUE-constraint
-// failure. MySQL surfaces a typed *mysql.MySQLError with errno 1062
-// (ER_DUP_ENTRY) — preferred to avoid false positives on error messages
-// that happen to contain the literal string "1062". SQLite (via
+// failure. PostgreSQL surfaces a typed *pgconn.PgError with SQLSTATE 23505,
+// which is preferred to avoid false positives. SQLite (via
 // glebarez/sqlite, used in unit tests) lacks a typed error, so we fall
 // back to a case-insensitive substring match on the well-known message.
 func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
-	var mysqlErr *mysql.MySQLError
-	if errors.As(err, &mysqlErr) {
-		return mysqlErr.Number == 1062
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) {
+		return postgresErr.Code == "23505"
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique constraint failed") || strings.Contains(msg, "unique")

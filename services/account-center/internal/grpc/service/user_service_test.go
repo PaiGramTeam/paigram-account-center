@@ -18,7 +18,7 @@ import (
 // TestGetUserPermissions_NoMagicAdminBackdoor pins the V17 fix: users with low IDs
 // must never be auto-granted admin.all + admin role just because their numeric ID is small.
 func TestGetUserPermissions_NoMagicAdminBackdoor(t *testing.T) {
-	db := testutil.OpenMySQLTestDB(t, "user_perm_no_admin_backdoor",
+	db := testutil.OpenPostgreSQLTestDB(t, "user_perm_no_admin_backdoor",
 		&model.User{},
 		&model.UserEmail{},
 		&model.UserProfile{},

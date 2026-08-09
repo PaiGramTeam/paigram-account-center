@@ -12,7 +12,7 @@ type UserTwoFactor struct {
 	Secret      string       `gorm:"size:255;not null"` // AES-256-GCM encrypted TOTP secret
 	BackupCodes string       `gorm:"type:text"`         // JSON array of bcrypt-hashed backup codes
 	EnabledAt   time.Time    `gorm:"not null"`
-	LastUsedAt  sql.NullTime `gorm:"type:datetime(3)"`
+	LastUsedAt  sql.NullTime `gorm:"type:timestamptz"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -29,7 +29,7 @@ type UserDevice struct {
 	IP           string       `gorm:"size:128"`
 	Location     string       `gorm:"size:255"` // City, Country
 	LastActiveAt time.Time    `gorm:"not null"`
-	TrustExpiry  sql.NullTime `gorm:"type:datetime(3)"` // For trusted device feature
+	TrustExpiry  sql.NullTime `gorm:"type:timestamptz"` // For trusted device feature
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -69,6 +69,6 @@ type PasswordResetToken struct {
 	UserID    uint64       `gorm:"index;not null"`
 	Token     string       `gorm:"size:255;uniqueIndex;not null"`
 	ExpiresAt time.Time    `gorm:"not null"`
-	UsedAt    sql.NullTime `gorm:"type:datetime(3)"`
+	UsedAt    sql.NullTime `gorm:"type:timestamptz"`
 	CreatedAt time.Time
 }

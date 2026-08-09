@@ -27,7 +27,7 @@ var dbCounter atomic.Uint64
 
 // newTestDB returns a SQLite in-memory *gorm.DB seeded with just the
 // user_sessions table. We use raw DDL because model.UserSession + its
-// MySQL CURRENT_TIMESTAMP(3) column defaults are not portable to SQLite.
+// Production timestamp defaults are not portable to SQLite.
 func newTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := fmt.Sprintf("file:%s-%d?mode=memory&cache=shared", t.Name(), dbCounter.Add(1))
