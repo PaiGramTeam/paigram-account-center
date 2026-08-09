@@ -58,6 +58,7 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 			Public             bool     `json:"public"`
 			Authenticated      bool     `json:"authenticated"`
 			DynamicPermissions []string `json:"dynamicPermissions"`
+			RequiredRoles      []string `json:"requiredRoles"`
 		} `json:"x-access"`
 	}
 	var createOperation operation
@@ -83,7 +84,7 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	require.NotNil(t, tokenOperation.RequestBody)
 	require.True(t, tokenOperation.RequestBody.Required)
 	require.Contains(t, tokenOperation.RequestBody.Content, "application/x-www-form-urlencoded")
-	require.ElementsMatch(t, []string{"200", "400", "401", "408", "413", "415", "500"}, mapKeys(tokenOperation.Responses))
+	require.ElementsMatch(t, []string{"200", "400", "401", "408", "413", "500"}, mapKeys(tokenOperation.Responses))
 
 	var actionOperation operation
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/admin/system/platform-services/{id}/check"]["post"], &actionOperation))
@@ -96,6 +97,7 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	require.True(t, adminOperation.Access.Authenticated)
 	require.False(t, adminOperation.Access.Public)
 	require.Equal(t, []string{"casbin:path-and-method"}, adminOperation.Access.DynamicPermissions)
+	require.Equal(t, []string{"admin"}, adminOperation.Access.RequiredRoles)
 
 	var protectedOperation struct {
 		Security []map[string][]string `json:"security"`
@@ -108,6 +110,9 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 			Name     string `json:"name"`
 			In       string `json:"in"`
 			Required bool   `json:"required"`
+			Schema   struct {
+				Type string `json:"type"`
+			} `json:"schema"`
 		} `json:"parameters"`
 	}
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/admin/users/{id}"]["get"], &parameterizedOperation))
@@ -115,6 +120,58 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	require.Equal(t, "id", parameterizedOperation.Parameters[0].Name)
 	require.Equal(t, "path", parameterizedOperation.Parameters[0].In)
 	require.True(t, parameterizedOperation.Parameters[0].Required)
+	require.Equal(t, "integer", parameterizedOperation.Parameters[0].Schema.Type)
+
+	var listUsersOperation struct {
+		Parameters []struct {
+			Name   string `json:"name"`
+			In     string `json:"in"`
+			Schema struct {
+				Type string `json:"type"`
+			} `json:"schema"`
+		} `json:"parameters"`
+	}
+	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/admin/users"]["get"], &listUsersOperation))
+	parameters := make(map[string]string, len(listUsersOperation.Parameters))
+	for _, parameter := range listUsersOperation.Parameters {
+		require.Equal(t, "query", parameter.In)
+		parameters[parameter.Name] = parameter.Schema.Type
+	}
+	require.Equal(t, "integer", parameters["page"])
+	require.Equal(t, "integer", parameters["page_size"])
+	require.Equal(t, "string", parameters["sort_by"])
+	require.Equal(t, "string", parameters["order"])
+	require.Equal(t, "string", parameters["status"])
+	require.Equal(t, "string", parameters["search"])
+
+	require.Contains(t, recorder.Body.String(), "totp_code")
+	require.Contains(t, recorder.Body.String(), "trust_device")
+}
+
+func TestSpecializedHumaContractsPreserveWireSemantics(t *testing.T) {
+	stack := newIntegrationStack(t)
+
+	login := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
+		`{"email":"missing@example.com","password":"password123","totp_code":"123456","trust_device":true}`,
+	))
+	login.Header.Set("Content-Type", "application/json")
+	loginResponse := httptest.NewRecorder()
+	stack.Router.ServeHTTP(loginResponse, login)
+	require.Equal(t, http.StatusUnauthorized, loginResponse.Code)
+
+	token := httptest.NewRequest(http.MethodPost, "/api/v1/oauth/token", strings.NewReader(`{"grant_type":"client_credentials"}`))
+	token.Header.Set("Content-Type", "application/json")
+	tokenResponse := httptest.NewRecorder()
+	stack.Router.ServeHTTP(tokenResponse, token)
+	require.Equal(t, http.StatusBadRequest, tokenResponse.Code)
+	require.Equal(t, "no-store", tokenResponse.Header().Get("Cache-Control"))
+	var oauthError struct {
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	require.NoError(t, json.Unmarshal(tokenResponse.Body.Bytes(), &oauthError))
+	require.Equal(t, "invalid_request", oauthError.Error)
+	require.NotEmpty(t, oauthError.ErrorDescription)
 }
 
 func mapKeys[V any](values map[string]V) []string {

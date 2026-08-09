@@ -29,6 +29,11 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 	})
 
 	widgets := runtime.V1.Group("/widgets").WithAccess(Access{Authenticated: true})
+	widgets.RegisterContract(http.MethodGet, "/:widgetId", ResponseContract(
+		struct {
+			ID string `json:"id"`
+		}{}, http.StatusOK, http.StatusBadRequest,
+	).WithParameters(PathString("widgetId")))
 	widgets.RegisterContract(http.MethodPost, "", JSONContract(
 		struct {
 			Name string `json:"name" minLength:"1"`
@@ -39,7 +44,12 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 		http.StatusCreated,
 		http.StatusBadRequest,
 	))
-	widgets.RegisterContract(http.MethodPost, "/:widgetId/refresh", ResponseContract(nil, http.StatusAccepted))
+	widgets.RegisterContract(http.MethodDelete, "/:widgetId", ResponseContract(
+		nil, http.StatusNoContent, http.StatusBadRequest,
+	).WithParameters(PathString("widgetId")))
+	widgets.RegisterContract(http.MethodPost, "/:widgetId/refresh", ResponseContract(
+		nil, http.StatusAccepted, http.StatusBadRequest,
+	).WithParameters(PathString("widgetId")))
 	widgets.GET("/:widgetId", func(c *gin.Context) {
 		c.Set("route_middleware", true)
 		c.Next()
@@ -221,11 +231,43 @@ func TestRuntimeValidatesFormContractBeforeGinHandler(t *testing.T) {
 	require.Equal(t, 1, handlerCalls)
 }
 
-func TestCompatibilitySuccessResponsesAreRouteSpecific(t *testing.T) {
-	require.Equal(t, http.StatusCreated, compatibilitySuccessStatus(http.MethodPost, "/api/v1/auth/register"))
-	require.Equal(t, http.StatusOK, compatibilitySuccessStatus(http.MethodPost, "/api/v1/auth/login"))
-	require.Equal(t, http.StatusNoContent, compatibilitySuccessStatus(http.MethodDelete, "/api/v1/me/sessions/{sessionId}"))
-	require.NotContains(t, compatibilitySuccessResponses(http.MethodPost, "/api/v1/auth/login"), "201")
+func TestRuntimeValidatesTypedPathAndQueryParameters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	runtime, err := Attach(engine, Options{Title: "Test API", Version: "1.0.0"})
+	require.NoError(t, err)
+	widgets := runtime.V1.Group("/widgets").WithAccess(Access{Public: true})
+	contract := ResponseContract(nil, http.StatusNoContent).WithParameters(
+		QueryInteger("page", 1, 1, 100),
+	)
+	widgets.RegisterContract(http.MethodGet, "/:id", contract)
+	handlerCalled := false
+	widgets.GET("/:id", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusNoContent)
+	})
+
+	for _, target := range []string{"/api/v1/widgets/not-an-id", "/api/v1/widgets/1?page=invalid"} {
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, target, nil))
+		require.Equal(t, http.StatusBadRequest, response.Code)
+		require.False(t, handlerCalled)
+	}
+
+	response := httptest.NewRecorder()
+	engine.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/widgets/1?page=2", nil))
+	require.Equal(t, http.StatusNoContent, response.Code)
+	require.True(t, handlerCalled)
+}
+
+func TestRuntimeRequiresExplicitContract(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	runtime, err := Attach(engine, Options{Title: "Test API", Version: "1.0.0"})
+	require.NoError(t, err)
+	require.PanicsWithValue(t, "HTTP operation contract is required: GET /api/v1/widgets", func() {
+		runtime.V1.GET("/widgets", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	})
 }
 
 func TestRuntimeCanDisableDocumentationRoutes(t *testing.T) {

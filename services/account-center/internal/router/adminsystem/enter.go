@@ -26,7 +26,7 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	adminGate := middleware.RequireRoleMiddleware("admin")
 	permissionCheck := middleware.CasbinMiddleware()
 	adminSystem := httpserver.WithAccess(rg.Group("/admin/system"), httpserver.Access{
-		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"}, RequiredRoles: []string{"admin"},
 	})
 	adminSystem.Use(adminGate, permissionCheck)
 	{

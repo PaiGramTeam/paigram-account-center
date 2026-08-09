@@ -36,6 +36,9 @@ type Contract struct {
 	requestRequired bool
 	successStatus   int
 	errors          []int
+	errorTypes      map[int]reflect.Type
+	parameters      []Parameter
+	validateBody    bool
 	maxBodyBytes    int64
 	bodyReadTimeout time.Duration
 }
@@ -63,7 +66,35 @@ func newContract(request, response any, contentType string, successStatus int, e
 		requestRequired: request != nil,
 		successStatus:   successStatus,
 		errors:          append([]int(nil), errorStatuses...),
+		errorTypes:      make(map[int]reflect.Type),
+		validateBody:    true,
 	}
+}
+
+func (c Contract) WithErrorResponse(response any, statuses ...int) Contract {
+	responseType := indirectType(response)
+	if responseType == nil {
+		panic("HTTP contract error response type is required")
+	}
+	if c.errorTypes == nil {
+		c.errorTypes = make(map[int]reflect.Type)
+	} else {
+		cloned := make(map[int]reflect.Type, len(c.errorTypes)+len(statuses))
+		for status, current := range c.errorTypes {
+			cloned[status] = current
+		}
+		c.errorTypes = cloned
+	}
+	for _, status := range statuses {
+		c.errors = appendStatus(c.errors, status)
+		c.errorTypes[status] = responseType
+	}
+	return c
+}
+
+func (c Contract) WithoutBodyValidation() Contract {
+	c.validateBody = false
+	return c
 }
 
 func (c Contract) WithBodyLimits(maxBytes int64, readTimeout time.Duration) Contract {
@@ -83,8 +114,12 @@ func indirectType(value any) reflect.Type {
 	return typeOf
 }
 
-func (c Contract) prepare(registry huma.Registry, defaults BodyOptions) Contract {
+func (c Contract) prepare(registry huma.Registry, defaults BodyOptions, path string) Contract {
 	c.registry = registry
+	c = c.prepareParameters(path)
+	if len(c.parameters) > 0 {
+		c.errors = appendStatus(c.errors, http.StatusBadRequest)
+	}
 	if c.requestType != nil {
 		c.requestSchema = huma.SchemaFromType(registry, c.requestType)
 	}
@@ -98,8 +133,10 @@ func (c Contract) prepare(registry huma.Registry, defaults BodyOptions) Contract
 		c.bodyReadTimeout = defaults.ReadTimeout
 	}
 	if c.hasRequestBody() {
-		c.errors = appendStatus(c.errors, http.StatusBadRequest)
-		c.errors = appendStatus(c.errors, http.StatusUnsupportedMediaType)
+		if c.validateBody {
+			c.errors = appendStatus(c.errors, http.StatusBadRequest)
+			c.errors = appendStatus(c.errors, http.StatusUnsupportedMediaType)
+		}
 		if c.maxBodyBytes > 0 {
 			c.errors = appendStatus(c.errors, http.StatusRequestEntityTooLarge)
 		}
@@ -128,9 +165,11 @@ func (c Contract) apply(op *huma.Operation) {
 	op.Errors = append([]int(nil), c.errors...)
 	op.MaxBodyBytes = c.maxBodyBytes
 	op.BodyReadTimeout = c.bodyReadTimeout
+	op.SkipValidateParams = false
 }
 
 func (c Contract) document(op *huma.Operation) {
+	c.documentParameters(op)
 	if c.requestSchema == nil {
 		op.RequestBody = nil
 	} else {
@@ -145,7 +184,7 @@ func (c Contract) document(op *huma.Operation) {
 		strconv.Itoa(c.successStatus): contractResponse(c.successStatus, c.responseSchema),
 	}
 	for _, status := range c.errors {
-		op.Responses[strconv.Itoa(status)] = errorContractResponse(status, c.registry)
+		op.Responses[strconv.Itoa(status)] = errorContractResponse(status, c.registry, c.errorTypes[status])
 	}
 }
 
@@ -157,11 +196,20 @@ func contractResponse(status int, schema *huma.Schema) *huma.Response {
 	return result
 }
 
-func errorContractResponse(status int, registry huma.Registry) *huma.Response {
+func errorContractResponse(status int, registry huma.Registry, responseType reflect.Type) *huma.Response {
+	var schema *huma.Schema
+	if responseType != nil {
+		schema = huma.SchemaFromType(registry, responseType)
+	} else {
+		schema = &huma.Schema{OneOf: []*huma.Schema{
+			huma.SchemaFromType(registry, reflect.TypeFor[humaCompatibilityError]()),
+			huma.SchemaFromType(registry, reflect.TypeFor[codedCompatibilityError]()),
+		}}
+	}
 	return &huma.Response{
 		Description: http.StatusText(status),
 		Content: map[string]*huma.MediaType{
-			"application/json": {Schema: huma.SchemaFromType(registry, reflect.TypeFor[humaCompatibilityError]())},
+			"application/json": {Schema: schema},
 		},
 	}
 }
@@ -203,7 +251,7 @@ type contractValidationFailure struct {
 }
 
 func (c Contract) bindRequest(request *http.Request, body []byte) ([]byte, *contractValidationFailure) {
-	if !c.hasRequestBody() {
+	if !c.hasRequestBody() || !c.validateBody {
 		return body, nil
 	}
 	if len(strings.TrimSpace(string(body))) == 0 {
@@ -273,6 +321,16 @@ type humaCompatibilityError struct {
 	Code    int    `json:"code"`
 	Data    any    `json:"data"`
 	Message string `json:"message"`
+}
+
+type codedCompatibilityError struct {
+	Error codedCompatibilityErrorDetail `json:"error"`
+}
+
+type codedCompatibilityErrorDetail struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
 }
 
 func (e *humaCompatibilityError) Error() string {

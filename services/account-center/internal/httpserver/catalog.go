@@ -8,6 +8,7 @@ type Access struct {
 	Authenticated      bool
 	Permission         string
 	DynamicPermissions []string
+	RequiredRoles      []string
 }
 
 // Route is the stable catalog entry emitted for a registered operation.

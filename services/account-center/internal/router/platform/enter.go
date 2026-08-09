@@ -17,6 +17,7 @@ func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
 }
 
 func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	registerContracts(rg)
 	registerRoutes(r, rg)
 }
 

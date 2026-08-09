@@ -16,7 +16,9 @@ import (
 	"gorm.io/gorm"
 
 	"paigram/internal/handler"
+	handlermeidentities "paigram/internal/handler/meidentities"
 	"paigram/internal/httpserver"
+	"paigram/internal/response"
 )
 
 // RouterGroup wires the meidentities handler onto a gin router subtree.
@@ -34,10 +36,15 @@ func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
 }
 
 func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
-	rg.RegisterContract(http.MethodDelete, "/me/bot-identities/:botId", httpserver.ResponseContract(
+	rg.RegisterContract(http.MethodGet, "/me/bot-identities", httpserver.ResponseContract(
+		response.Envelope[[]handlermeidentities.BotIdentityDTO]{}, http.StatusOK,
+		http.StatusUnauthorized, http.StatusInternalServerError,
+	))
+	unlinkContract := httpserver.ResponseContract(
 		nil, http.StatusNoContent,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError,
-	))
+	).WithParameters(httpserver.PathString("botId"))
+	rg.RegisterContract(http.MethodDelete, "/me/bot-identities/:botId", unlinkContract)
 	registerRoutes(r, rg)
 }
 

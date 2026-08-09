@@ -51,6 +51,12 @@ func registerGinBridge[I any](api huma.API, op huma.Operation, endpoint gin.Hand
 		func() {
 			defer func() { ginContext.Writer = originalWriter }()
 			if contract != nil {
+				if failure := contract.validateParameters(ginContext); failure != nil {
+					ginContext.JSON(failure.status, humaCompatibilityError{
+						Code: failure.status, Data: failure.details, Message: failure.message,
+					})
+					return
+				}
 				boundBody, failure := contract.bindRequest(ginContext.Request, body)
 				if failure != nil {
 					ginContext.JSON(failure.status, humaCompatibilityError{

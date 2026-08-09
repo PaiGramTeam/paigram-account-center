@@ -167,23 +167,20 @@ func (g *Group) register(method, path string, handlers ...gin.HandlerFunc) gin.I
 	}
 	validateAccess(g.access)
 	fullPath := joinPath(g.prefix, humaPath(path))
+	contract, hasContract := g.contracts.get(method, fullPath)
+	if !hasContract {
+		panic("HTTP operation contract is required: " + routeKey(method, fullPath))
+	}
+	contract = contract.prepare(g.api.OpenAPI().Components.Schemas, g.body, fullPath)
 	op := huma.Operation{
-		OperationID:        operationID(method, fullPath),
-		Method:             method,
-		Path:               fullPath,
-		DefaultStatus:      compatibilitySuccessStatus(method, fullPath),
-		SkipValidateParams: true,
-		SkipValidateBody:   true,
-		Tags:               []string{operationTag(fullPath)},
-		Parameters:         pathParameters(fullPath),
-		Responses:          compatibilitySuccessResponses(method, fullPath),
+		OperationID:   operationID(method, fullPath),
+		Method:        method,
+		Path:          fullPath,
+		DefaultStatus: contract.successStatus,
+		Tags:          []string{operationTag(fullPath)},
 	}
 	op.Extensions = map[string]any{"x-access": accessExtension(g.access)}
-	contract, hasContract := g.contracts.get(method, fullPath)
-	if hasContract {
-		contract = contract.prepare(g.api.OpenAPI().Components.Schemas, g.body)
-		contract.apply(&op)
-	}
+	contract.apply(&op)
 	if !g.access.Public {
 		op.Security = []map[string][]string{{"bearerAuth": {}}}
 	}
@@ -195,13 +192,11 @@ func (g *Group) register(method, path string, handlers ...gin.HandlerFunc) gin.I
 		middleware: append([]gin.HandlerFunc(nil), handlers[:len(handlers)-1]...),
 	}
 	registrationAPI := &registrationAPI{API: g.api, adapter: adapter}
-	if hasContract {
-		registrationAPI.contract = &contract
-	}
-	if hasContract && contract.hasRequestBody() {
+	registrationAPI.contract = &contract
+	if contract.hasRequestBody() {
 		registerGinBridge(registrationAPI, op, endpoint, &contract, func(input *ginBridgeBodyInput) []byte { return input.RawBody })
 	} else {
-		registerGinBridge(registrationAPI, op, endpoint, nil, func(_ *ginBridgeInput) []byte { return nil })
+		registerGinBridge(registrationAPI, op, endpoint, &contract, func(_ *ginBridgeInput) []byte { return nil })
 	}
 	g.catalog.add(Route{OperationID: op.OperationID, Method: method, Path: fullPath, Access: g.access})
 	return g.router

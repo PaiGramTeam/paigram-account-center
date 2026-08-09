@@ -43,6 +43,15 @@ type MessageData struct {
 	Message string `json:"message"`
 }
 
+type ErrorEnvelope struct {
+	Error ErrorDetail `json:"error"`
+}
+
+type PaginatedData[T any] struct {
+	Items      []T             `json:"items"`
+	Pagination *PaginationMeta `json:"pagination"`
+}
+
 func NewMessageData(message string) *MessageData {
 	return &MessageData{Message: message}
 }

@@ -4,12 +4,14 @@ import "time"
 
 type CreateAuthorityParams struct {
 	Name          string
+	DisplayName   string
 	Description   string
 	PermissionIDs []uint
 }
 
 type UpdateAuthorityParams struct {
 	Name        *string
+	DisplayName *string
 	Description *string
 }
 
@@ -29,6 +31,7 @@ type ListAuthoritiesResult struct {
 type RoleWithPermissions struct {
 	ID          uint             `json:"id"`
 	Name        string           `json:"name"`
+	DisplayName string           `json:"display_name"`
 	Description string           `json:"description"`
 	IsSystem    bool             `json:"is_system"`
 	CreatedAt   time.Time        `json:"created_at"`

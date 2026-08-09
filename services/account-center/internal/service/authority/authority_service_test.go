@@ -76,6 +76,21 @@ func TestListAuthoritiesCarriesRequestedPageSize(t *testing.T) {
 	assert.Len(t, result.Data, 0)
 }
 
+func TestCreateAndUpdateAuthorityPersistDisplayName(t *testing.T) {
+	db := setupAuthorityServiceTestDB(t)
+	service := &AuthorityService{db: db}
+
+	role, err := service.CreateAuthority(CreateAuthorityParams{Name: "operators", DisplayName: "Operators"})
+	require.NoError(t, err)
+	assert.Equal(t, "Operators", role.DisplayName)
+
+	updated := "Platform Operators"
+	require.NoError(t, service.UpdateAuthority(uint(role.ID), UpdateAuthorityParams{DisplayName: &updated}))
+	var stored model.Role
+	require.NoError(t, db.First(&stored, role.ID).Error)
+	assert.Equal(t, updated, stored.DisplayName)
+}
+
 func TestListAuthoritiesUsesDeterministicOrdering(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
@@ -107,6 +122,7 @@ func TestListAuthoritiesUsesDeterministicOrdering(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, firstPage.Data, 2)
 	assert.Equal(t, "authority-c", firstPage.Data[0].Name)
+	assert.Equal(t, "authority-c", firstPage.Data[0].DisplayName)
 	assert.Equal(t, "authority-b", firstPage.Data[1].Name)
 
 	secondPage, err := service.ListAuthorities(ListAuthoritiesParams{Page: 2, PageSize: 2})

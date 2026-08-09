@@ -28,11 +28,11 @@ type RegisterEmailRequest struct {
 	// User email address
 	// required: true
 	// example: user@example.com
-	Email string `json:"email" format:"email"`
+	Email string `json:"email" binding:"required,email" format:"email"`
 	// User password (8-72 characters)
 	// required: true
 	// example: SecurePassword123
-	Password string `json:"password" minLength:"8" maxLength:"72"`
+	Password string `json:"password" binding:"required" minLength:"8" maxLength:"72"`
 	// Display name for the user
 	// required: true
 	// example: John Doe
@@ -73,7 +73,7 @@ type swaggerLoginEmailParams struct {
 	// Login credentials
 	// in: body
 	// required: true
-	Body loginEmailRequest
+	Body LoginEmailRequest
 }
 
 // swagger:model loginEmailRequest
@@ -81,15 +81,21 @@ type LoginEmailRequest struct {
 	// User email address
 	// required: true
 	// example: user@example.com
-	Email string `json:"email" format:"email"`
+	Email string `json:"email" binding:"required,email" format:"email"`
 	// User password
 	// required: true
 	// example: SecurePassword123
-	Password string `json:"password" minLength:"8" maxLength:"72"`
+	Password string `json:"password" binding:"required" minLength:"8" maxLength:"72"`
+	// Optional TOTP or backup code when two-factor authentication is enabled.
+	TOTPCode string `json:"totp_code,omitempty" binding:"omitempty,min=6,max=8" minLength:"6" maxLength:"8"`
+	// Whether to trust this device for 30 days after two-factor authentication.
+	TrustDevice bool `json:"trust_device,omitempty"`
 	// CAPTCHA token issued by Cloudflare Turnstile when risk checks require it
 	// example: 0.zrSnR7...
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
+
+type loginEmailRequest = LoginEmailRequest
 
 // swagger:model loginResponse
 type LoginResponse struct {

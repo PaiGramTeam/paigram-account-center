@@ -1,12 +1,8 @@
 package httpserver
 
 import (
-	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
-
-	"github.com/danielgtaylor/huma/v2"
 )
 
 var (
@@ -31,6 +27,9 @@ func validateAccess(access Access) {
 	if len(access.DynamicPermissions) > 0 && !access.Authenticated {
 		panic("dynamic HTTP permissions require authenticated access")
 	}
+	if len(access.RequiredRoles) > 0 && !access.Authenticated {
+		panic("HTTP role requirements require authenticated access")
+	}
 }
 
 func accessExtension(access Access) map[string]any {
@@ -44,73 +43,14 @@ func accessExtension(access Access) map[string]any {
 	if len(access.DynamicPermissions) > 0 {
 		result["dynamicPermissions"] = append([]string(nil), access.DynamicPermissions...)
 	}
+	if len(access.RequiredRoles) > 0 {
+		result["requiredRoles"] = append([]string(nil), access.RequiredRoles...)
+	}
 	return result
 }
 
 func humaPath(path string) string {
 	return ginPathParameterPattern.ReplaceAllString(path, `{$1}`)
-}
-
-func pathParameters(path string) []*huma.Param {
-	matches := humaPathParameterPattern.FindAllStringSubmatch(path, -1)
-	parameters := make([]*huma.Param, 0, len(matches))
-	seen := make(map[string]struct{}, len(matches))
-	for _, match := range matches {
-		name := match[1]
-		if _, exists := seen[name]; exists {
-			continue
-		}
-		seen[name] = struct{}{}
-		parameters = append(parameters, &huma.Param{
-			Name:     name,
-			In:       "path",
-			Required: true,
-			Schema:   &huma.Schema{Type: "string"},
-		})
-	}
-	return parameters
-}
-
-func compatibilitySuccessResponses(method, path string) map[string]*huma.Response {
-	jsonResponse := func(description string) *huma.Response {
-		return &huma.Response{
-			Description: description,
-			Content: map[string]*huma.MediaType{
-				"application/json": {Schema: &huma.Schema{Type: "object", AdditionalProperties: true}},
-			},
-		}
-	}
-	status := compatibilitySuccessStatus(method, path)
-	if status == http.StatusNoContent {
-		return map[string]*huma.Response{"204": {Description: "Request completed without a response body"}}
-	}
-	return map[string]*huma.Response{strconv.Itoa(status): jsonResponse(http.StatusText(status))}
-}
-
-func compatibilitySuccessStatus(method, path string) int {
-	if status, exists := compatibilityStatusOverrides[routeKey(method, path)]; exists {
-		return status
-	}
-	if method == http.MethodDelete {
-		return http.StatusNoContent
-	}
-	return http.StatusOK
-}
-
-var compatibilityStatusOverrides = map[string]int{
-	"GET /api/v1/auth/telegram/start":                      http.StatusFound,
-	"GET /api/v1/auth/telegram/callback":                   http.StatusFound,
-	"POST /api/v1/auth/register":                           http.StatusCreated,
-	"POST /api/v1/me/emails":                               http.StatusCreated,
-	"POST /api/v1/me/platform-accounts":                    http.StatusCreated,
-	"POST /api/v1/admin/users":                             http.StatusCreated,
-	"POST /api/v1/admin/system/platform-services":          http.StatusCreated,
-	"POST /api/v1/admin/service-credentials":               http.StatusCreated,
-	"DELETE /api/v1/me/emails/{emailId}":                   http.StatusOK,
-	"DELETE /api/v1/me/login-methods/{provider}":           http.StatusOK,
-	"DELETE /api/v1/me/security/2fa":                       http.StatusOK,
-	"DELETE /api/v1/admin/users/{id}/sessions/{sessionId}": http.StatusOK,
-	"DELETE /api/v1/admin/roles/{id}":                      http.StatusOK,
 }
 
 func joinPath(prefix, path string) string {

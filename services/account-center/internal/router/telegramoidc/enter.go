@@ -34,14 +34,20 @@ func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
 }
 
 func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
-	rg.RegisterContract(http.MethodGet, "/auth/telegram/start", httpserver.ResponseContract(
+	startContract := httpserver.ResponseContract(
 		nil, http.StatusFound,
 		http.StatusBadRequest, http.StatusServiceUnavailable, http.StatusInternalServerError,
-	))
-	rg.RegisterContract(http.MethodGet, "/auth/telegram/callback", httpserver.ResponseContract(
+	).WithParameters(
+		httpserver.RequiredQueryString("bot"), httpserver.QueryString("redirect_to"),
+	)
+	rg.RegisterContract(http.MethodGet, "/auth/telegram/start", startContract)
+	callbackContract := httpserver.ResponseContract(
 		nil, http.StatusFound,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusBadGateway, http.StatusInternalServerError,
-	))
+	).WithParameters(
+		httpserver.QueryString("code"), httpserver.QueryString("state"), httpserver.QueryString("error"),
+	)
+	rg.RegisterContract(http.MethodGet, "/auth/telegram/callback", callbackContract)
 	registerPublic(r, rg)
 }
 

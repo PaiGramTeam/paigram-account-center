@@ -218,14 +218,6 @@ func (h *Handler) RegisterEmail(c *gin.Context) {
 	response.Created(c, responseData)
 }
 
-type loginEmailRequest struct {
-	Email        string `json:"email" binding:"required,email"`
-	Password     string `json:"password" binding:"required"`
-	TOTPCode     string `json:"totp_code" binding:"omitempty,min=6,max=8"` // Optional 2FA or backup code
-	TrustDevice  bool   `json:"trust_device"`                              // Trust this device for 30 days
-	CaptchaToken string `json:"captcha_token"`
-}
-
 // swagger:route POST /api/v1/auth/login auth loginEmail
 //
 // Login with email and password.
@@ -246,7 +238,7 @@ type loginEmailRequest struct {
 //
 // LoginWithEmail authenticates a user via email/password.
 func (h *Handler) LoginWithEmail(c *gin.Context) {
-	var req loginEmailRequest
+	var req LoginEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("login email: invalid request body", zap.Error(err))
 		response.BadRequest(c, "invalid request body")

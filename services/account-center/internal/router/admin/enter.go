@@ -27,7 +27,7 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	permissionCheck := middleware.CasbinMiddleware()
 	userHandler := &handler.ApiGroupApp.UserApiGroup.Handler
 	users := httpserver.WithAccess(rg.Group("/admin/users"), httpserver.Access{
-		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"}, RequiredRoles: []string{"admin"},
 	})
 	users.Use(adminGate)
 	{
@@ -53,7 +53,7 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 
 	authorityHandler := &handler.ApiGroupApp.AuthorityApiGroup.AuthorityHandler
 	roles := httpserver.WithAccess(rg.Group("/admin/roles"), httpserver.Access{
-		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"}, RequiredRoles: []string{"admin"},
 	})
 	roles.Use(adminGate)
 	{

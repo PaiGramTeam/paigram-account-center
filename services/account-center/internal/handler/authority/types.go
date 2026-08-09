@@ -9,14 +9,14 @@ import (
 
 type CreateAuthorityRequest struct {
 	Name          string `json:"name" binding:"required,min=2,max=50" minLength:"2" maxLength:"50"`
-	DisplayName   string `json:"display_name,omitempty" maxLength:"100"`
+	DisplayName   string `json:"display_name,omitempty" binding:"omitempty,min=1,max=100" minLength:"1" maxLength:"100"`
 	Description   string `json:"description,omitempty" binding:"max=200" maxLength:"200"`
 	PermissionIDs []uint `json:"permission_ids,omitempty"`
 }
 
 type UpdateAuthorityRequest struct {
 	Name        *string `json:"name,omitempty" binding:"omitempty,min=2,max=50" minLength:"2" maxLength:"50"`
-	DisplayName *string `json:"display_name,omitempty" maxLength:"100"`
+	DisplayName *string `json:"display_name,omitempty" binding:"omitempty,min=1,max=100" minLength:"1" maxLength:"100"`
 	Description *string `json:"description,omitempty" binding:"omitempty,max=200" maxLength:"200"`
 }
 

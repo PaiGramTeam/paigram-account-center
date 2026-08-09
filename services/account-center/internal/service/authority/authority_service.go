@@ -2,6 +2,7 @@ package authority
 
 import (
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 	"paigram/internal/model"
@@ -27,6 +28,10 @@ func (s *AuthorityService) DB() *gorm.DB {
 
 func (s *AuthorityService) CreateAuthority(params CreateAuthorityParams) (*model.Role, error) {
 	var role *model.Role
+	displayName := strings.TrimSpace(params.DisplayName)
+	if displayName == "" {
+		displayName = params.Name
+	}
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var count int64
@@ -39,7 +44,7 @@ func (s *AuthorityService) CreateAuthority(params CreateAuthorityParams) (*model
 
 		role = &model.Role{
 			Name:        params.Name,
-			DisplayName: params.Name,
+			DisplayName: displayName,
 			Description: params.Description,
 			IsSystem:    false,
 		}
@@ -109,6 +114,9 @@ func (s *AuthorityService) UpdateAuthority(roleID uint, params UpdateAuthorityPa
 
 	if params.Description != nil {
 		role.Description = *params.Description
+	}
+	if params.DisplayName != nil {
+		role.DisplayName = *params.DisplayName
 	}
 
 	return s.db.Save(&role).Error
@@ -211,6 +219,7 @@ func (s *AuthorityService) ListAuthorities(params ListAuthoritiesParams) (*ListA
 		data[i] = RoleWithPermissions{
 			ID:          uint(role.ID),
 			Name:        role.Name,
+			DisplayName: role.DisplayName,
 			Description: role.Description,
 			IsSystem:    role.IsSystem,
 			CreatedAt:   role.CreatedAt,

@@ -30,10 +30,13 @@ func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
 }
 
 func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
-	rg.RegisterContract(http.MethodPost, "/oauth/token", httpserver.FormContract(
+	tokenContract := httpserver.FormContract(
 		handleroauth.TokenRequest{}, credentials.IssuedToken{}, http.StatusOK,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError,
-	))
+	).WithoutBodyValidation().WithErrorResponse(
+		handleroauth.TokenErrorResponse{}, http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError,
+	)
+	rg.RegisterContract(http.MethodPost, "/oauth/token", tokenContract)
 	registerPublic(r, rg)
 }
 
@@ -59,7 +62,7 @@ func registerAdmin[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	credentialsHandler := &handler.ApiGroupApp.OAuthApiGroup.CredentialsHandler
 
 	credentialsAdmin := httpserver.WithAccess(rg.Group("/admin/service-credentials"), httpserver.Access{
-		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"}, RequiredRoles: []string{"admin"},
 	})
 	credentialsAdmin.Use(adminGate, permissionCheck)
 	{

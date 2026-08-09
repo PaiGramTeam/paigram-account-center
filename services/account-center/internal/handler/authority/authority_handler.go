@@ -46,6 +46,7 @@ func (h *AuthorityHandler) CreateAuthority(c *gin.Context) {
 
 	role, err := h.service.CreateAuthority(authority.CreateAuthorityParams{
 		Name:          req.Name,
+		DisplayName:   req.DisplayName,
 		Description:   req.Description,
 		PermissionIDs: req.PermissionIDs,
 	})
@@ -169,6 +170,7 @@ func (h *AuthorityHandler) UpdateAuthority(c *gin.Context) {
 
 	err = h.service.UpdateAuthority(uint(roleID), authority.UpdateAuthorityParams{
 		Name:        req.Name,
+		DisplayName: req.DisplayName,
 		Description: req.Description,
 	})
 	if err != nil {
