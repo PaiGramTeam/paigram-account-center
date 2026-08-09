@@ -3,11 +3,9 @@ package platform
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 
-	"gorm.io/gorm"
-
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 )
 
@@ -76,7 +74,7 @@ func (s *PlatformService) CreatePlatformService(ctx context.Context, input Creat
 	}
 
 	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
-		if isPlatformServiceConflict(err) {
+		if dberror.IsUniqueViolation(err) {
 			return nil, ErrPlatformServiceConflict
 		}
 		return nil, err
@@ -96,7 +94,7 @@ func (s *PlatformService) UpdatePlatformService(ctx context.Context, id uint64, 
 	}
 
 	if err := s.db.WithContext(ctx).Save(row).Error; err != nil {
-		if isPlatformServiceConflict(err) {
+		if dberror.IsUniqueViolation(err) {
 			return nil, ErrPlatformServiceConflict
 		}
 		return nil, err
@@ -286,15 +284,4 @@ func (s *PlatformService) decorateRuntimeState(ctx context.Context, row model.Pl
 	view.RuntimeState = result.State
 	view.CheckedAt = &result.CheckedAt
 	view.Error = result.Error
-}
-
-func isPlatformServiceConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
-		return true
-	}
-	errText := strings.ToLower(err.Error())
-	return strings.Contains(errText, "duplicate entry") || strings.Contains(errText, "duplicated key")
 }

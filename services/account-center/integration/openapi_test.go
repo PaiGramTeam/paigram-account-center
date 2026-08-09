@@ -45,4 +45,29 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	require.Contains(t, document.Paths, "/api/v1/auth/register")
 	require.Contains(t, document.Paths, "/api/v1/me")
 	require.Contains(t, document.Paths, "/api/v1/admin/users/{id}")
+
+	var createOperation struct {
+		Responses map[string]json.RawMessage `json:"responses"`
+	}
+	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/auth/register"]["post"], &createOperation))
+	require.Contains(t, createOperation.Responses, "201")
+
+	var protectedOperation struct {
+		Security []map[string][]string `json:"security"`
+	}
+	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/me"]["get"], &protectedOperation))
+	require.NotEmpty(t, protectedOperation.Security)
+
+	var parameterizedOperation struct {
+		Parameters []struct {
+			Name     string `json:"name"`
+			In       string `json:"in"`
+			Required bool   `json:"required"`
+		} `json:"parameters"`
+	}
+	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/admin/users/{id}"]["get"], &parameterizedOperation))
+	require.NotEmpty(t, parameterizedOperation.Parameters)
+	require.Equal(t, "id", parameterizedOperation.Parameters[0].Name)
+	require.Equal(t, "path", parameterizedOperation.Parameters[0].In)
+	require.True(t, parameterizedOperation.Parameters[0].Required)
 }

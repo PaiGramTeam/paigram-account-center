@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 )
 
@@ -268,14 +269,7 @@ func buildSettingsAuditMetadata(domain string, patch map[string]any) map[string]
 }
 
 func isSettingsConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
-		return true
-	}
-	errText := strings.ToLower(err.Error())
-	return strings.Contains(errText, "duplicate entry") || strings.Contains(errText, "duplicated key") || strings.Contains(errText, "unique constraint failed")
+	return dberror.IsUniqueViolation(err)
 }
 
 func nullableUserID(userID uint64) sql.NullInt64 {

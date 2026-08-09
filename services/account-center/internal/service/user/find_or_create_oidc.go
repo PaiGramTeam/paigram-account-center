@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 )
 
@@ -119,7 +119,7 @@ func (s *UserService) FindOrCreateOIDCTx(ctx context.Context, tx *gorm.DB, provi
 		ProviderAccountID: subject,
 	}
 	if err := tx.Create(&credential).Error; err != nil {
-		if isUniqueViolation(err) {
+		if dberror.IsUniqueViolation(err) {
 			// Race loss: a concurrent OIDC callback for the same
 			// (provider, subject) won the INSERT race. Re-lookup the
 			// credential under the same tx and return that winner's
@@ -162,24 +162,4 @@ func loginTypeForOIDCProvider(provider string) model.LoginType {
 	default:
 		return model.LoginTypeOAuth
 	}
-}
-
-// isUniqueViolation returns true if err indicates a UNIQUE-constraint
-// failure. PostgreSQL surfaces a typed *pgconn.PgError with SQLSTATE 23505,
-// which is preferred over text matching to avoid false positives. SQLite
-// (via glebarez/sqlite, used in unit tests) lacks a typed error, so we
-// fall back to a case-insensitive substring match on the well-known
-// message. Mirrors botlink/service.go's isUniqueViolation; kept local
-// rather than refactored into a shared internal/db/errors helper to
-// limit blast radius of this repair commit.
-func isUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-	var postgresErr *pgconn.PgError
-	if errors.As(err, &postgresErr) {
-		return postgresErr.Code == "23505"
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unique constraint failed") || strings.Contains(msg, "unique")
 }

@@ -13,7 +13,7 @@ type LegalDocument struct {
 	DocumentType string         `gorm:"size:32;not null;uniqueIndex:uk_legal_document_type_version,priority:1;index"`
 	Version      string         `gorm:"size:64;not null;uniqueIndex:uk_legal_document_type_version,priority:2"`
 	Title        string         `gorm:"size:255;not null"`
-	Content      string         `gorm:"type:longtext;not null"`
+	Content      string         `gorm:"type:text;not null"`
 	Published    bool           `gorm:"not null;default:false;index"`
 	PublishedAt  sql.NullTime   `gorm:"type:timestamptz"`
 	UpdatedBy    sql.NullInt64  `gorm:"type:bigint;index"`

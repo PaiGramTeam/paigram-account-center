@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 )
 
@@ -196,7 +195,7 @@ func (s *Service) UpsertLinkTx(ctx context.Context, tx *gorm.DB, in UpsertLinkIn
 		row.ExternalUsername.Valid = true
 	}
 	if err := tx.Create(&row).Error; err != nil {
-		if isUniqueViolation(err) {
+		if dberror.IsUniqueViolation(err) {
 			// Step 4: lost a race. Re-lookup unscoped to disambiguate
 			// the race-loss type. Spec §5.2 requires idempotent success
 			// when the winning row holds the SAME triple as our input.
@@ -342,21 +341,4 @@ func (s *Service) writeAudit(tx *gorm.DB, userID uint64, action string, in Upser
 		return fmt.Errorf("botlink: insert audit: %w", err)
 	}
 	return nil
-}
-
-// isUniqueViolation returns true if err indicates a UNIQUE-constraint
-// failure. PostgreSQL surfaces a typed *pgconn.PgError with SQLSTATE 23505,
-// which is preferred to avoid false positives. SQLite (via
-// glebarez/sqlite, used in unit tests) lacks a typed error, so we fall
-// back to a case-insensitive substring match on the well-known message.
-func isUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-	var postgresErr *pgconn.PgError
-	if errors.As(err, &postgresErr) {
-		return postgresErr.Code == "23505"
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "unique constraint failed") || strings.Contains(msg, "unique")
 }

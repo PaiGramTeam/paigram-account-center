@@ -1,7 +1,12 @@
 package httpserver
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -11,7 +16,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var pathParameterPattern = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_-]*)`)
+var (
+	ginPathParameterPattern  = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_-]*)`)
+	humaPathParameterPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_-]*)\}`)
+)
 
 type OpenAPIOptions struct {
 	Enabled bool
@@ -65,10 +73,10 @@ func Attach(engine *gin.Engine, options Options) (*Runtime, error) {
 
 	api := humagin.New(engine, config)
 	catalog := newCatalog()
-	v1API := huma.NewGroup(api, "/api/v1")
 	v1 := &Group{
 		router:  engine.Group("/api/v1"),
-		api:     v1API,
+		engine:  engine,
+		api:     api,
 		catalog: catalog,
 		prefix:  "/api/v1",
 		access:  Access{Public: true},
@@ -76,9 +84,10 @@ func Attach(engine *gin.Engine, options Options) (*Runtime, error) {
 	return &Runtime{Engine: engine, API: api, V1: v1, Catalog: catalog}, nil
 }
 
-// Group keeps Gin middleware composition and Huma documentation in lockstep.
+// Group keeps Gin middleware composition and Huma operation registration in lockstep.
 type Group struct {
 	router  *gin.RouterGroup
+	engine  *gin.Engine
 	api     huma.API
 	catalog *Catalog
 	prefix  string
@@ -99,7 +108,8 @@ type RouteGroup[T any] interface {
 func (g *Group) Group(path string, handlers ...gin.HandlerFunc) *Group {
 	return &Group{
 		router:  g.router.Group(path, handlers...),
-		api:     huma.NewGroup(g.api, humaPath(path)),
+		engine:  g.engine,
+		api:     g.api,
 		catalog: g.catalog,
 		prefix:  joinPath(g.prefix, humaPath(path)),
 		access:  g.access,
@@ -142,28 +152,212 @@ func (g *Group) register(method, path string, handlers ...gin.HandlerFunc) gin.I
 		panic("HTTP operation handler is required")
 	}
 	validateAccess(g.access)
-	relativePath := humaPath(path)
-	fullPath := joinPath(g.prefix, relativePath)
+	fullPath := joinPath(g.prefix, humaPath(path))
 	op := huma.Operation{
-		OperationID: operationID(method, fullPath),
-		Method:      method,
-		Path:        relativePath,
-		Tags:        []string{operationTag(fullPath)},
-		Responses: map[string]*huma.Response{
-			"200": {Description: "Successful response"},
-		},
+		OperationID:        operationID(method, fullPath),
+		Method:             method,
+		Path:               fullPath,
+		DefaultStatus:      http.StatusOK,
+		SkipValidateParams: true,
+		SkipValidateBody:   true,
+		Tags:               []string{operationTag(fullPath)},
+		Parameters:         pathParameters(fullPath),
+		Responses:          compatibilitySuccessResponses(method),
 	}
 	if !g.access.Public {
 		op.Security = []map[string][]string{{"bearerAuth": {}}}
 	}
-	if documenter, ok := g.api.(huma.OperationDocumenter); ok {
-		documenter.DocumentOperation(&op)
-	} else {
-		g.api.OpenAPI().AddOperation(&op)
+	endpoint := handlers[len(handlers)-1]
+	adapter := &ginRegistrationAdapter{
+		engine:     g.engine,
+		router:     g.router,
+		path:       path,
+		middleware: append([]gin.HandlerFunc(nil), handlers[:len(handlers)-1]...),
 	}
-	routes := g.router.Handle(method, path, handlers...)
+	registrationAPI := &registrationAPI{API: g.api, adapter: adapter}
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch:
+		registrationAPI.optionalRequestBody = true
+		registerGinBridge(registrationAPI, op, endpoint, func(input *ginBridgeBodyInput) []byte { return input.RawBody })
+	default:
+		registerGinBridge(registrationAPI, op, endpoint, func(_ *ginBridgeInput) []byte { return nil })
+	}
 	g.catalog.add(Route{OperationID: op.OperationID, Method: method, Path: fullPath, Access: g.access})
-	return routes
+	return g.router
+}
+
+type ginBridgeInput struct{}
+
+type ginBridgeBodyInput struct {
+	RawBody []byte `contentType:"*/*"`
+}
+
+type ginBridgeOutput struct {
+	Status int `status:""`
+	Body   []byte
+}
+
+type ginContextKey struct{}
+
+type humaContextKey struct{}
+
+func registerGinBridge[I any](api huma.API, op huma.Operation, endpoint gin.HandlerFunc, requestBody func(*I) []byte) {
+	huma.Register[I, ginBridgeOutput](api, op, func(ctx context.Context, input *I) (*ginBridgeOutput, error) {
+		ginContext, ok := ctx.Value(ginContextKey{}).(*gin.Context)
+		if !ok {
+			return nil, errors.New("gin context is unavailable")
+		}
+		humaContext, ok := ctx.Value(humaContextKey{}).(huma.Context)
+		if !ok {
+			return nil, errors.New("huma context is unavailable")
+		}
+		body := requestBody(input)
+		if body != nil {
+			ginContext.Request.Body = io.NopCloser(bytes.NewReader(body))
+			ginContext.Request.ContentLength = int64(len(body))
+		}
+
+		originalWriter := ginContext.Writer
+		captured := newBufferedGinWriter(originalWriter)
+		ginContext.Writer = captured
+		func() {
+			defer func() { ginContext.Writer = originalWriter }()
+			endpoint(ginContext)
+		}()
+		copyHeaders(humaContext, captured.Header())
+		return &ginBridgeOutput{Status: captured.Status(), Body: append([]byte(nil), captured.body.Bytes()...)}, nil
+	})
+}
+
+type registrationAPI struct {
+	huma.API
+	adapter             huma.Adapter
+	optionalRequestBody bool
+}
+
+func (a *registrationAPI) Adapter() huma.Adapter {
+	return a.adapter
+}
+
+func (a *registrationAPI) DocumentOperation(op *huma.Operation) {
+	if a.optionalRequestBody && op.RequestBody != nil {
+		op.RequestBody.Required = false
+	}
+	if !op.Hidden {
+		a.OpenAPI().AddOperation(op)
+	}
+}
+
+type ginRegistrationAdapter struct {
+	engine     *gin.Engine
+	router     *gin.RouterGroup
+	path       string
+	middleware []gin.HandlerFunc
+}
+
+func (a *ginRegistrationAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
+	bridge := func(c *gin.Context) {
+		originalRequest := c.Request
+		humaContext := humagin.NewContext(op, c)
+		requestContext := context.WithValue(c.Request.Context(), ginContextKey{}, c)
+		requestContext = context.WithValue(requestContext, humaContextKey{}, humaContext)
+		c.Request = c.Request.WithContext(requestContext)
+		defer func() { c.Request = originalRequest }()
+		handler(humaContext)
+	}
+	handlers := append(append([]gin.HandlerFunc(nil), a.middleware...), bridge)
+	a.router.Handle(op.Method, a.path, handlers...)
+}
+
+type bufferedGinWriter struct {
+	original gin.ResponseWriter
+	header   http.Header
+	body     bytes.Buffer
+	status   int
+	size     int
+	written  bool
+}
+
+func newBufferedGinWriter(original gin.ResponseWriter) *bufferedGinWriter {
+	header := make(http.Header, len(original.Header()))
+	for name, values := range original.Header() {
+		header[name] = append([]string(nil), values...)
+	}
+	return &bufferedGinWriter{original: original, header: header, status: http.StatusOK, size: -1}
+}
+
+func (w *bufferedGinWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *bufferedGinWriter) Write(data []byte) (int, error) {
+	w.WriteHeaderNow()
+	written, err := w.body.Write(data)
+	w.size += written
+	return written, err
+}
+
+func (w *bufferedGinWriter) WriteString(data string) (int, error) {
+	return w.Write([]byte(data))
+}
+
+func (w *bufferedGinWriter) WriteHeader(status int) {
+	if w.written {
+		return
+	}
+	w.status = status
+}
+
+func (w *bufferedGinWriter) WriteHeaderNow() {
+	if w.written {
+		return
+	}
+	w.written = true
+	w.size = 0
+}
+
+func (w *bufferedGinWriter) Status() int {
+	return w.status
+}
+
+func (w *bufferedGinWriter) Size() int {
+	return w.size
+}
+
+func (w *bufferedGinWriter) Written() bool {
+	return w.written
+}
+
+func (w *bufferedGinWriter) Flush() {
+	w.WriteHeaderNow()
+}
+
+func (w *bufferedGinWriter) CloseNotify() <-chan bool {
+	return w.original.CloseNotify()
+}
+
+func (w *bufferedGinWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return w.original.Hijack()
+}
+
+func (w *bufferedGinWriter) Pusher() http.Pusher {
+	return w.original.Pusher()
+}
+
+func copyHeaders(ctx huma.Context, headers http.Header) {
+	for name, values := range headers {
+		for index, value := range values {
+			if index == 0 {
+				ctx.SetHeader(name, value)
+			} else {
+				ctx.AppendHeader(name, value)
+			}
+		}
+	}
+}
+
+func (a *ginRegistrationAdapter) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	a.engine.ServeHTTP(writer, request)
 }
 
 func validateAccess(access Access) {
@@ -183,7 +377,47 @@ func validateAccess(access Access) {
 }
 
 func humaPath(path string) string {
-	return pathParameterPattern.ReplaceAllString(path, `{$1}`)
+	return ginPathParameterPattern.ReplaceAllString(path, `{$1}`)
+}
+
+func pathParameters(path string) []*huma.Param {
+	matches := humaPathParameterPattern.FindAllStringSubmatch(path, -1)
+	parameters := make([]*huma.Param, 0, len(matches))
+	seen := make(map[string]struct{}, len(matches))
+	for _, match := range matches {
+		name := match[1]
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		parameters = append(parameters, &huma.Param{
+			Name:     name,
+			In:       "path",
+			Required: true,
+			Schema:   &huma.Schema{Type: "string"},
+		})
+	}
+	return parameters
+}
+
+func compatibilitySuccessResponses(method string) map[string]*huma.Response {
+	jsonResponse := func(description string) *huma.Response {
+		return &huma.Response{
+			Description: description,
+			Content: map[string]*huma.MediaType{
+				"application/json": {Schema: &huma.Schema{Type: "object", AdditionalProperties: true}},
+			},
+		}
+	}
+	responses := map[string]*huma.Response{"200": jsonResponse("Successful response")}
+	switch method {
+	case http.MethodPost:
+		responses["201"] = jsonResponse("Resource created")
+		responses["202"] = jsonResponse("Request accepted")
+	case http.MethodDelete:
+		responses["204"] = &huma.Response{Description: "Request completed without a response body"}
+	}
+	return responses
 }
 
 func joinPath(prefix, path string) string {

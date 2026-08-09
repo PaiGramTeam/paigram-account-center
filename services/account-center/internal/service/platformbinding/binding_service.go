@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 )
 
@@ -204,7 +204,7 @@ func (s *BindingService) PersistRuntimeSummary(bindingID uint64, summary Runtime
 }
 
 func (s *BindingService) handlePersistRuntimeSummaryError(err error, binding *model.PlatformAccountBinding, summary RuntimeSummary) (*model.PlatformAccountBinding, error) {
-	if !isDuplicateBindingError(err) {
+	if !dberror.IsUniqueViolation(err) {
 		return nil, err
 	}
 	if binding == nil || summary.PlatformAccountID == "" {
@@ -302,7 +302,7 @@ func (s *BindingService) updateBinding(binding *model.PlatformAccountBinding, in
 }
 
 func (s *BindingService) handleCreateBindingError(err error, input CreateBindingInput) (*model.PlatformAccountBinding, error) {
-	if !isDuplicateBindingError(err) {
+	if !dberror.IsUniqueViolation(err) {
 		return nil, err
 	}
 	if !input.ExternalAccountKey.Valid {
@@ -318,15 +318,6 @@ func (s *BindingService) handleCreateBindingError(err error, input CreateBinding
 		return nil, ErrBindingAlreadyOwned
 	}
 	return &existing, nil
-}
-
-func isDuplicateBindingError(err error) bool {
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
-		return true
-	}
-
-	var postgresErr *pgconn.PgError
-	return errors.As(err, &postgresErr) && postgresErr.Code == "23505"
 }
 
 func bindingStatusFromRuntimeSummary(status string, fallback model.PlatformAccountBindingStatus) model.PlatformAccountBindingStatus {
