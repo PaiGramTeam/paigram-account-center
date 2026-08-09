@@ -1,0 +1,52 @@
+[project]
+name = "paigram-account-sdk"
+version = "0.1.0"
+description = "Async PaiGram client for Account Center and authorized platform services"
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+license = { text = "AGPL-3.0-only" }
+authors = [{ name = "PaiGramTeam" }]
+dependencies = [
+    "grpcio>=1.74.0,<2.0.0",
+    "httpx>=0.28.0,<1.0.0",
+    "protobuf>=5.29.0,<7.0.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27.0,<2.0.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/paigram_account_sdk"]
+
+[dependency-groups]
+dev = [
+    "grpcio-tools>=1.74.0,<2.0.0",
+    "mypy>=1.17.0,<2.0.0",
+    "pytest>=9.0.0,<10.0.0",
+    "pytest-asyncio>=1.0.0,<2.0.0",
+    "ruff>=0.12.0,<1.0.0",
+    "types-protobuf>=6.30.0,<7.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+extend-exclude = ["src/paigram_account_sdk/_generated"]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["paigram_account_sdk"]
+exclude = ["src/paigram_account_sdk/_generated"]
+
+[[tool.mypy.overrides]]
+module = ["grpc.*"]
+ignore_missing_imports = true

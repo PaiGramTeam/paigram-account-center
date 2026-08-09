@@ -29,6 +29,11 @@ try {
     finally {
         Pop-Location
     }
+
+    & "$PSScriptRoot\..\sdks\python\generate.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
 }
 finally {
     Pop-Location
