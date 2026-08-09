@@ -30,14 +30,6 @@ import (
 
 var errRefreshTokenRotated = errors.New("refresh token already rotated")
 
-type registerEmailRequest struct {
-	Email        string `json:"email" binding:"required,email"`
-	Password     string `json:"password" binding:"required,min=8,max=72"`
-	DisplayName  string `json:"display_name" binding:"required"`
-	Locale       string `json:"locale"`
-	CaptchaToken string `json:"captcha_token"`
-}
-
 // swagger:route POST /api/v1/auth/register auth registerEmail
 //
 // Register a new user with email and password.
@@ -73,7 +65,7 @@ type registerEmailRequest struct {
 // token must arrive only via email so it proves ownership of the
 // address.
 func (h *Handler) RegisterEmail(c *gin.Context) {
-	var req registerEmailRequest
+	var req RegisterEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("register email: invalid request body", zap.Error(err))
 		response.BadRequest(c, "invalid request body")
@@ -522,10 +514,6 @@ func (h *Handler) LoginWithEmail(c *gin.Context) {
 	response.Success(c, responseData)
 }
 
-type refreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
 // swagger:route POST /api/v1/auth/refresh auth refreshToken
 //
 // Refresh access token.
@@ -544,7 +532,7 @@ type refreshTokenRequest struct {
 //
 // RefreshToken exchanges a refresh token for a new pair.
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req refreshTokenRequest
+	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("refresh token: invalid request body", zap.Error(err))
 		response.BadRequest(c, "invalid request body")
@@ -745,10 +733,6 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	response.Success(c, responseData)
 }
 
-type logoutRequest struct {
-	Token string `json:"token" binding:"required"`
-}
-
 // swagger:route POST /api/v1/auth/logout auth logout
 //
 // Logout and revoke token.
@@ -766,7 +750,7 @@ type logoutRequest struct {
 //
 // Logout revokes an access or refresh token.
 func (h *Handler) Logout(c *gin.Context) {
-	var req logoutRequest
+	var req LogoutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("logout: invalid request body", zap.Error(err))
 		response.BadRequest(c, "invalid request body")
@@ -800,11 +784,6 @@ func (h *Handler) Logout(c *gin.Context) {
 	response.SuccessWithMessage(c, response.NewMessageData("logout successful"), "logout successful")
 }
 
-type verifyEmailRequest struct {
-	Email string `json:"email" binding:"required,email"`
-	Token string `json:"token" binding:"required"`
-}
-
 // swagger:route POST /api/v1/auth/verify-email auth verifyEmail
 //
 // Verify email address.
@@ -822,7 +801,7 @@ type verifyEmailRequest struct {
 //
 // VerifyEmail handles email verification.
 func (h *Handler) VerifyEmail(c *gin.Context) {
-	var req verifyEmailRequest
+	var req VerifyEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("verify email: invalid request body", zap.Error(err))
 		response.BadRequest(c, "invalid request body")

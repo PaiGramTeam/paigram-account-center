@@ -48,7 +48,7 @@ func registerContracts(rg *httpserver.Group) {
 	rg.RegisterContract(http.MethodPut, "/me/login-methods/:provider", httpserver.JSONContract(
 		authhandler.InitiateOAuthRequest{}, authhandler.InitiateOAuthResponse{}, http.StatusOK,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusNotFound, http.StatusInternalServerError,
-	))
+	).WithOptionalBody())
 	rg.RegisterContract(http.MethodGet, "/me/login-methods", httpserver.ResponseContract(
 		response.Envelope[[]serviceme.LoginMethodView]{}, http.StatusOK, readErrors...,
 	))

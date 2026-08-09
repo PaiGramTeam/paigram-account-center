@@ -92,6 +92,7 @@ type Group struct {
 	prefix    string
 	access    Access
 	body      BodyOptions
+	errors    []int
 }
 
 // RouteGroup is the shared surface implemented by Gin and the Huma-aware group.
@@ -115,7 +116,14 @@ func (g *Group) Group(path string, handlers ...gin.HandlerFunc) *Group {
 		prefix:    joinPath(g.prefix, humaPath(path)),
 		access:    g.access,
 		body:      g.body,
+		errors:    append([]int(nil), g.errors...),
 	}
+}
+
+func (g *Group) WithErrorStatuses(statuses ...int) *Group {
+	clone := *g
+	clone.errors = append(append([]int(nil), g.errors...), statuses...)
+	return &clone
 }
 
 func (g *Group) WithAccess(access Access) *Group {
@@ -134,6 +142,7 @@ func WithAccess[T RouteGroup[T]](group T, access Access) T {
 
 func (g *Group) RegisterContract(method, path string, contract Contract) {
 	fullPath := joinPath(g.prefix, humaPath(path))
+	contract = contract.WithErrorStatuses(g.errors...)
 	g.contracts.add(method, fullPath, contract)
 }
 
@@ -193,7 +202,7 @@ func (g *Group) register(method, path string, handlers ...gin.HandlerFunc) gin.I
 	}
 	registrationAPI := &registrationAPI{API: g.api, adapter: adapter}
 	registrationAPI.contract = &contract
-	if contract.hasRequestBody() {
+	if contract.readsRequestBody() {
 		registerGinBridge(registrationAPI, op, endpoint, &contract, func(input *ginBridgeBodyInput) []byte { return input.RawBody })
 	} else {
 		registerGinBridge(registrationAPI, op, endpoint, &contract, func(_ *ginBridgeInput) []byte { return nil })

@@ -57,16 +57,18 @@ func registerGinBridge[I any](api huma.API, op huma.Operation, endpoint gin.Hand
 					})
 					return
 				}
-				boundBody, failure := contract.bindRequest(ginContext.Request, body)
-				if failure != nil {
-					ginContext.JSON(failure.status, humaCompatibilityError{
-						Code: failure.status, Data: failure.details, Message: failure.message,
-					})
-					return
+				if contract.readsRequestBody() {
+					boundBody, failure := contract.bindRequest(ginContext.Request, body)
+					if failure != nil {
+						ginContext.JSON(failure.status, humaCompatibilityError{
+							Code: failure.status, Data: failure.details, Message: failure.message,
+						})
+						return
+					}
+					body = boundBody
+					ginContext.Request.Body = io.NopCloser(bytes.NewReader(body))
+					ginContext.Request.ContentLength = int64(len(body))
 				}
-				body = boundBody
-				ginContext.Request.Body = io.NopCloser(bytes.NewReader(body))
-				ginContext.Request.ContentLength = int64(len(body))
 			}
 			endpoint(ginContext)
 		}()

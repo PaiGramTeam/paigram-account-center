@@ -33,7 +33,7 @@ func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
 	tokenContract := httpserver.FormContract(
 		handleroauth.TokenRequest{}, credentials.IssuedToken{}, http.StatusOK,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError,
-	).WithoutBodyValidation().WithErrorResponse(
+	).WithHandlerManagedBody().WithErrorResponse(
 		handleroauth.TokenErrorResponse{}, http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError,
 	)
 	rg.RegisterContract(http.MethodPost, "/oauth/token", tokenContract)

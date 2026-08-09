@@ -341,7 +341,9 @@ type UpdateUserStatusRequest struct {
 
 // swagger:model updateUserStatusResponse
 type UpdateUserStatusResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// Success message
 		// example: user status updated successfully
 		Message string `json:"message"`
@@ -382,7 +384,9 @@ type ResetPasswordRequest struct {
 
 // swagger:model resetPasswordResponse
 type ResetPasswordResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// Success message
 		// example: password reset successfully
 		Message string `json:"message"`

@@ -9,9 +9,12 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
+	"paigram/internal/model"
 )
 
 var ginPathParameterPattern = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_-]*)`)
@@ -77,14 +80,32 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/auth/login"]["post"], &loginOperation))
 	require.Contains(t, loginOperation.Responses, "200")
 	require.Contains(t, loginOperation.Responses, "401")
+	require.Contains(t, loginOperation.Responses, "429")
 	require.NotContains(t, loginOperation.Responses, "201")
+	var loginSuccess struct {
+		Content map[string]struct {
+			Schema struct {
+				OneOf []json.RawMessage `json:"oneOf"`
+			} `json:"schema"`
+		} `json:"content"`
+	}
+	require.NoError(t, json.Unmarshal(loginOperation.Responses["200"], &loginSuccess))
+	require.Len(t, loginSuccess.Content["application/json"].Schema.OneOf, 2)
+
+	var refreshOperation operation
+	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/auth/refresh"]["post"], &refreshOperation))
+	require.Contains(t, refreshOperation.Responses, "429")
+
+	var logoutOperation operation
+	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/auth/logout"]["post"], &logoutOperation))
+	require.NotContains(t, logoutOperation.Responses, "429")
 
 	var tokenOperation operation
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/oauth/token"]["post"], &tokenOperation))
 	require.NotNil(t, tokenOperation.RequestBody)
 	require.True(t, tokenOperation.RequestBody.Required)
 	require.Contains(t, tokenOperation.RequestBody.Content, "application/x-www-form-urlencoded")
-	require.ElementsMatch(t, []string{"200", "400", "401", "408", "413", "500"}, mapKeys(tokenOperation.Responses))
+	require.ElementsMatch(t, []string{"200", "400", "401", "500"}, mapKeys(tokenOperation.Responses))
 
 	var actionOperation operation
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/admin/system/platform-services/{id}/check"]["post"], &actionOperation))
@@ -98,6 +119,7 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	require.False(t, adminOperation.Access.Public)
 	require.Equal(t, []string{"casbin:path-and-method"}, adminOperation.Access.DynamicPermissions)
 	require.Equal(t, []string{"admin"}, adminOperation.Access.RequiredRoles)
+	require.Contains(t, adminOperation.Responses, "429")
 
 	var protectedOperation struct {
 		Security []map[string][]string `json:"security"`
@@ -150,6 +172,24 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 
 func TestSpecializedHumaContractsPreserveWireSemantics(t *testing.T) {
 	stack := newIntegrationStack(t)
+	userID, _, _, email, password := registerAndLogin(
+		t, stack, "huma-contract-2fa@example.com", "HumaContractPass123!",
+	)
+	require.NoError(t, stack.DB.Create(&model.UserTwoFactor{
+		UserID:    userID,
+		Secret:    "unused-for-challenge",
+		EnabledAt: time.Now().UTC(),
+	}).Error)
+
+	challenge := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/auth/login", map[string]any{
+		"email":    email,
+		"password": password,
+	}, map[string]string{"User-Agent": "HumaContractChallenge/1.0"})
+	require.Equal(t, http.StatusOK, challenge.Code, challenge.Body.String())
+	challengeData := decodeResponseData(t, challenge)
+	require.Equal(t, true, challengeData["requires_totp"])
+	require.NotEmpty(t, challengeData["message"])
+	require.NotContains(t, challengeData, "access_token")
 
 	login := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(
 		`{"email":"missing@example.com","password":"password123","totp_code":"123456","trust_device":true}`,
@@ -172,6 +212,20 @@ func TestSpecializedHumaContractsPreserveWireSemantics(t *testing.T) {
 	require.NoError(t, json.Unmarshal(tokenResponse.Body.Bytes(), &oauthError))
 	require.Equal(t, "invalid_request", oauthError.Error)
 	require.NotEmpty(t, oauthError.ErrorDescription)
+
+	largeToken := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/oauth/token",
+		strings.NewReader("grant_type=client_credentials&client_id="+strings.Repeat("x", 11<<20)),
+	)
+	largeToken.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	largeTokenResponse := httptest.NewRecorder()
+	stack.Router.ServeHTTP(largeTokenResponse, largeToken)
+	require.Equal(t, http.StatusBadRequest, largeTokenResponse.Code)
+	require.Equal(t, "no-store", largeTokenResponse.Header().Get("Cache-Control"))
+	require.NoError(t, json.Unmarshal(largeTokenResponse.Body.Bytes(), &oauthError))
+	require.Equal(t, "invalid_request", oauthError.Error)
+	require.Equal(t, "malformed form body", oauthError.ErrorDescription)
 }
 
 func mapKeys[V any](values map[string]V) []string {

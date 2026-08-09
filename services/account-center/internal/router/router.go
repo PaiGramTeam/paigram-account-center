@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
@@ -137,7 +138,8 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 	// Public routes - no authentication required
 	authHandler := &handler.ApiGroupApp.AuthApiGroup.Handler
 	authGroup := v1.Group("/auth")
-	registerAuthContracts(authGroup)
+	rateLimitingEnabled := rateLimitCfg.Enabled && rateLimitStore != nil
+	registerAuthContracts(authGroup, rateLimitingEnabled)
 	{
 		// Apply rate limiting to auth endpoints if enabled
 		if rateLimitCfg.Enabled && rateLimitStore != nil {
@@ -226,6 +228,7 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 
 	// Apply rate limiting to authenticated endpoints if enabled
 	if rateLimitCfg.Enabled && rateLimitStore != nil {
+		protected = protected.WithErrorStatuses(http.StatusTooManyRequests)
 		protected.Use(middleware.RateLimit(middleware.RateLimitConfig{
 			Rate:    rateLimitCfg.API.Authenticated,
 			KeyFunc: middleware.UserIDKeyFunc,

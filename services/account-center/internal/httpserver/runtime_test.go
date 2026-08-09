@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -229,6 +230,37 @@ func TestRuntimeValidatesFormContractBeforeGinHandler(t *testing.T) {
 	engine.ServeHTTP(invalidResponse, invalidRequest)
 	require.Equal(t, http.StatusBadRequest, invalidResponse.Code)
 	require.Equal(t, 1, handlerCalls)
+}
+
+func TestRuntimePreservesHandlerManagedBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	runtime, err := Attach(engine, Options{
+		Title: "Test API", Version: "1.0.0", Body: BodyOptions{MaxBytes: 8},
+	})
+	require.NoError(t, err)
+	tokens := runtime.V1.Group("/tokens").WithAccess(Access{Public: true})
+	tokens.RegisterContract(http.MethodPost, "", FormContract(
+		struct {
+			ClientID string `json:"client_id" minLength:"1"`
+		}{}, nil, http.StatusNoContent, http.StatusBadRequest,
+	).WithHandlerManagedBody())
+
+	payload := "client_id=" + strings.Repeat("x", 32)
+	var received string
+	tokens.POST("", func(c *gin.Context) {
+		body, readErr := io.ReadAll(c.Request.Body)
+		require.NoError(t, readErr)
+		received = string(body)
+		c.Status(http.StatusNoContent)
+	})
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/tokens", strings.NewReader(payload))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	engine.ServeHTTP(response, request)
+	require.Equal(t, http.StatusNoContent, response.Code)
+	require.Equal(t, payload, received)
 }
 
 func TestRuntimeValidatesTypedPathAndQueryParameters(t *testing.T) {

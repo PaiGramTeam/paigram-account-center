@@ -20,7 +20,7 @@ type swaggerRegisterEmailParams struct {
 	// User registration details
 	// in: body
 	// required: true
-	Body registerEmailRequest
+	Body RegisterEmailRequest
 }
 
 // swagger:model registerEmailRequest
@@ -32,11 +32,11 @@ type RegisterEmailRequest struct {
 	// User password (8-72 characters)
 	// required: true
 	// example: SecurePassword123
-	Password string `json:"password" binding:"required" minLength:"8" maxLength:"72"`
+	Password string `json:"password" binding:"required,min=8,max=72" minLength:"8" maxLength:"72"`
 	// Display name for the user
 	// required: true
 	// example: John Doe
-	DisplayName string `json:"display_name" minLength:"1"`
+	DisplayName string `json:"display_name" binding:"required" minLength:"1"`
 	// User locale preference
 	// example: en_US
 	Locale string `json:"locale,omitempty"`
@@ -44,6 +44,8 @@ type RegisterEmailRequest struct {
 	// example: 0.zrSnR7...
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
+
+type registerEmailRequest = RegisterEmailRequest
 
 // swagger:model registerEmailResponse
 type RegisterEmailResponse struct {
@@ -120,6 +122,15 @@ type LoginResponse struct {
 	} `json:"data"`
 }
 
+type LoginChallengeResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		RequiresTOTP bool   `json:"requires_totp"`
+		Message      string `json:"message"`
+	} `json:"data"`
+}
+
 // swagger:response loginResponse
 type swaggerLoginResponse struct {
 	// in: body
@@ -131,7 +142,7 @@ type swaggerRefreshTokenParams struct {
 	// Refresh token details
 	// in: body
 	// required: true
-	Body refreshTokenRequest
+	Body RefreshTokenRequest
 }
 
 // swagger:model refreshTokenRequest
@@ -139,7 +150,7 @@ type RefreshTokenRequest struct {
 	// JWT refresh token
 	// required: true
 	// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" binding:"required" minLength:"1"`
 }
 
 // swagger:parameters logout
@@ -147,7 +158,7 @@ type swaggerLogoutParams struct {
 	// Token to revoke
 	// in: body
 	// required: true
-	Body logoutRequest
+	Body LogoutRequest
 }
 
 // swagger:model logoutRequest
@@ -155,7 +166,7 @@ type LogoutRequest struct {
 	// Access or refresh token to revoke
 	// required: true
 	// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-	Token string `json:"token"`
+	Token string `json:"token" binding:"required" minLength:"1"`
 }
 
 // swagger:model logoutResponse
@@ -180,7 +191,7 @@ type swaggerVerifyEmailParams struct {
 	// Email verification details
 	// in: body
 	// required: true
-	Body verifyEmailRequest
+	Body VerifyEmailRequest
 }
 
 // swagger:model verifyEmailRequest
@@ -188,12 +199,14 @@ type VerifyEmailRequest struct {
 	// Email address to verify
 	// required: true
 	// example: user@example.com
-	Email string `json:"email" format:"email"`
+	Email string `json:"email" binding:"required,email" format:"email"`
 	// Verification token
 	// required: true
 	// example: abcd1234efgh5678
-	Token string `json:"token"`
+	Token string `json:"token" binding:"required" minLength:"1"`
 }
+
+type verifyEmailRequest = VerifyEmailRequest
 
 // swagger:model verifyEmailResponse
 type VerifyEmailResponse struct {
@@ -223,7 +236,7 @@ type swaggerInitiateOAuthParams struct {
 	Provider string `json:"provider"`
 	// OAuth initiation details
 	// in: body
-	Body initiateOAuthRequest
+	Body InitiateOAuthRequest
 }
 
 // swagger:model initiateOAuthRequest
@@ -269,7 +282,7 @@ type swaggerOAuthCallbackParams struct {
 	// OAuth callback data
 	// in: body
 	// required: true
-	Body oauthCallbackRequest
+	Body OAuthCallbackRequest
 }
 
 // swagger:model oauthCallbackRequest
@@ -277,11 +290,11 @@ type OAuthCallbackRequest struct {
 	// OAuth state token
 	// required: true
 	// example: random-state-token-123
-	State string `json:"state"`
+	State string `json:"state" binding:"required" minLength:"1"`
 	// OAuth authorization code
 	// required: true
 	// example: auth-code-from-provider
-	Code string `json:"code"`
+	Code string `json:"code" binding:"required" minLength:"1"`
 }
 
 // swagger:model oauthCallbackResponse

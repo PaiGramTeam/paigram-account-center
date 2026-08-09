@@ -124,10 +124,6 @@ func (c *oidcVerifierCache) verifierFor(provider string, providerCfg config.OAut
 	return v, nil
 }
 
-type initiateOAuthRequest struct {
-	RedirectTo string `json:"redirect_to"`
-}
-
 // swagger:route POST /api/v1/auth/oauth/{provider}/init auth initiateOAuth
 //
 // Initiate OAuth authentication flow.
@@ -189,7 +185,7 @@ func (h *Handler) initiateOAuth(c *gin.Context, purpose model.OAuthPurpose, user
 		return
 	}
 
-	var req initiateOAuthRequest
+	var req InitiateOAuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		if !errors.Is(err, io.EOF) {
 			logging.Error("initiate oauth: invalid request body", zap.Error(err), zap.String("provider", provider))
@@ -264,11 +260,6 @@ func (h *Handler) initiateOAuth(c *gin.Context, purpose model.OAuthPurpose, user
 	response.Success(c, responseData)
 }
 
-type oauthCallbackRequest struct {
-	State string `json:"state" binding:"required"`
-	Code  string `json:"code" binding:"required"` // Authorization code from provider
-}
-
 // swagger:route POST /api/v1/auth/oauth/{provider}/callback auth handleOAuthCallback
 //
 // Handle OAuth provider callback.
@@ -306,7 +297,7 @@ func (h *Handler) HandleOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	var req oauthCallbackRequest
+	var req OAuthCallbackRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("oauth callback: invalid request body", zap.Error(err), zap.String("provider", provider))
 		response.BadRequest(c, "invalid request body")

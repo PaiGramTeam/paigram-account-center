@@ -27,20 +27,51 @@ type BodyOptions struct {
 }
 
 type Contract struct {
-	requestType     reflect.Type
-	responseType    reflect.Type
-	requestSchema   *huma.Schema
-	responseSchema  *huma.Schema
-	registry        huma.Registry
-	contentType     string
-	requestRequired bool
-	successStatus   int
-	errors          []int
-	errorTypes      map[int]reflect.Type
-	parameters      []Parameter
-	validateBody    bool
-	maxBodyBytes    int64
-	bodyReadTimeout time.Duration
+	requestType          reflect.Type
+	responseType         reflect.Type
+	responseAlternatives []reflect.Type
+	requestSchema        *huma.Schema
+	responseSchema       *huma.Schema
+	registry             huma.Registry
+	contentType          string
+	requestRequired      bool
+	successStatus        int
+	errors               []int
+	errorTypes           map[int]reflect.Type
+	parameters           []Parameter
+	validateBody         bool
+	handlerManagedBody   bool
+	maxBodyBytes         int64
+	bodyReadTimeout      time.Duration
+}
+
+func (c Contract) WithSuccessResponseAlternatives(responses ...any) Contract {
+	for _, response := range responses {
+		responseType := indirectType(response)
+		if responseType == nil {
+			panic("HTTP contract success response type is required")
+		}
+		c.responseAlternatives = append(c.responseAlternatives, responseType)
+	}
+	return c
+}
+
+func (c Contract) WithOptionalBody() Contract {
+	c.requestRequired = false
+	return c
+}
+
+func (c Contract) WithHandlerManagedBody() Contract {
+	c.validateBody = false
+	c.handlerManagedBody = true
+	return c
+}
+
+func (c Contract) WithErrorStatuses(statuses ...int) Contract {
+	for _, status := range statuses {
+		c.errors = appendStatus(c.errors, status)
+	}
+	return c
 }
 
 func JSONContract(request, response any, successStatus int, errorStatuses ...int) Contract {
@@ -92,11 +123,6 @@ func (c Contract) WithErrorResponse(response any, statuses ...int) Contract {
 	return c
 }
 
-func (c Contract) WithoutBodyValidation() Contract {
-	c.validateBody = false
-	return c
-}
-
 func (c Contract) WithBodyLimits(maxBytes int64, readTimeout time.Duration) Contract {
 	c.maxBodyBytes = maxBytes
 	c.bodyReadTimeout = readTimeout
@@ -126,13 +152,23 @@ func (c Contract) prepare(registry huma.Registry, defaults BodyOptions, path str
 	if c.responseType != nil {
 		c.responseSchema = huma.SchemaFromType(registry, c.responseType)
 	}
+	if len(c.responseAlternatives) > 0 {
+		schemas := make([]*huma.Schema, 0, len(c.responseAlternatives)+1)
+		if c.responseSchema != nil {
+			schemas = append(schemas, c.responseSchema)
+		}
+		for _, responseType := range c.responseAlternatives {
+			schemas = append(schemas, huma.SchemaFromType(registry, responseType))
+		}
+		c.responseSchema = &huma.Schema{OneOf: schemas}
+	}
 	if c.maxBodyBytes == 0 {
 		c.maxBodyBytes = defaults.MaxBytes
 	}
 	if c.bodyReadTimeout == 0 {
 		c.bodyReadTimeout = defaults.ReadTimeout
 	}
-	if c.hasRequestBody() {
+	if c.readsRequestBody() {
 		if c.validateBody {
 			c.errors = appendStatus(c.errors, http.StatusBadRequest)
 			c.errors = appendStatus(c.errors, http.StatusUnsupportedMediaType)
@@ -158,6 +194,10 @@ func appendStatus(statuses []int, status int) []int {
 
 func (c Contract) hasRequestBody() bool {
 	return c.requestType != nil
+}
+
+func (c Contract) readsRequestBody() bool {
+	return c.hasRequestBody() && !c.handlerManagedBody
 }
 
 func (c Contract) apply(op *huma.Operation) {
