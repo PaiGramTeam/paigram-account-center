@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  /* Enable dark mode based on class strategy */
+  --color-scheme: light dark;
+}
+
+/* Dark mode selector - triggered by arco-theme="dark" */
+[arco-theme="dark"] {
+  color-scheme: dark;
+}

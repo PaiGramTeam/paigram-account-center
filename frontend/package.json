@@ -1,0 +1,44 @@
+{
+  "name": "paigram-account-center",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:user": "bun run --cwd packages/user-app dev",
+    "dev:admin": "bun run --cwd packages/admin-app dev",
+    "build:user": "bun run --cwd packages/user-app build",
+    "build:admin": "bun run --cwd packages/admin-app build",
+    "build:all": "bun run build:user && bun run build:admin",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,ts,jsx,tsx,vue,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,jsx,tsx,vue,json,md}\"",
+    "type-check": "bun run --filter='*' type-check",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/bun": "latest",
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
+    "@vue/eslint-config-typescript": "^14.6.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-vue": "^10.7.0",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "typescript": "^5.0.0",
+    "vite": "8.0.5",
+    "vue-eslint-parser": "^10.2.0"
+  },
+  "dependencies": {
+    "@vue/language-server": "^3.2.3",
+    "pinia-plugin-persistedstate": "^4.7.1"
+  }
+}

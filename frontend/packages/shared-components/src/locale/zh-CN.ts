@@ -1,0 +1,66 @@
+export default {
+  'menu.dashboard': '仪表盘',
+  'menu.dashboard.workplace': '工作台',
+  'menu.dashboard.monitor': '实时监控',
+  'menu.profile': '个人中心',
+  'menu.account': '账号管理',
+  'menu.account.info': '账号信息',
+  'menu.account.security': '安全设置',
+  'menu.account.binding': '账号绑定',
+  'menu.users': '用户管理',
+  'menu.users.list': '用户列表',
+  'menu.users.roles': '角色管理',
+  'menu.users.permissions': '权限管理',
+  'menu.system': '系统设置',
+  'menu.system.config': '系统配置',
+  'menu.system.logs': '操作日志',
+
+  // Common
+  'common.login': '登录',
+  'common.logout': '退出登录',
+  'common.username': '用户名',
+  'common.password': '密码',
+  'common.rememberMe': '记住我',
+  'common.save': '保存',
+  'common.cancel': '取消',
+  'common.confirm': '确认',
+  'common.edit': '编辑',
+  'common.delete': '删除',
+  'common.search': '搜索',
+  'common.reset': '重置',
+  'common.submit': '提交',
+  'common.back': '返回',
+  'common.loading': '加载中...',
+
+  // Messages
+  'message.loginSuccess': '登录成功',
+  'message.loginFailed': '登录失败',
+  'message.logoutSuccess': '退出成功',
+  'message.saveSuccess': '保存成功',
+  'message.saveFailed': '保存失败',
+  'message.deleteConfirm': '确定要删除吗？',
+  'message.deleteSuccess': '删除成功',
+  'message.deleteFailed': '删除失败',
+  'message.noPermission': '没有权限访问此页面',
+
+  // Validation
+  'validation.required': '此项为必填项',
+  'validation.email': '请输入有效的邮箱地址',
+  'validation.minLength': '长度不能少于 {min} 个字符',
+  'validation.maxLength': '长度不能超过 {max} 个字符',
+
+  // User
+  'user.email': '邮箱',
+  'user.nickname': '昵称',
+  'user.role': '角色',
+  'user.status': '状态',
+  'user.createTime': '创建时间',
+  'user.lastLoginTime': '最后登录时间',
+
+  // Settings
+  'settings.theme': '主题',
+  'settings.language': '语言',
+  'settings.darkMode': '暗黑模式',
+  'settings.lightMode': '亮色模式',
+  'settings.systemTheme': '跟随系统',
+}

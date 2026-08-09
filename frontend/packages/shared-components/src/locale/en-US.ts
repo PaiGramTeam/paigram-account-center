@@ -1,0 +1,66 @@
+export default {
+  'menu.dashboard': 'Dashboard',
+  'menu.dashboard.workplace': 'Workplace',
+  'menu.dashboard.monitor': 'Monitor',
+  'menu.profile': 'Profile',
+  'menu.account': 'Account',
+  'menu.account.info': 'Account Info',
+  'menu.account.security': 'Security',
+  'menu.account.binding': 'Account Binding',
+  'menu.users': 'Users',
+  'menu.users.list': 'User List',
+  'menu.users.roles': 'Roles',
+  'menu.users.permissions': 'Permissions',
+  'menu.system': 'System',
+  'menu.system.config': 'Configuration',
+  'menu.system.logs': 'Audit Logs',
+
+  // Common
+  'common.login': 'Login',
+  'common.logout': 'Logout',
+  'common.username': 'Username',
+  'common.password': 'Password',
+  'common.rememberMe': 'Remember me',
+  'common.save': 'Save',
+  'common.cancel': 'Cancel',
+  'common.confirm': 'Confirm',
+  'common.edit': 'Edit',
+  'common.delete': 'Delete',
+  'common.search': 'Search',
+  'common.reset': 'Reset',
+  'common.submit': 'Submit',
+  'common.back': 'Back',
+  'common.loading': 'Loading...',
+
+  // Messages
+  'message.loginSuccess': 'Login successful',
+  'message.loginFailed': 'Login failed',
+  'message.logoutSuccess': 'Logout successful',
+  'message.saveSuccess': 'Saved successfully',
+  'message.saveFailed': 'Save failed',
+  'message.deleteConfirm': 'Are you sure you want to delete?',
+  'message.deleteSuccess': 'Deleted successfully',
+  'message.deleteFailed': 'Delete failed',
+  'message.noPermission': 'No permission to access this page',
+
+  // Validation
+  'validation.required': 'This field is required',
+  'validation.email': 'Please enter a valid email address',
+  'validation.minLength': 'Must be at least {min} characters',
+  'validation.maxLength': 'Must be no more than {max} characters',
+
+  // User
+  'user.email': 'Email',
+  'user.nickname': 'Nickname',
+  'user.role': 'Role',
+  'user.status': 'Status',
+  'user.createTime': 'Created',
+  'user.lastLoginTime': 'Last Login',
+
+  // Settings
+  'settings.theme': 'Theme',
+  'settings.language': 'Language',
+  'settings.darkMode': 'Dark Mode',
+  'settings.lightMode': 'Light Mode',
+  'settings.systemTheme': 'System',
+}
