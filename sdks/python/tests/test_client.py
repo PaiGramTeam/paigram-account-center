@@ -107,6 +107,12 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
         return platform_pb2.DeleteCredentialResponse(success=True)
 
 
+class PreconditionPlatformService(PlatformService):
+    async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "credential is inactive")
+
+
 async def require_request_id(context):  # type: ignore[no-untyped-def, no-untyped-call]
     metadata = dict(context.invocation_metadata())
     if metadata.get("x-request-id") != "request-123":
@@ -145,9 +151,9 @@ async def account_server() -> AsyncIterator[str]:
 
 
 @asynccontextmanager
-async def platform_server() -> AsyncIterator[str]:
+async def platform_server(service: PlatformService | None = None) -> AsyncIterator[str]:
     server = grpc.aio.server()
-    platform_pb2_grpc.add_PlatformServiceServicer_to_server(PlatformService(), server)
+    platform_pb2_grpc.add_PlatformServiceServicer_to_server(service or PlatformService(), server)
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
     try:
@@ -342,7 +348,7 @@ async def test_oauth_server_failure_is_retryable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_failed_precondition_maps_credential_state() -> None:
+async def test_account_precondition_maps_service_unavailable() -> None:
     async with (
         account_server() as target,
         PaiGramAccountClient(
@@ -355,5 +361,29 @@ async def test_failed_precondition_maps_credential_state() -> None:
             http_transport=token_transport(),
         ) as client,
     ):
-        with pytest.raises(CredentialError, match="binding is inactive"):
+        with pytest.raises(ServiceUnavailableError, match="binding is inactive"):
             await client.resolve_user("inactive", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_platform_precondition_maps_credential_state() -> None:
+    async with (
+        account_server() as account_target,
+        platform_server(PreconditionPlatformService()) as platform_target,
+        PaiGramAccountClient(
+            account_http_url="https://account.example.test",
+            account_grpc_target=account_target,
+            account_grpc_secure=False,
+            client_id="paigram",
+            client_secret="secret",
+            platform_endpoints={"mihomo": PlatformEndpoint(target=platform_target, secure=False)},
+            http_transport=token_transport(),
+        ) as client,
+    ):
+        binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
+        with pytest.raises(CredentialError, match="credential is inactive"):
+            await client.get_credential_summary(
+                external_user_id="telegram:10001",
+                binding=binding,
+                request_id="request-123",
+            )

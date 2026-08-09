@@ -42,14 +42,16 @@ try {
         Invoke-Checked -Command {
             uv add --editable $sdkRoot --no-sync
         } -FailureMessage "PaiGram and SDK dependency resolution failed"
+        Invoke-Checked -Command {
+            uv sync --python 3.10 --frozen --no-dev
+        } -FailureMessage "PaiGram and SDK environment synchronization failed"
+        Invoke-Checked -Command {
+            uv run --python 3.10 --frozen --no-sync python -c "from paigram_account_sdk import PaiGramAccountClient, PlatformEndpoint; assert PaiGramAccountClient and PlatformEndpoint"
+        } -FailureMessage "PaiGram project environment could not import the SDK"
     }
     finally {
         Pop-Location
     }
-
-    Invoke-Checked -Command {
-        uv run --isolated --no-project --python 3.10 --with-editable $sdkRoot --with "httpx<1.0.0,>=0.28.0" python -c "from paigram_account_sdk import PaiGramAccountClient, PlatformEndpoint; assert PaiGramAccountClient and PlatformEndpoint"
-    } -FailureMessage "PaiGram Python 3.10 SDK import failed"
 }
 finally {
     if (Test-Path -LiteralPath $checkoutPath) {
@@ -60,4 +62,3 @@ finally {
         Remove-Item -LiteralPath $resolvedCheckout -Recurse -Force
     }
 }
-

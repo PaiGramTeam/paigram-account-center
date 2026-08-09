@@ -28,7 +28,7 @@ Raw platform credentials must never be stored by Account Center, the SDK, or bot
 
 ## Local verification
 
-Required local tools are Go, Buf, Bun, uv, `protoc-gen-go`, and `protoc-gen-go-grpc`. Docker is not required by the repository verification flow.
+Required local tools are Go, Buf, Bun, uv, GitHub CLI, `protoc-gen-go`, and `protoc-gen-go-grpc`. Docker is not required by the repository verification flow.
 
 Run the complete local verification suite from the repository root:
 
@@ -37,6 +37,8 @@ pwsh ./scripts/verify.ps1
 ```
 
 The default verification checks the pinned current PaiGram `main` baseline and requires a clean worktree. During development, `-AllowDirty` permits intentional local edits and `-SkipPaiGramCompatibility` permits an offline run.
+
+The command does not claim the external MySQL/Redis integration suites: those require separately provisioned isolated services and remain a production-cutover gate.
 
 The repository intentionally does not copy build or deployment systems from the source repositories.
 

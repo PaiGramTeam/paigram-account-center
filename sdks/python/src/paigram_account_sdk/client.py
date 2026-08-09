@@ -217,6 +217,7 @@ class PaiGramAccountClient:
                 timeout=self._timeout,
             ),
             request_id,
+            failed_precondition_error=ServiceUnavailableError,
         )
         schema = MessageToDict(response.credential_schema, preserving_proto_field_name=True)
         return PlatformDescriptor(
@@ -252,6 +253,7 @@ class PaiGramAccountClient:
                 timeout=self._timeout,
             ),
             resolved_request_id,
+            failed_precondition_error=CredentialError,
         )
         return _credential_summary_from_proto(response)
 
@@ -279,6 +281,7 @@ class PaiGramAccountClient:
                 timeout=self._timeout,
             ),
             resolved_request_id,
+            failed_precondition_error=CredentialError,
         )
         return RefreshResult(
             status=_credential_status(response.status),
@@ -309,6 +312,7 @@ class PaiGramAccountClient:
                 timeout=self._timeout,
             ),
             resolved_request_id,
+            failed_precondition_error=CredentialError,
         )
         return bool(response.success)
 
@@ -324,7 +328,11 @@ class PaiGramAccountClient:
             metadata=(("authorization", f"Bearer {token}"), *_correlation_metadata(request_id)),
             timeout=self._timeout,
         )
-        return await _grpc_call(call, request_id)
+        return await _grpc_call(
+            call,
+            request_id,
+            failed_precondition_error=ServiceUnavailableError,
+        )
 
     async def _authorize_platform_action(
         self,
@@ -393,11 +401,16 @@ def _create_channel(
     return grpc.aio.secure_channel(target, credentials)
 
 
-async def _grpc_call(call: Awaitable[T], request_id: str) -> T:
+async def _grpc_call(
+    call: Awaitable[T],
+    request_id: str,
+    *,
+    failed_precondition_error: type[AccountSDKError],
+) -> T:
     try:
         return await call
     except grpc.aio.AioRpcError as error:
-        mapped = _map_grpc_error(error)
+        mapped = _map_grpc_error(error, failed_precondition_error)
         logger.warning(
             "gRPC request %s failed with %s: %s",
             request_id,
@@ -407,7 +420,10 @@ async def _grpc_call(call: Awaitable[T], request_id: str) -> T:
         raise mapped from error
 
 
-def _map_grpc_error(error: grpc.aio.AioRpcError) -> AccountSDKError:
+def _map_grpc_error(
+    error: grpc.aio.AioRpcError,
+    failed_precondition_error: type[AccountSDKError],
+) -> AccountSDKError:
     message = error.details() or error.code().name
     error_type: type[AccountSDKError]
     if error.code() == grpc.StatusCode.INVALID_ARGUMENT:
@@ -421,7 +437,7 @@ def _map_grpc_error(error: grpc.aio.AioRpcError) -> AccountSDKError:
     elif error.code() in (grpc.StatusCode.ALREADY_EXISTS, grpc.StatusCode.ABORTED):
         error_type = ConflictError
     elif error.code() == grpc.StatusCode.FAILED_PRECONDITION:
-        error_type = CredentialError
+        error_type = failed_precondition_error
     elif error.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
         error_type = DeadlineExceededError
     elif error.code() == grpc.StatusCode.UNAVAILABLE or error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
