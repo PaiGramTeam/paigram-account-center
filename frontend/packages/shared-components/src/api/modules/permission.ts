@@ -1,22 +1,6 @@
 import type { createRequest } from '../request'
-import type {
-  PermissionListParams,
-  PermissionListResponse,
-  CreatePermissionRequest,
-  CreatePermissionResponse,
-  DeletePermissionResponse,
-  PermissionDetailResponse,
-} from '../types'
-
-interface BackendPermission {
-  id: number
-  name: string
-  resource: string
-  action: string
-  description: string
-  created_at: string
-  updated_at: string
-}
+import type { OpenApiPermissionInfo, OpenApiRole } from '../openapi'
+import type { PermissionListParams, PermissionListResponse, PermissionDetailResponse } from '../types'
 
 function toTitleCase(value: string): string {
   return value
@@ -26,7 +10,7 @@ function toTitleCase(value: string): string {
     .join(' ')
 }
 
-function mapPermission(permission: BackendPermission) {
+function mapPermission(permission: OpenApiPermissionInfo) {
   return {
     id: permission.id,
     name: permission.name,
@@ -35,61 +19,52 @@ function mapPermission(permission: BackendPermission) {
     category: permission.resource,
     resource: permission.resource,
     action: permission.action,
-    created_at: permission.created_at,
-    updated_at: permission.updated_at,
-  }
-}
-
-function normalizePermissionPayload(data: CreatePermissionRequest) {
-  const resource = data.resource || data.name.split(':')[0] || ''
-  const action = data.action || data.name.split(':')[1] || ''
-
-  return {
-    name: data.name,
-    resource,
-    action,
-    description: data.description,
   }
 }
 
 export function createPermissionApi(request: ReturnType<typeof createRequest>) {
-  return {
-    // List permissions with pagination.
-    async getList(params?: PermissionListParams): Promise<PermissionListResponse> {
-      const response = await request.get<{
-        data: { data: BackendPermission[]; pagination: PermissionListResponse['pagination'] }
-      }>('/permissions', { params })
+  async function listAssignedPermissions() {
+    const response = await request.get<{ items: OpenApiRole[] | null }>('/admin/roles', {
+      params: { page: 1, page_size: 100 },
+    })
+    const permissions = new Map<number, OpenApiPermissionInfo>()
+    for (const role of response.data.items ?? []) {
+      for (const permission of role.permissions ?? []) permissions.set(permission.id, permission)
+    }
+    return [...permissions.values()]
+  }
 
-      const allPermissions = response.data.data.data.map(mapPermission)
+  return {
+    async getList(params?: PermissionListParams): Promise<PermissionListResponse> {
+      const assignedPermissions = await listAssignedPermissions()
       const filteredPermissions = params?.category
-        ? allPermissions.filter((permission) => permission.category === params.category)
-        : allPermissions
+        ? assignedPermissions.filter((permission) => permission.resource === params.category)
+        : assignedPermissions
+      const page = params?.page ?? 1
+      const pageSize = params?.page_size ?? 20
+      const offset = (page - 1) * pageSize
 
       return {
-        data: filteredPermissions,
+        data: filteredPermissions.slice(offset, offset + pageSize).map(mapPermission),
         pagination: {
-          ...response.data.data.pagination,
-          total: params?.category ? filteredPermissions.length : response.data.data.pagination.total,
+          page,
+          page_size: pageSize,
+          total: filteredPermissions.length,
+          total_pages: Math.max(1, Math.ceil(filteredPermissions.length / pageSize)),
         },
       }
     },
 
-    // Get one permission.
     async getDetail(id: number | string): Promise<PermissionDetailResponse> {
-      const response = await request.get<BackendPermission>(`/permissions/${id}`)
+      const permission = (await listAssignedPermissions()).find((item) => String(item.id) === String(id))
+      if (!permission) throw new Error('Permission not found in the assigned role catalog.')
       return {
-        data: mapPermission(response.data),
+        data: {
+          ...mapPermission(permission),
+          created_at: '',
+          updated_at: '',
+        },
       }
-    },
-
-    // Create a permission.
-    async create(data: CreatePermissionRequest): Promise<CreatePermissionResponse> {
-      return request.post('/permissions', normalizePermissionPayload(data))
-    },
-
-    // Delete a permission.
-    async delete(id: number | string): Promise<DeletePermissionResponse> {
-      return request.delete(`/permissions/${id}`)
     },
   }
 }

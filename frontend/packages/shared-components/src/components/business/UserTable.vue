@@ -95,7 +95,6 @@
             </a-avatar>
             <div>
               <div class="font-medium">{{ record.display_name }}</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">{{ record.primary_email }}</div>
             </div>
           </div>
         </template>
@@ -188,14 +187,14 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  view: [user: UserListItem]
-  edit: [user: UserListItem]
-  create: []
-  delete: [user: UserListItem]
+  'view': [user: UserListItem]
+  'edit': [user: UserListItem]
+  'create': []
+  'delete': [user: UserListItem]
   'batch-delete': [users: UserListItem[]]
   'reset-password': [user: UserListItem]
   'toggle-status': [user: UserListItem]
-  refresh: []
+  'refresh': []
 }>()
 
 const searchForm = reactive({
@@ -402,15 +401,7 @@ const handleBatchDelete = () => {
 }
 
 const handleResetPassword = (record: UserListItem) => {
-  Modal.confirm({
-    title: '重置密码',
-    content: `确定要重置用户 "${record.display_name}" 的密码吗？`,
-    okText: '确定',
-    cancelText: '取消',
-    onOk: () => {
-      emit('reset-password', record)
-    },
-  })
+  emit('reset-password', record)
 }
 
 const handleToggleStatus = (record: UserListItem) => {

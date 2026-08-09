@@ -15,7 +15,7 @@
         <p class="mt-2 text-sm text-slate-500 dark:text-gray-400">使用管理员账号完成验证后进入控制台。</p>
       </div>
 
-      <a-form :model="loginForm" :rules="rules" layout="vertical" @submit="handleSubmit">
+      <a-form :model="loginForm" :rules="rules" layout="vertical" @submit-success="handleSubmit">
         <a-form-item field="email" label="邮箱">
           <a-input v-model="loginForm.email" placeholder="请输入邮箱" :disabled="showTwoFactorStep" />
         </a-form-item>
@@ -122,14 +122,7 @@ const oauthProviders = [
   { name: 'github', label: 'GitHub', icon: IconGithub },
 ]
 
-interface FormSubmitData {
-  values: LoginEmailRequest
-  errors: Record<string, string> | undefined
-}
-
-const handleSubmit = async ({ values, errors }: FormSubmitData): Promise<void> => {
-  if (errors) return
-
+const handleSubmit = async (values: LoginEmailRequest): Promise<void> => {
   if (showCaptcha.value) {
     if (!turnstileSiteKey) {
       Message.error('当前站点未配置安全验证，请联系管理员')

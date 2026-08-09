@@ -1,31 +1,29 @@
 import js from '@eslint/js'
 import typescript from '@typescript-eslint/eslint-plugin'
 import typescriptParser from '@typescript-eslint/parser'
-import prettier from 'eslint-plugin-prettier'
-import prettierConfig from 'eslint-config-prettier'
+import prettierConfig from 'eslint-config-prettier/flat'
 import vue from 'eslint-plugin-vue'
-import vueParser from 'vue-eslint-parser'
+import globals from 'globals'
 
 export default [
-  // Ignore patterns
   {
     ignores: [
       'dist/**',
       'node_modules/**',
       '**/dist/**',
       '**/node_modules/**',
-      '*.config.js',
-      '*.config.ts',
-      'src/vite-env.d.ts',
+      'coverage/**',
+      'playwright-report/**',
+      'test-results/**',
+      '**/vite-env.d.ts',
       '**/auto-imports.d.ts',
       '**/components.d.ts',
+      'packages/shared-components/src/api/generated/**',
     ],
   },
 
-  // Base JavaScript config
   js.configs.recommended,
 
-  // TypeScript files
   {
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
@@ -35,21 +33,9 @@ export default [
         sourceType: 'module',
       },
       globals: {
-        // Browser globals
-        window: 'readonly',
-        document: 'readonly',
-        localStorage: 'readonly',
-        sessionStorage: 'readonly',
-        console: 'readonly',
-        setTimeout: 'readonly',
-        setInterval: 'readonly',
-        clearTimeout: 'readonly',
-        clearInterval: 'readonly',
-        Event: 'readonly',
-        HTMLElement: 'readonly',
-        // Module globals
-        module: 'readonly',
-        require: 'readonly',
+        ...globals.browser,
+        ...globals.node,
+        ...globals.bun,
       },
     },
     plugins: {
@@ -59,7 +45,7 @@ export default [
       'no-console': 'off',
       'no-debugger': 'warn',
       'no-unused-vars': 'off',
-      'no-undef': 'off', // TypeScript handles this
+      'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         {
@@ -72,46 +58,34 @@ export default [
     },
   },
 
-  // Vue 3 files
   ...vue.configs['flat/recommended'],
   {
     files: ['**/*.vue'],
     languageOptions: {
-      parser: vueParser,
       parserOptions: {
         parser: typescriptParser,
         ecmaVersion: 'latest',
         sourceType: 'module',
       },
       globals: {
-        // Browser globals
-        window: 'readonly',
-        document: 'readonly',
-        localStorage: 'readonly',
-        sessionStorage: 'readonly',
-        console: 'readonly',
-        setTimeout: 'readonly',
-        setInterval: 'readonly',
-        clearTimeout: 'readonly',
-        clearInterval: 'readonly',
-        Event: 'readonly',
-        HTMLElement: 'readonly',
+        ...globals.browser,
       },
     },
     plugins: {
       '@typescript-eslint': typescript,
-      prettier,
     },
     rules: {
       'no-console': 'off',
       'no-debugger': 'warn',
-      'no-undef': 'off', // Vue handles this
+      'no-undef': 'off',
       'no-unused-vars': 'off',
       'vue/multi-word-component-names': 'off',
       'vue/no-v-html': 'warn',
       'vue/require-default-prop': 'off',
-      'vue/attributes-order': 'off', // Too strict
-      'vue/attribute-hyphenation': 'off', // Allow both styles
+      'vue/attributes-order': 'off',
+      'vue/attribute-hyphenation': 'off',
+      'vue/max-attributes-per-line': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         {
@@ -121,10 +95,8 @@ export default [
         },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
-      'prettier/prettier': 'warn',
     },
   },
 
-  // Prettier config (must be last to override others)
   prettierConfig,
 ]

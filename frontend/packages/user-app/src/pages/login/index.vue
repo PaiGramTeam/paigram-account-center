@@ -25,7 +25,7 @@
             </p>
           </div>
 
-          <a-form :model="loginForm" :rules="rules" layout="vertical" @submit="handleSubmit">
+          <a-form :model="loginForm" :rules="rules" layout="vertical" @submit-success="handleSubmit">
             <a-form-item field="email" label="邮箱地址">
               <a-input
                 v-model="loginForm.email"
@@ -165,14 +165,7 @@ const oauthProviders = [
   { name: 'github', label: 'GitHub', icon: IconGithub },
 ]
 
-interface FormSubmitData {
-  values: LoginEmailRequest
-  errors: Record<string, string> | undefined
-}
-
-const handleSubmit = async ({ values, errors }: FormSubmitData): Promise<void> => {
-  if (errors) return
-
+const handleSubmit = async (values: LoginEmailRequest): Promise<void> => {
   if (showCaptcha.value) {
     if (!turnstileSiteKey) {
       Message.error('当前站点未配置安全验证，请联系管理员')

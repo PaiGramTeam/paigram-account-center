@@ -62,7 +62,7 @@
               {{ twoFactorEnabled ? '您的账号已开启双因素认证，登录时需要验证码' : '启用双因素认证可以提高账号安全性' }}
             </p>
           </div>
-          <a-button v-if="!twoFactorEnabled" type="primary" :loading="twoFactorLoading" @click="handleEnable2FA">
+          <a-button v-if="!twoFactorEnabled" type="primary" :loading="twoFactorLoading" @click="showEnable2FAModal">
             启用 2FA
           </a-button>
           <a-button v-else status="danger" :loading="twoFactorLoading" @click="showDisable2FAModal">
@@ -137,6 +137,19 @@
     <a-modal v-model:visible="enable2FAModalVisible" title="启用双因素认证" :footer="false" width="500px">
       <div class="space-y-4">
         <a-spin :loading="twoFactorLoading" class="w-full">
+          <a-form v-if="!twoFactorData" :model="setup2FAForm" layout="vertical" @submit="handleEnable2FA">
+            <a-alert type="info" class="mb-4">启用双因素认证前，请先验证当前密码。</a-alert>
+            <a-form-item label="当前密码" field="password" :rules="[{ required: true, message: '请输入当前密码' }]">
+              <a-input-password
+                v-model="setup2FAForm.password"
+                placeholder="请输入当前密码"
+                :disabled="twoFactorLoading"
+              />
+            </a-form-item>
+            <a-form-item>
+              <a-button type="primary" html-type="submit" :loading="twoFactorLoading">继续</a-button>
+            </a-form-item>
+          </a-form>
           <div v-if="twoFactorData">
             <a-alert type="info" class="mb-4">
               请使用 Google Authenticator 或其他 TOTP 应用扫描二维码，然后输入验证码以完成设置
@@ -224,7 +237,7 @@ import { ref, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { IconComputer } from '@arco-design/web-vue/es/icon'
 import { useUserStore } from '@paigram/shared-components'
-import { securityApi, userApi } from '@/api'
+import { securityApi } from '@/api'
 import type { Device, UserSecuritySummary } from '@paigram/shared-components'
 
 // Stores
@@ -248,6 +261,10 @@ const confirm2FAForm = ref({
   code: '',
 })
 
+const setup2FAForm = ref({
+  password: '',
+})
+
 const disable2FAForm = ref({
   password: '',
   code: '',
@@ -261,6 +278,12 @@ const twoFactorData = ref<{
 
 const devices = ref<Device[]>([])
 const securitySummary = ref<UserSecuritySummary | null>(null)
+
+const showEnable2FAModal = (): void => {
+  twoFactorData.value = null
+  setup2FAForm.value.password = ''
+  enable2FAModalVisible.value = true
+}
 
 const handleChangePassword = async (): Promise<void> => {
   if (!userStore.userId) {
@@ -299,9 +322,8 @@ const handleEnable2FA = async (): Promise<void> => {
 
   twoFactorLoading.value = true
   try {
-    const response = await securityApi.enable2FA(userStore.userId)
+    const response = await securityApi.enable2FA(userStore.userId, setup2FAForm.value.password)
     twoFactorData.value = response.data
-    enable2FAModalVisible.value = true
   } catch (error) {
     console.error('Enable 2FA error:', error)
     const err = error as { error?: string; message?: string }
@@ -320,7 +342,6 @@ const handleConfirm2FA = async (): Promise<void> => {
   try {
     await securityApi.confirm2FA(userStore.userId, {
       code: confirm2FAForm.value.code,
-      secret: twoFactorData.value.secret,
     })
 
     Message.success('双因素认证已启用')
@@ -395,7 +416,7 @@ const fetchSecuritySummary = async (): Promise<void> => {
   if (!userStore.userId) return
 
   try {
-    const response = await userApi.getSecuritySummary(userStore.userId)
+    const response = await securityApi.getOverview()
     securitySummary.value = response.data
     twoFactorEnabled.value = response.data.two_factor_enabled
   } catch (error) {

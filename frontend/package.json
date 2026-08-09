@@ -9,36 +9,49 @@
   "scripts": {
     "dev:user": "bun run --cwd packages/user-app dev",
     "dev:admin": "bun run --cwd packages/admin-app dev",
+    "dev:user:mock": "bun run --cwd packages/user-app dev:mock",
+    "dev:admin:mock": "bun run --cwd packages/admin-app dev:mock",
     "build:user": "bun run --cwd packages/user-app build",
     "build:admin": "bun run --cwd packages/admin-app build",
     "build:all": "bun run build:user && bun run build:admin",
-    "lint": "eslint . --max-warnings 0",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"**/*.{js,ts,jsx,tsx,vue,json,md}\"",
-    "format:check": "prettier --check \"**/*.{js,ts,jsx,tsx,vue,json,md}\"",
+    "lint": "eslint packages tests eslint.config.js playwright*.ts --max-warnings 0",
+    "lint:fix": "bun run lint --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "type-check": "bun run --filter='*' type-check",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage"
+    "test": "bun test tests/unit",
+    "test:watch": "bun test --watch tests/unit",
+    "test:coverage": "bun test --coverage tests/unit",
+    "e2e": "playwright test --config playwright.e2e.config.ts",
+    "e2e:mock": "playwright test --config playwright.mock.config.ts",
+    "e2e:all": "playwright test",
+    "openapi:gen": "openapi-typescript ../contracts/openapi.json -o packages/shared-components/src/api/generated/schema.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.55.0",
     "@types/bun": "latest",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",
-    "@vue/eslint-config-typescript": "^14.6.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.5",
     "eslint-plugin-vue": "^10.7.0",
+    "globals": "^16.5.0",
+    "msw": "^2.15.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "typescript": "^5.0.0",
-    "vite": "8.0.5",
-    "vue-eslint-parser": "^10.2.0"
+    "vite": "8.0.5"
   },
   "dependencies": {
     "@vue/language-server": "^3.2.3",
     "pinia-plugin-persistedstate": "^4.7.1"
+  },
+  "msw": {
+    "workerDirectory": [
+      "packages/user-app/public",
+      "packages/admin-app/public"
+    ]
   }
 }

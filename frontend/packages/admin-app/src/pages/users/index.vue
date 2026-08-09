@@ -130,8 +130,7 @@
       v-model:visible="editVisible"
       :title="editMode === 'create' ? '新建用户' : '编辑用户'"
       :width="600"
-      @ok="handleSaveUser"
-      @cancel="editVisible = false"
+      :on-before-ok="handleSaveUser"
     >
       <a-form ref="editFormRef" :model="editForm" :rules="editRules" layout="vertical">
         <a-form-item field="display_name" label="显示名称">
@@ -164,6 +163,12 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <ResetPasswordModal
+      v-model:visible="resetPasswordVisible"
+      :user-name="resetPasswordTarget?.display_name || ''"
+      :reset-password="resetPasswordForTarget"
+    />
   </div>
 </template>
 
@@ -171,7 +176,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
-import { UserTable, UserCard, PageHeader, useUserStore } from '@paigram/shared-components'
+import { ResetPasswordModal, UserTable, UserCard, PageHeader, useUserStore } from '@paigram/shared-components'
 import { roleApi, userApi } from '@/api'
 import type { RoleListItem, UserAuditLogItem, UserDetail, UserListItem, UserStatus } from '@paigram/shared-components'
 
@@ -191,6 +196,8 @@ const currentUser = ref<UserDetail | null>(null)
 const userLogs = ref<UserAuditLogItem[]>([])
 const roleOptions = ref<RoleListItem[]>([])
 const editingUserId = ref<number | null>(null)
+const resetPasswordVisible = ref(false)
+const resetPasswordTarget = ref<UserListItem | UserDetail | null>(null)
 
 const editVisible = ref(false)
 const editMode = ref<'create' | 'edit'>('create')
@@ -314,9 +321,9 @@ const handleCreateUser = () => {
   editVisible.value = true
 }
 
-const handleSaveUser = async () => {
-  const valid = await editFormRef.value?.validate()
-  if (!valid) return
+const handleSaveUser = async (): Promise<boolean> => {
+  const errors = await editFormRef.value?.validate()
+  if (errors) return false
 
   try {
     if (editMode.value === 'create') {
@@ -334,40 +341,52 @@ const handleSaveUser = async () => {
         await userApi.update(editingUserId.value, {
           display_name: editForm.display_name,
           roles: editForm.roles,
-          status: editForm.status as 'active' | 'pending' | 'suspended' | 'deleted',
           locale: editForm.locale,
         })
+        if (currentUser.value?.status !== editForm.status) {
+          await userApi.updateStatus(editingUserId.value, editForm.status)
+        }
         Message.success('更新成功')
         if (currentUser.value?.id === editingUserId.value) {
           currentUser.value = await loadUserDetail(editingUserId.value)
         }
       }
     }
-    editVisible.value = false
     userTableRef.value?.refresh()
+    return true
   } catch (error) {
     console.error('保存失败:', error)
     const errorMessage = error instanceof Error ? error.message : '保存失败，请稍后重试'
     Message.error(errorMessage)
+    return false
   }
 }
 
-const handleResetPasswordFor = async (user: UserListItem | UserDetail) => {
+const handleResetPasswordFor = (user: UserListItem | UserDetail): void => {
   if (!user?.id) return
+  resetPasswordTarget.value = user
+  resetPasswordVisible.value = true
+}
 
+const resetPasswordForTarget = async (password: string): Promise<void> => {
+  if (!resetPasswordTarget.value) return
   try {
-    await userApi.resetPassword(user.id)
-    Message.success('密码重置邮件已发送')
+    await userApi.resetPassword(resetPasswordTarget.value.id, {
+      new_password: password,
+      invalidate_sessions: true,
+    })
+    Message.success('临时密码已设置，其他会话已撤销')
   } catch (error) {
     console.error('重置密码失败:', error)
     const errorMessage = error instanceof Error ? error.message : '重置密码失败'
     Message.error(errorMessage)
+    throw error
   }
 }
 
-const handleResetPassword = async () => {
+const handleResetPassword = () => {
   if (!currentUser.value) return
-  await handleResetPasswordFor(currentUser.value)
+  handleResetPasswordFor(currentUser.value)
 }
 
 const handleForceLogout = async () => {

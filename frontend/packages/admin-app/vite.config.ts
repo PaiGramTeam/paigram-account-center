@@ -7,7 +7,8 @@ import { ArcoResolver } from 'unplugin-vue-components/resolvers'
 import path from 'node:path' // Add this import
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  cacheDir: `../../node_modules/.vite/admin-app-${mode}`,
   plugins: [
     vue(),
     tailwindcss(),
@@ -41,4 +42,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

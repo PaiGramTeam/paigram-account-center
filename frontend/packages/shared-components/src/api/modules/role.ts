@@ -1,4 +1,5 @@
 import type { createRequest } from '../request'
+import type { OpenApiRole } from '../openapi'
 import type {
   RoleListParams,
   RoleListItem,
@@ -11,26 +12,7 @@ import type {
   RoleDetailResponse,
 } from '../types'
 
-interface BackendRole {
-  id: number
-  name: string
-  display_name: string
-  description: string
-  is_system?: boolean
-  permissions?: Array<{
-    id: number
-    name: string
-    resource: string
-    action: string
-    description: string
-    created_at?: string
-    updated_at?: string
-  }>
-  created_at: string
-  updated_at: string
-}
-
-function mapRole(role: BackendRole): RoleListItem {
+function mapRole(role: OpenApiRole): RoleListItem {
   return {
     id: role.id,
     name: role.name,
@@ -43,7 +25,7 @@ function mapRole(role: BackendRole): RoleListItem {
   }
 }
 
-function mapRoleDetail(role: BackendRole) {
+function mapRoleDetail(role: OpenApiRole) {
   return {
     ...mapRole(role),
     permissions: (role.permissions || []).map((permission) => ({
@@ -54,8 +36,8 @@ function mapRoleDetail(role: BackendRole) {
       category: permission.resource,
       resource: permission.resource,
       action: permission.action,
-      created_at: permission.created_at,
-      updated_at: permission.updated_at,
+      created_at: undefined,
+      updated_at: undefined,
     })),
     updated_at: role.updated_at,
   }
@@ -64,33 +46,33 @@ function mapRoleDetail(role: BackendRole) {
 export function createRoleApi(request: ReturnType<typeof createRequest>) {
   return {
     async getList(params?: RoleListParams): Promise<RoleListResponse> {
-      const response = await request.get<{ data: { data: BackendRole[]; pagination: RoleListResponse['pagination'] } }>(
-        '/roles',
-        { params }
-      )
+      const response = await request.get<{
+        items: OpenApiRole[] | null
+        pagination: RoleListResponse['pagination']
+      }>('/admin/roles', { params })
       return {
-        data: response.data.data.data.map(mapRole),
-        pagination: response.data.data.pagination,
+        data: (response.data.items ?? []).map(mapRole),
+        pagination: response.data.pagination,
       }
     },
 
     async getDetail(id: number | string): Promise<RoleDetailResponse> {
-      const response = await request.get<BackendRole>(`/roles/${id}`)
+      const response = await request.get<OpenApiRole>(`/admin/roles/${id}`)
       return {
         data: mapRoleDetail(response.data),
       }
     },
 
     async create(data: CreateRoleRequest): Promise<CreateRoleResponse> {
-      return request.post('/roles', data)
+      return request.post('/admin/roles', data)
     },
 
     async update(id: number | string, data: UpdateRoleRequest): Promise<UpdateRoleResponse> {
-      return request.put(`/roles/${id}`, data)
+      return request.put(`/admin/roles/${id}`, data)
     },
 
     async delete(id: number | string): Promise<DeleteRoleResponse> {
-      return request.delete(`/roles/${id}`)
+      return request.delete(`/admin/roles/${id}`)
     },
   }
 }

@@ -1,3 +1,5 @@
+import type { components, operations } from './generated/schema'
+
 export interface ApiResponse<T = unknown> {
   code?: number
   message?: string
@@ -18,26 +20,13 @@ export interface ApiError {
   details?: Record<string, unknown>
 }
 
-export interface LoginEmailRequest {
-  email: string
-  password: string
-  totp_code?: string
-  trust_device?: boolean
-  captcha_token?: string
-}
+export type LoginEmailRequest = operations['post-api-v1-auth-login']['requestBody']['content']['application/json']
 
-export interface LoginChallengeResponseData {
+export type LoginChallengeResponseData = components['schemas']['LoginChallengeResponseDataStruct'] & {
   requires_totp: true
-  message: string
 }
 
-export interface LoginResponseData {
-  access_token: string
-  refresh_token: string
-  access_expiry: string
-  refresh_expiry: string
-  user_id: number
-}
+export type LoginResponseData = components['schemas']['LoginResponseDataStruct']
 
 export type LoginEmailResponseData = LoginResponseData | LoginChallengeResponseData
 export type LoginResponse = ApiResponse<LoginResponseData>
@@ -79,7 +68,6 @@ export interface UserDetail extends UserInfo {
 export interface UserListItem {
   id: number
   display_name: string
-  primary_email: string
   avatar_url?: string
   status: UserStatus
   roles?: string[]
@@ -130,10 +118,12 @@ export interface CreateUserResponse {
 
 export interface UpdateUserRequest {
   display_name?: string
-  status?: UserStatus
   roles?: string[]
   locale?: string
 }
+
+export type ResetPasswordRequest =
+  operations['post-api-v1-admin-users-id-reset-password']['requestBody']['content']['application/json']
 
 export interface UpdateUserResponse {
   data: UserDetail
@@ -187,13 +177,11 @@ export interface UserLoginLogItem {
   created_at: string
 }
 
-export interface RefreshTokenRequest {
-  refresh_token: string
-}
+export type ActivityLogItem = components['schemas']['ActivityLogView']
 
-export interface LogoutRequest {
-  token: string
-}
+export type RefreshTokenRequest = operations['post-api-v1-auth-refresh']['requestBody']['content']['application/json']
+
+export type LogoutRequest = operations['post-api-v1-auth-logout']['requestBody']['content']['application/json']
 
 export interface LogoutResponse {
   data: {
@@ -201,23 +189,9 @@ export interface LogoutResponse {
   }
 }
 
-export interface RegisterEmailRequest {
-  email: string
-  password: string
-  display_name: string
-  locale?: string
-  captcha_token?: string
-}
+export type RegisterEmailRequest = operations['post-api-v1-auth-register']['requestBody']['content']['application/json']
 
-export interface RegisterEmailResponse {
-  data: {
-    user_id: number
-    email: string
-    requires_email_verification: boolean
-    verification_token?: string
-    verification_expires_at?: string
-  }
-}
+export type RegisterEmailResponse = ApiResponse<components['schemas']['RegisterEmailResponseDataStruct']>
 
 export interface ProfileData {
   user_id: number
@@ -250,48 +224,14 @@ export interface UpdateProfileRequest {
   locale?: string
 }
 
-export interface InitiateOAuthRequest {
-  redirect_to?: string
-}
+export type InitiateOAuthRequest = NonNullable<
+  operations['post-api-v1-auth-oauth-provider-init']['requestBody']
+>['content']['application/json']
 
-export interface InitiateOAuthResponse {
-  data: {
-    auth_url: string
-    state: string
-    nonce: string
-    expires_at: string
-  }
-}
+export type InitiateOAuthResponse = ApiResponse<components['schemas']['InitiateOAuthResponseDataStruct']>
 
-export interface OAuthCallbackRequest {
-  state: string
-  code: string
-}
-
-// Telegram Auth
-export interface TelegramAuthData {
-  id: number
-  first_name?: string
-  last_name?: string
-  username?: string
-  photo_url?: string
-  auth_date: number
-  hash: string
-}
-
-export interface TelegramAuthResponse {
-  access_token: string
-  refresh_token: string
-  expires_in: number
-  token_type: string
-  user: {
-    id: number
-    display_name: string
-    email?: string
-    avatar_url?: string
-    status: string
-  }
-}
+export type OAuthCallbackRequest =
+  operations['post-api-v1-auth-oauth-provider-callback']['requestBody']['content']['application/json']
 
 export interface BoundAccount {
   provider: string
@@ -320,16 +260,10 @@ export interface PaginatedResponse<T> {
 
 export interface BindAccountRequest {
   provider: string
-  provider_data: Record<string, unknown>
+  redirect_to?: string
 }
 
-export interface BindAccountResponse {
-  data: {
-    provider: string
-    provider_account_id: string
-    bound_at: string
-  }
-}
+export type BindAccountResponse = ApiResponse<components['schemas']['InitiateOAuthResponseDataStruct']>
 
 export interface UnbindAccountResponse {
   data: {
@@ -356,10 +290,8 @@ export interface Enable2FAResponse {
   }
 }
 
-export interface Confirm2FARequest {
-  code: string
-  secret: string
-}
+export type Confirm2FARequest =
+  operations['post-api-v1-me-security-2fa-confirm']['requestBody']['content']['application/json']
 
 export interface Confirm2FAResponse {
   data: {

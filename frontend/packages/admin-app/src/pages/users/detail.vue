@@ -183,13 +183,7 @@
       <a-empty v-else description="用户不存在" />
     </a-spin>
 
-    <a-modal
-      v-model:visible="editVisible"
-      title="编辑用户"
-      :width="600"
-      @ok="handleSaveEdit"
-      @cancel="editVisible = false"
-    >
+    <a-modal v-model:visible="editVisible" title="编辑用户" :width="600" :on-before-ok="handleSaveEdit">
       <a-form ref="editFormRef" :model="editForm" :rules="editRules" layout="vertical">
         <a-form-item field="display_name" label="显示名称">
           <a-input v-model="editForm.display_name" placeholder="请输入显示名称" />
@@ -213,6 +207,12 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <ResetPasswordModal
+      v-model:visible="resetPasswordVisible"
+      :user-name="userDetail?.display_name || ''"
+      :reset-password="resetCurrentUserPassword"
+    />
   </div>
 </template>
 
@@ -223,7 +223,14 @@ import { Message, Modal } from '@arco-design/web-vue'
 import { IconUser, IconEmail, IconInfoCircle } from '@arco-design/web-vue/es/icon'
 import type { FormInstance } from '@arco-design/web-vue'
 import { userApi } from '@/api'
-import type { UpdateUserRequest, UserDetail, UserSecuritySummary, UserSessionItem } from '@paigram/shared-components'
+import { ResetPasswordModal } from '@paigram/shared-components'
+import type {
+  UpdateUserRequest,
+  UserDetail,
+  UserSecuritySummary,
+  UserSessionItem,
+  UserStatus,
+} from '@paigram/shared-components'
 
 const route = useRoute()
 const router = useRouter()
@@ -232,9 +239,10 @@ const userDetail = ref<UserDetail | null>(null)
 const securitySummary = ref<UserSecuritySummary | null>(null)
 const sessions = ref<UserSessionItem[]>([])
 const editVisible = ref(false)
+const resetPasswordVisible = ref(false)
 const editFormRef = ref<FormInstance>()
 
-const editForm = reactive<UpdateUserRequest>({
+const editForm = reactive<UpdateUserRequest & { status: UserStatus }>({
   display_name: '',
   status: 'active',
   locale: '',
@@ -321,22 +329,29 @@ const handleEdit = (): void => {
   editVisible.value = true
 }
 
-const handleSaveEdit = async (): Promise<void> => {
-  const valid = await editFormRef.value?.validate()
-  if (!valid) return
+const handleSaveEdit = async (): Promise<boolean> => {
+  const errors = await editFormRef.value?.validate()
+  if (errors) return false
 
   const userId = route.params.id
-  if (!userId) return
+  if (!userId) return false
 
   try {
-    await userApi.update(userId as string, editForm)
+    await userApi.update(userId as string, {
+      display_name: editForm.display_name,
+      locale: editForm.locale,
+    })
+    if (userDetail.value?.status !== editForm.status) {
+      await userApi.updateStatus(userId as string, editForm.status)
+    }
     Message.success('更新成功')
-    editVisible.value = false
     await loadUserDetail()
+    return true
   } catch (error) {
     console.error('更新失败:', error)
     const errorMessage = error instanceof Error ? error.message : '更新失败，请稍后重试'
     Message.error(errorMessage)
+    return false
   }
 }
 
@@ -368,26 +383,21 @@ const handleDelete = (): void => {
 
 const handleResetPassword = (): void => {
   if (!userDetail.value) return
+  resetPasswordVisible.value = true
+}
 
-  Modal.confirm({
-    title: '重置密码',
-    content: `确定要重置用户 "${userDetail.value.display_name}" 的密码吗？`,
-    okText: '确定',
-    cancelText: '取消',
-    onOk: async () => {
-      const userId = route.params.id
-      if (!userId) return
-
-      try {
-        await userApi.resetPassword(userId as string)
-        Message.success('密码重置邮件已发送')
-      } catch (error) {
-        console.error('重置密码失败:', error)
-        const errorMessage = error instanceof Error ? error.message : '重置密码失败'
-        Message.error(errorMessage)
-      }
-    },
-  })
+const resetCurrentUserPassword = async (password: string): Promise<void> => {
+  const userId = route.params.id
+  if (!userId) return
+  try {
+    await userApi.resetPassword(userId as string, { new_password: password, invalidate_sessions: true })
+    Message.success('临时密码已设置，其他会话已撤销')
+  } catch (error) {
+    console.error('重置密码失败:', error)
+    const errorMessage = error instanceof Error ? error.message : '重置密码失败'
+    Message.error(errorMessage)
+    throw error
+  }
 }
 
 const handleToggleStatus = (): void => {

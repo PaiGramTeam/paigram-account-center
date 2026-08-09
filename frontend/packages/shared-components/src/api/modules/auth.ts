@@ -11,8 +11,6 @@ import type {
   InitiateOAuthRequest,
   InitiateOAuthResponse,
   OAuthCallbackRequest,
-  TelegramAuthData,
-  TelegramAuthResponse,
 } from '../types'
 
 export function createAuthApi(request: ReturnType<typeof createRequest>) {
@@ -43,16 +41,6 @@ export function createAuthApi(request: ReturnType<typeof createRequest>) {
 
     async handleOAuthCallback(provider: string, data: OAuthCallbackRequest): Promise<LoginResponse> {
       return request.post(`/auth/oauth/${provider}/callback`, data, { skipErrorToast: true })
-    },
-
-    async telegramAuth(data: TelegramAuthData, botToken: string): Promise<TelegramAuthResponse> {
-      const response = await request.post('/auth/oauth/telegram', data, {
-        skipErrorToast: true,
-        headers: {
-          'X-Telegram-Bot-Token': botToken,
-        },
-      })
-      return response.data as TelegramAuthResponse
     },
   }
 }

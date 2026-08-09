@@ -10,4 +10,5 @@
 *.yaml text eol=lf
 
 contracts/gen/** linguist-generated=true
-
+contracts/openapi.json linguist-generated=true
+frontend/packages/shared-components/src/api/generated/** linguist-generated=true

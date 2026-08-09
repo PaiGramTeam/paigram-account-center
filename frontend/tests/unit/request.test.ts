@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { normalizeApiError } from '../packages/shared-components/src/api/request'
+import { normalizeApiError } from '../../packages/shared-components/src/api/request'
 
 describe('normalizeApiError', () => {
   test('returns the safe fallback for an empty response', () => {

@@ -1,7 +1,10 @@
 # Build outputs
 dist
+coverage
 node_modules
 .vscode
+playwright-report
+test-results
 
 # Lock files
 package-lock.json
@@ -14,3 +17,5 @@ bun.lockb
 **/components.d.ts
 **/types/auto-imports.d.ts
 **/types/components.d.ts
+packages/shared-components/src/api/generated/
+**/public/mockServiceWorker.js

@@ -16,6 +16,7 @@ export { default as UserCard } from './components/business/UserCard.vue'
 export { default as PageHeader } from './components/business/PageHeader.vue'
 export { default as AuthTwoFactorStep } from './components/business/AuthTwoFactorStep.vue'
 export { default as TurnstileWidget } from './components/business/TurnstileWidget.vue'
+export { default as ResetPasswordModal } from './components/business/ResetPasswordModal.vue'
 
 export { useUserStore } from './stores/user'
 export { useAppStore } from './stores/app'
@@ -45,3 +46,6 @@ export type { UserDetail, UserListItem, UserStatus, LoginType } from './api/type
 export * from './api'
 export { createRequest } from './api/request'
 export type { RequestConfig } from './api/request'
+
+// Development mocks
+export { enableMocking } from './mocks'

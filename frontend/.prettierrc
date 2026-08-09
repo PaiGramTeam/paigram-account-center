@@ -3,13 +3,14 @@
   "$schema": "https://json.schemastore.org/prettierrc",
   "semi": false,
   "singleQuote": true,
+  "quoteProps": "consistent",
   "tabWidth": 2,
   "useTabs": false,
   "trailingComma": "es5",
   "printWidth": 120,
   "arrowParens": "always",
-  "endOfLine": "auto",
+  "endOfLine": "lf",
   "vueIndentScriptAndStyle": false,
   "bracketSpacing": true,
-  "htmlWhitespaceSensitivity": "css"
+  "htmlWhitespaceSensitivity": "strict"
 }

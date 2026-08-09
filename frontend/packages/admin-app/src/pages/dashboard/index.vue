@@ -72,7 +72,7 @@
                 <template #title>
                   {{ user.display_name }}
                 </template>
-                <template #description> {{ user.primary_email }} · {{ formatRelativeTime(user.created_at) }} </template>
+                <template #description>{{ formatRelativeTime(user.created_at) }}</template>
               </a-list-item-meta>
               <template #actions>
                 <a-button type="text" size="small" @click="handleViewUser(user)"> 查看 </a-button>

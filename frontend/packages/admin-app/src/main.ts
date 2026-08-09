@@ -2,29 +2,42 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import pinia from './stores'
 import router from './routes'
-import { setupRouterGuard, setupI18n, useUserStore, usePermissionStore, useAppStore } from '@paigram/shared-components'
+import {
+  enableMocking,
+  setupRouterGuard,
+  setupI18n,
+  useUserStore,
+  usePermissionStore,
+  useAppStore,
+} from '@paigram/shared-components'
 import type { RouterGuardConfig } from '@paigram/shared-components'
 
 import './style.css'
 import '@arco-design/web-vue/es/message/style/index.css'
 import '@arco-design/web-vue/es/notification/style/index.css'
 
-const app = createApp(App)
+async function bootstrap(): Promise<void> {
+  await enableMocking()
 
-app.use(pinia)
+  const app = createApp(App)
 
-const appStore = useAppStore()
-appStore.initTheme()
+  app.use(pinia)
 
-setupI18n(app)
+  const appStore = useAppStore()
+  appStore.initTheme()
 
-const routerGuardConfig: RouterGuardConfig = {
-  getUserStore: () => useUserStore(),
-  getPermissionStore: () => usePermissionStore(),
-  whiteList: ['/login', '/404', '/403'],
+  setupI18n(app)
+
+  const routerGuardConfig: RouterGuardConfig = {
+    getUserStore: () => useUserStore(),
+    getPermissionStore: () => usePermissionStore(),
+    whiteList: ['/login', '/404', '/403'],
+  }
+  setupRouterGuard(router, routerGuardConfig)
+
+  app.use(router)
+
+  app.mount('#app')
 }
-setupRouterGuard(router, routerGuardConfig)
 
-app.use(router)
-
-app.mount('#app')
+void bootstrap()

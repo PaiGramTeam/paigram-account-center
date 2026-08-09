@@ -32,7 +32,8 @@ export function setupRouterGuard(router: Router, config: RouterGuardConfig) {
 
     if (userStore.isLogin) {
       if (to.path === '/login') {
-        next({ path: '/' })
+        const authenticatedHome = typeof to.meta.authenticatedHome === 'string' ? to.meta.authenticatedHome : '/'
+        next({ path: authenticatedHome })
       } else {
         if (to.meta?.requiresAuth === false) {
           next()

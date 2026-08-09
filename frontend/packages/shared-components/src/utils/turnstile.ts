@@ -1,9 +1,9 @@
 export interface TurnstileRenderOptions {
-  sitekey: string
-  action?: string
-  theme?: 'light' | 'dark' | 'auto'
-  size?: 'normal' | 'compact' | 'flexible'
-  callback?: (token: string) => void
+  'sitekey': string
+  'action'?: string
+  'theme'?: 'light' | 'dark' | 'auto'
+  'size'?: 'normal' | 'compact' | 'flexible'
+  'callback'?: (token: string) => void
   'expired-callback'?: () => void
   'error-callback'?: (errorCode?: string) => void
 }

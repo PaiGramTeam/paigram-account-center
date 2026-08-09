@@ -52,11 +52,11 @@ async function renderWidget() {
     errorMessage.value = ''
 
     widgetId.value = turnstile.render(containerRef.value, {
-      sitekey: props.siteKey,
-      action: props.action,
-      theme: props.theme,
-      size: props.size,
-      callback: (token: string) => {
+      'sitekey': props.siteKey,
+      'action': props.action,
+      'theme': props.theme,
+      'size': props.size,
+      'callback': (token: string) => {
         errorMessage.value = ''
         emit('token', token)
       },

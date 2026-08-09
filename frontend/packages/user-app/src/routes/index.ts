@@ -12,7 +12,7 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: '/login',
     name: 'Login',
     component: () => import('@/pages/login/index.vue'),
-    meta: { locale: 'common.login', requiresAuth: false, hideInMenu: true },
+    meta: { locale: 'common.login', requiresAuth: false, hideInMenu: true, authenticatedHome: '/dashboard' },
   },
   {
     path: '/register',
