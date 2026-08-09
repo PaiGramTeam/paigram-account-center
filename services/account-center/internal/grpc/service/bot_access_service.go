@@ -295,9 +295,9 @@ func mapBotAccessError(operation string, err error) error {
 	case errors.Is(err, botaccess.ErrInactiveAccountRef):
 		return status.Error(codes.FailedPrecondition, "platform account binding is not active")
 	case errors.Is(err, botaccess.ErrInvalidTicketConfig):
-		return status.Error(codes.FailedPrecondition, "invalid service ticket config")
+		return status.Error(codes.Unavailable, "invalid service ticket config")
 	case errors.Is(err, botaccess.ErrSigningKeyUnavailable):
-		return status.Error(codes.FailedPrecondition, "service ticket signing key unavailable")
+		return status.Error(codes.Unavailable, "service ticket signing key unavailable")
 	default:
 		return status.Errorf(codes.Internal, "%s: %v", operation, err)
 	}

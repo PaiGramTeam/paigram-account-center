@@ -331,7 +331,7 @@ class PaiGramAccountClient:
         return await _grpc_call(
             call,
             request_id,
-            failed_precondition_error=ServiceUnavailableError,
+            failed_precondition_error=CredentialError,
         )
 
     async def _authorize_platform_action(

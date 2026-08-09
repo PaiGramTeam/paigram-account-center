@@ -348,7 +348,7 @@ async def test_oauth_server_failure_is_retryable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_account_precondition_maps_service_unavailable() -> None:
+async def test_account_precondition_maps_credential_state() -> None:
     async with (
         account_server() as target,
         PaiGramAccountClient(
@@ -361,7 +361,7 @@ async def test_account_precondition_maps_service_unavailable() -> None:
             http_transport=token_transport(),
         ) as client,
     ):
-        with pytest.raises(ServiceUnavailableError, match="binding is inactive"):
+        with pytest.raises(CredentialError, match="binding is inactive"):
             await client.resolve_user("inactive", request_id="request-123")
 
 
