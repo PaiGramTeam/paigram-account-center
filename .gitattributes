@@ -1,0 +1,13 @@
+* text=auto
+
+*.go text eol=lf
+*.proto text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.vue text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+contracts/gen/** linguist-generated=true
+

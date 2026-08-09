@@ -1,0 +1,33 @@
+# Local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Go
+*.test
+coverage.out
+
+# JavaScript
+**/node_modules/
+**/dist/
+**/coverage/
+
+# Python
+**/.venv/
+**/__pycache__/
+**/.mypy_cache/
+**/.pytest_cache/
+**/.ruff_cache/
+*.py[cod]
+
+# Local artifacts
+*.log
+tmp/
+
