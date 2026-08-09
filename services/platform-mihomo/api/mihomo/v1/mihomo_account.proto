@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package mihomo.v1;
+
+option go_package = "platform-mihomo-service/api/mihomo/v1;v1";
+
+import "google/protobuf/timestamp.proto";
+
+service MihomoAccountService {
+  rpc BindCredential(BindCredentialRequest) returns (BindCredentialResponse);
+  rpc UpsertDevice(UpsertDeviceRequest) returns (UpsertDeviceResponse);
+  rpc ConfirmPrimaryProfile(ConfirmPrimaryProfileRequest) returns (ConfirmPrimaryProfileResponse);
+  rpc GetCredentialStatus(GetCredentialStatusRequest) returns (GetCredentialStatusResponse);
+  rpc ValidateCredential(ValidateCredentialRequest) returns (ValidateCredentialResponse);
+  rpc RefreshCredential(RefreshCredentialRequest) returns (RefreshCredentialResponse);
+  rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse);
+  rpc GetPrimaryProfile(GetPrimaryProfileRequest) returns (GetPrimaryProfileResponse);
+  rpc GetAuthKey(GetAuthKeyRequest) returns (GetAuthKeyResponse);
+  rpc GetCredentialSummary(GetCredentialSummaryRequest) returns (GetCredentialSummaryResponse);
+  rpc UpdateCredential(UpdateCredentialRequest) returns (UpdateCredentialResponse);
+  rpc DeleteCredential(DeleteCredentialRequest) returns (DeleteCredentialResponse);
+}
+
+enum CredentialStatus {
+  CREDENTIAL_STATUS_UNSPECIFIED = 0;
+  CREDENTIAL_STATUS_ACTIVE = 1;
+  CREDENTIAL_STATUS_EXPIRED = 2;
+  CREDENTIAL_STATUS_INVALID = 3;
+  CREDENTIAL_STATUS_CHALLENGE_REQUIRED = 4;
+}
+
+message DeviceInfo {
+  string device_id = 1;
+  string device_fp = 2;
+  string device_name = 3;
+}
+
+message DeviceSummary {
+  string device_id = 1;
+  string device_fp = 2;
+  string device_name = 3;
+  bool is_valid = 4;
+  google.protobuf.Timestamp last_seen_at = 5;
+}
+
+message ProfileSummary {
+  uint64 id = 1;
+  string platform_account_id = 2;
+  string game_biz = 3;
+  string region = 4;
+  string player_id = 5;
+  string nickname = 6;
+  int32 level = 7;
+  bool is_default = 8;
+}
+
+message CredentialSummary {
+  string platform_account_id = 1;
+  CredentialStatus status = 2;
+  google.protobuf.Timestamp last_validated_at = 3;
+  google.protobuf.Timestamp last_refreshed_at = 4;
+  repeated DeviceSummary devices = 5;
+  repeated ProfileSummary profiles = 6;
+}
+
+message BindCredentialRequest {
+  string service_ticket = 1;
+  string cookie_bundle_json = 2;
+  DeviceInfo device = 3;
+  string region_hint = 4;
+}
+
+message BindCredentialResponse {
+  string platform_account_id = 1;
+  CredentialStatus status = 2;
+  repeated ProfileSummary profiles = 3;
+}
+
+message UpsertDeviceRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+  DeviceInfo device = 3;
+}
+
+message UpsertDeviceResponse {
+  bool success = 1;
+}
+
+message ConfirmPrimaryProfileRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+  string player_id = 3;
+}
+
+message ConfirmPrimaryProfileResponse {
+  ProfileSummary profile = 1;
+}
+
+message GetCredentialStatusRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message GetCredentialStatusResponse {
+  CredentialStatus status = 1;
+  google.protobuf.Timestamp last_validated_at = 2;
+}
+
+message ValidateCredentialRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message ValidateCredentialResponse {
+  CredentialStatus status = 1;
+  string error_code = 2;
+}
+
+message RefreshCredentialRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message RefreshCredentialResponse {
+  CredentialStatus status = 1;
+  google.protobuf.Timestamp refreshed_at = 2;
+}
+
+message ListProfilesRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message ListProfilesResponse {
+  repeated ProfileSummary profiles = 1;
+}
+
+message GetPrimaryProfileRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message GetPrimaryProfileResponse {
+  ProfileSummary profile = 1;
+}
+
+message GetAuthKeyRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+  string player_id = 3;
+}
+
+message GetAuthKeyResponse {
+  string authkey = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message GetCredentialSummaryRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message GetCredentialSummaryResponse {
+  CredentialSummary summary = 1;
+}
+
+message UpdateCredentialRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+  string cookie_bundle_json = 3;
+  DeviceInfo device = 4;
+  string region_hint = 5;
+}
+
+message UpdateCredentialResponse {
+  CredentialSummary summary = 1;
+}
+
+message DeleteCredentialRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message DeleteCredentialResponse {
+  bool success = 1;
+}

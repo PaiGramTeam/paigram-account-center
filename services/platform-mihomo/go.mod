@@ -1,0 +1,52 @@
+module platform-mihomo-service
+
+go 1.24.0
+
+require (
+	github.com/glebarez/sqlite v1.11.0
+	github.com/go-kratos/kratos/v2 v2.9.2
+	github.com/go-sql-driver/mysql v1.8.1
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/redis/go-redis/v9 v9.18.0
+	github.com/stretchr/testify v1.11.1
+	google.golang.org/grpc v1.64.0
+	google.golang.org/protobuf v1.36.11
+	gorm.io/driver/mysql v1.6.0
+	gorm.io/gorm v1.31.1
+)
+
+require (
+	dario.cat/mergo v1.0.0 // indirect
+	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/PaiGramTeam/paigram-account-center/contracts/gen/go v0.0.0
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/glebarez/go-sqlite v1.21.2 // indirect
+	github.com/go-kratos/aegis v0.2.0 // indirect
+	github.com/go-playground/form/v4 v4.2.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/mux v1.8.1 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	go.uber.org/atomic v1.11.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/libc v1.22.5 // indirect
+	modernc.org/mathutil v1.5.0 // indirect
+	modernc.org/memory v1.5.0 // indirect
+	modernc.org/sqlite v1.23.1 // indirect
+)
+
+replace github.com/PaiGramTeam/paigram-account-center/contracts/gen/go => ../../contracts/gen/go

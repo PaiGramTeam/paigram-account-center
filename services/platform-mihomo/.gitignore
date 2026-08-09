@@ -1,0 +1,5 @@
+.worktrees/
+/configs/config.yaml
+go.work
+go.work.sum
+.env.integration.local

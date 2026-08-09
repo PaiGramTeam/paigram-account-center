@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package platform.mihomo.conf;
+
+option go_package = "platform-mihomo-service/internal/conf;conf";
+
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  Security security = 3;
+}
+
+message Server {
+  message GRPC {
+    string network = 1;
+    string addr = 2;
+    int32 timeout_seconds = 3;
+  }
+
+  GRPC grpc = 1;
+}
+
+message Data {
+  message Database {
+    string driver = 1;
+    string source = 2;
+  }
+
+  message Redis {
+    string addr = 1;
+    string password = 2;
+    int32 db = 3;
+    string prefix = 4;
+  }
+
+  Database database = 1;
+  Redis redis = 2;
+}
+
+message Security {
+  string credential_encryption_key = 1;
+  string service_ticket_signing_key = 2;
+  string service_ticket_issuer = 3;
+  string service_ticket_public_key_pem = 4;
+  string service_ticket_key_id = 5;
+}
