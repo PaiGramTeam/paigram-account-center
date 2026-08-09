@@ -6,5 +6,4 @@ pinia.use(piniaPluginPersistedstate)
 
 export default pinia
 
-// 导出 stores
 export { useAuthStore } from './auth'

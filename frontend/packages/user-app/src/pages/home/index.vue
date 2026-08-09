@@ -96,7 +96,6 @@ import { Header, Footer } from '@paigram/shared-components'
 
 const router = useRouter()
 
-// 导航菜单
 const navigationItems = [
   { key: 'home', label: '首页', path: '/' },
   { key: 'features', label: '功能', path: '#features' },
@@ -104,7 +103,6 @@ const navigationItems = [
   { key: 'contact', label: '联系', path: '#contact' },
 ]
 
-// 功能特性
 const features = [
   {
     name: '统一认证',
@@ -138,22 +136,18 @@ const features = [
   },
 ]
 
-// 处理开始使用
 const handleGetStarted = (): void => {
   router.push('/login')
 }
 
-// 了解更多
 const handleLearnMore = (): void => {
   Message.info('功能开发中...')
 }
 
-// 注册账号
 const handleRegister = (): void => {
   router.push('/register')
 }
 
-// 联系我们
 const handleContactUs = (): void => {
   router.push('/contact')
 }

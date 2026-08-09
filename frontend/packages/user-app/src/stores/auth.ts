@@ -29,7 +29,6 @@ export const useAuthStore = defineStore('auth', {
   }),
 
   actions: {
-    // 邮箱密码登录
     async loginWithEmail(credentials: LoginEmailRequest): Promise<LoginWithEmailResult> {
       this.loading = true
       const userStore = useUserStore()
@@ -44,13 +43,11 @@ export const useAuthStore = defineStore('auth', {
           }
         }
 
-        // 保存认证信息
         userStore.setAuthData({
           accessToken: response.data.access_token,
           refreshToken: response.data.refresh_token,
         })
 
-        // 获取用户信息
         await this.fetchUserProfile(response.data.user_id)
 
         this.loginType = 'email'
@@ -64,7 +61,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // 获取用户资料
     async fetchUserProfile(userId?: number): Promise<void> {
       const userStore = useUserStore()
 
@@ -78,7 +74,6 @@ export const useAuthStore = defineStore('auth', {
 
         const profile = response.data
 
-        // 转换并保存用户信息
         userStore.setUserInfo({
           id: profile.user_id,
           display_name: profile.display_name,
@@ -102,7 +97,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // 邮箱注册
     async registerWithEmail(data: RegisterEmailRequest): Promise<RegisterEmailResponse['data']> {
       this.loading = true
 
@@ -127,7 +121,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // 刷新 Token
     async refreshToken(): Promise<void> {
       const userStore = useUserStore()
 
@@ -145,13 +138,11 @@ export const useAuthStore = defineStore('auth', {
           refreshToken: response.data.refresh_token,
         })
       } catch (error) {
-        // 刷新失败，清除认证信息
         userStore.logout()
         throw error
       }
     },
 
-    // 登出
     async logout(): Promise<void> {
       const userStore = useUserStore()
 
@@ -167,7 +158,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // OAuth 登录
     async initiateOAuth(provider: string, redirectTo?: string): Promise<string> {
       try {
         const response = await authApi.initiateOAuth(provider, {
@@ -181,7 +171,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // 处理 OAuth 回调
     async handleOAuthCallback(provider: string, callbackData: OAuthCallbackRequest): Promise<void> {
       this.loading = true
       const userStore = useUserStore()
@@ -189,13 +178,11 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await authApi.handleOAuthCallback(provider, callbackData)
 
-        // 保存认证信息
         userStore.setAuthData({
           accessToken: response.data.access_token,
           refreshToken: response.data.refresh_token,
         })
 
-        // 获取用户信息
         await this.fetchUserProfile(response.data.user_id)
 
         this.loginType = 'oauth'

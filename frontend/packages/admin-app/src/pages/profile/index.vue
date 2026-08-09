@@ -154,16 +154,13 @@ import { profileApi } from '@/api'
 
 const userStore = useUserStore()
 
-// 表单引用
 const profileFormRef = ref<FormInstance>()
 const passwordFormRef = ref<FormInstance>()
 
-// 加载状态
 const saving = ref(false)
 const changingPassword = ref(false)
 const toggling2FA = ref(false)
 
-// 基本信息表单
 const profileForm = reactive({
   display_name: '',
   avatar_url: '',
@@ -171,17 +168,14 @@ const profileForm = reactive({
   locale: 'zh-CN',
 })
 
-// 密码表单
 const passwordForm = reactive({
   current_password: '',
   new_password: '',
   confirm_password: '',
 })
 
-// 两步验证
 const twoFactorEnabled = ref(false)
 
-// 活跃会话
 const activeSessions = ref([
   {
     id: '1',
@@ -201,7 +195,6 @@ const activeSessions = ref([
   },
 ])
 
-// 表单验证规则
 const profileRules = {
   display_name: [
     { required: true, message: '请输入显示名称' },
@@ -239,12 +232,10 @@ const passwordRules = {
   ],
 }
 
-// 格式化日期
 const formatDate = (date: Date): string => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
-// 加载用户资料
 const loadProfile = async () => {
   try {
     if (!userStore.userInfo?.id) return
@@ -258,7 +249,6 @@ const loadProfile = async () => {
   }
 }
 
-// 保存个人资料
 const handleSaveProfile = async () => {
   const valid = await profileFormRef.value?.validate()
   if (!valid) return
@@ -284,21 +274,18 @@ const handleSaveProfile = async () => {
   }
 }
 
-// 重置表单
 const handleResetForm = () => {
   loadProfile()
 }
 
-// 修改密码
 const handleChangePassword = async () => {
   const valid = await passwordFormRef.value?.validate()
   if (!valid) return
 
   changingPassword.value = true
   try {
-    // TODO: 调用修改密码API
+    // TODO: Call the password change API.
     Message.success('密码修改成功，请重新登录')
-    // 清空表单
     passwordForm.current_password = ''
     passwordForm.new_password = ''
     passwordForm.confirm_password = ''
@@ -309,11 +296,10 @@ const handleChangePassword = async () => {
   }
 }
 
-// 切换两步验证
 const handleToggle2FA = async (value: boolean) => {
   toggling2FA.value = true
   try {
-    // TODO: 调用API切换两步验证
+    // TODO: Call the API that toggles two-factor authentication.
     Message.success(value ? '两步验证已开启' : '两步验证已关闭')
   } catch (_error) {
     Message.error('操作失败，请稍后重试')
@@ -323,10 +309,9 @@ const handleToggle2FA = async (value: boolean) => {
   }
 }
 
-// 注销会话
 const handleRevokeSession = async (sessionId: string) => {
   try {
-    // TODO: 调用API注销会话
+    // TODO: Call the API that revokes the session.
     Message.success('会话已注销')
     activeSessions.value = activeSessions.value.filter((s) => s.id !== sessionId)
   } catch (_error) {

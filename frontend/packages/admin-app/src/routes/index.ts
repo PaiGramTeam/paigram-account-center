@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
-// 公共路由
 export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/login',
@@ -29,7 +28,6 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
 ]
 
-// 需要根据权限动态加载的路由
 export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -171,7 +169,6 @@ export const asyncRoutes: RouteRecordRaw[] = [
   },
 ]
 
-// 捕获所有未匹配的路由
 const catchAllRoute: RouteRecordRaw = {
   path: '/:pathMatch(.*)*',
   redirect: '/404',

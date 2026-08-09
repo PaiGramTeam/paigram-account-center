@@ -17,7 +17,6 @@ export { default as PageHeader } from './components/business/PageHeader.vue'
 export { default as AuthTwoFactorStep } from './components/business/AuthTwoFactorStep.vue'
 export { default as TurnstileWidget } from './components/business/TurnstileWidget.vue'
 
-// Stores (保留原有导出用于向后兼容)
 export { useUserStore } from './stores/user'
 export { useAppStore } from './stores/app'
 export { usePermissionStore } from './stores/permission'

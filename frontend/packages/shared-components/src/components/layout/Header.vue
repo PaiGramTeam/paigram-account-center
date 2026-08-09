@@ -106,16 +106,13 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-// 计算属性
 const isLoggedIn = computed(() => userStore.isLogin)
 const activeMenuKey = computed(() => {
-  // 根据当前路由路径确定激活的菜单项
   const currentPath = route.path
   const item = props.navigationItems.find((item) => item.path === currentPath)
   return item?.key || ''
 })
 
-// 菜单点击处理
 const handleMenuClick = (key: string): void => {
   const item = props.navigationItems.find((item) => item.key === key)
   if (item && item.path) {
@@ -124,13 +121,11 @@ const handleMenuClick = (key: string): void => {
   emit('menuClick', key)
 }
 
-// 登录处理
 const handleLogin = (): void => {
   emit('login')
   router.push('/login')
 }
 
-// 登出处理
 const handleLogout = async (): Promise<void> => {
   try {
     await userStore.logout()
@@ -142,12 +137,10 @@ const handleLogout = async (): Promise<void> => {
   }
 }
 
-// 查看个人资料
 const handleViewProfile = (): void => {
   router.push('/profile')
 }
 
-// 账号设置
 const handleSettings = (): void => {
   router.push('/settings')
 }

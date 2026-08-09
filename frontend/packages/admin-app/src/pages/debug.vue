@@ -5,7 +5,6 @@
         <a-button type="primary" @click="refreshData">刷新数据</a-button>
       </template>
 
-      <!-- 用户信息 -->
       <div class="mb-6">
         <h3 class="mb-4 text-lg font-semibold">👤 用户信息</h3>
         <a-descriptions :column="2" bordered>
@@ -31,7 +30,6 @@
         </a-descriptions>
       </div>
 
-      <!-- 权限信息 -->
       <div class="mb-6">
         <h3 class="mb-4 text-lg font-semibold">🔐 权限信息</h3>
         <a-alert v-if="!userStore.userInfo?.permissions?.length" type="warning" class="mb-4">
@@ -60,7 +58,6 @@
         </div>
       </div>
 
-      <!-- 路由信息 -->
       <div class="mb-6">
         <h3 class="mb-4 text-lg font-semibold">🗺️ 路由信息</h3>
         <a-descriptions :column="1" bordered>
@@ -76,7 +73,6 @@
         </a-descriptions>
       </div>
 
-      <!-- 菜单路由需要的权限 -->
       <div class="mb-6">
         <h3 class="mb-4 text-lg font-semibold">📋 菜单路由权限要求</h3>
         <a-table :data="routePermissions" :pagination="false" bordered>
@@ -102,7 +98,6 @@
         </a-table>
       </div>
 
-      <!-- 完整的 UserInfo 对象 -->
       <div>
         <h3 class="mb-4 text-lg font-semibold">📦 完整的 UserInfo 对象</h3>
         <a-textarea
@@ -112,7 +107,6 @@
         />
       </div>
 
-      <!-- 操作按钮 -->
       <div class="mt-6 flex gap-4">
         <a-button type="primary" @click="mockAdminPermissions">模拟管理员权限</a-button>
         <a-button @click="mockUserPermissions">模拟普通用户权限</a-button>
@@ -134,7 +128,6 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-// 获取所有路由的权限要求
 const routePermissions = computed(() => {
   const results: Array<{
     name: string

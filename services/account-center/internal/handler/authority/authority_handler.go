@@ -25,13 +25,10 @@ func NewAuthorityHandler(service *authority.AuthorityService) *AuthorityHandler 
 	return &AuthorityHandler{service: service}
 }
 
-// CreateAuthority 创建角色
 // @Tags      Authority
-// @Summary   创建角色
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     data  body      CreateAuthorityRequest  true  "角色信息"
 // @Success   200   {object}  response.Response{data=model.Role}
 // @Failure   400   {object}  response.Response
 // @Failure   401   {object}  response.Response
@@ -53,7 +50,6 @@ func (h *AuthorityHandler) CreateAuthority(c *gin.Context) {
 		PermissionIDs: req.PermissionIDs,
 	})
 	if err != nil {
-		// 区分不同类型的错误,返回正确的 HTTP 状态码
 		if errors.Is(err, pkgerrors.ErrRoleNameDuplicate) {
 			response.Conflict(c, "角色名称已存在")
 			return
@@ -75,12 +71,9 @@ func (h *AuthorityHandler) CreateAuthority(c *gin.Context) {
 	})
 }
 
-// GetAuthority 获取角色详情
 // @Tags      Authority
-// @Summary   获取角色详情
 // @Security  BearerAuth
 // @Produce   json
-// @Param     id   path      int  true  "角色ID"
 // @Success   200  {object}  response.Response{data=model.Role}
 // @Failure   400  {object}  response.Response
 // @Failure   401  {object}  response.Response
@@ -97,7 +90,6 @@ func (h *AuthorityHandler) GetAuthority(c *gin.Context) {
 
 	role, err := h.service.GetAuthority(uint(roleID))
 	if err != nil {
-		// 区分不同类型的错误
 		if errors.Is(err, pkgerrors.ErrRoleNotFound) {
 			response.NotFound(c, "角色不存在")
 			return
@@ -110,14 +102,9 @@ func (h *AuthorityHandler) GetAuthority(c *gin.Context) {
 	response.Success(c, role)
 }
 
-// ListAuthorities 获取角色列表
 // @Tags      Authority
-// @Summary   获取角色列表（分页）
 // @Security  BearerAuth
 // @Produce   json
-// @Param     page      query     int     false  "页码"  default(1)
-// @Param     page_size query     int     false  "每页数量"  default(10)
-// @Param     name      query     string  false  "角色名称（模糊搜索）"
 // @Success   200       {object}  response.Response{data=ListAuthoritiesResponse}
 // @Failure   401       {object}  response.Response
 // @Failure   403       {object}  response.Response
@@ -128,7 +115,6 @@ func (h *AuthorityHandler) ListAuthorities(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 	name := c.Query("name")
 
-	// 验证分页参数
 	if page < 1 {
 		page = 1
 	}
@@ -150,14 +136,10 @@ func (h *AuthorityHandler) ListAuthorities(c *gin.Context) {
 	response.SuccessWithPagination(c, result.Data, int64(result.Total), result.Page, result.PageSize)
 }
 
-// UpdateAuthority 更新角色
 // @Tags      Authority
-// @Summary   更新角色信息
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     id    path      int                    true  "角色ID"
-// @Param     data  body      UpdateAuthorityRequest true  "更新信息"
 // @Success   200   {object}  response.Response
 // @Failure   400   {object}  response.Response
 // @Failure   401   {object}  response.Response
@@ -190,7 +172,6 @@ func (h *AuthorityHandler) UpdateAuthority(c *gin.Context) {
 		Description: req.Description,
 	})
 	if err != nil {
-		// 区分不同类型的错误
 		if errors.Is(err, pkgerrors.ErrRoleNotFound) {
 			response.NotFound(c, "角色不存在")
 			return
@@ -220,16 +201,12 @@ func (h *AuthorityHandler) UpdateAuthority(c *gin.Context) {
 	})
 }
 
-// DeleteAuthority 删除角色
 // @Tags      Authority
-// @Summary   删除角色
 // @Security  BearerAuth
 // @Produce   json
-// @Param     id   path      int  true  "角色ID"
 // @Success   200  {object}  response.Response
 // @Failure   400  {object}  response.Response
 // @Failure   401  {object}  response.Response
-// @Failure   403  {object}  response.Response  "系统角色不可删除"
 // @Failure   404  {object}  response.Response
 // @Failure   409  {object}  response.Response
 // @Failure   500  {object}  response.Response
@@ -243,7 +220,6 @@ func (h *AuthorityHandler) DeleteAuthority(c *gin.Context) {
 
 	err = h.service.DeleteAuthority(uint(roleID))
 	if err != nil {
-		// 区分不同类型的错误
 		if errors.Is(err, pkgerrors.ErrRoleNotFound) {
 			response.NotFound(c, "角色不存在")
 			return
@@ -273,14 +249,10 @@ func (h *AuthorityHandler) DeleteAuthority(c *gin.Context) {
 	})
 }
 
-// AssignPermissions 为角色分配权限
 // @Tags      Authority
-// @Summary   为角色分配权限（全量覆盖）
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     id    path      int                       true  "角色ID"
-// @Param     data  body      AssignPermissionsRequest  true  "权限ID列表"
 // @Success   200   {object}  response.Response
 // @Failure   400   {object}  response.Response
 // @Failure   401   {object}  response.Response
@@ -346,12 +318,9 @@ func authorityActorUserID(c *gin.Context) *uint64 {
 	return &userID
 }
 
-// GetRolePermissions 获取角色的权限列表
 // @Tags      Authority
-// @Summary   获取角色的所有权限
 // @Security  BearerAuth
 // @Produce   json
-// @Param     id   path      int  true  "角色ID"
 // @Success   200  {object}  response.Response{data=[]model.Permission}
 // @Failure   400  {object}  response.Response
 // @Failure   401  {object}  response.Response
@@ -380,12 +349,9 @@ func (h *AuthorityHandler) GetRolePermissions(c *gin.Context) {
 	response.Success(c, permissions)
 }
 
-// GetAuthorityUsers 获取角色下的用户列表
 // @Tags      Authority
-// @Summary   获取角色下的用户列表
 // @Security  BearerAuth
 // @Produce   json
-// @Param     id   path      int  true  "角色ID"
 // @Success   200  {object}  response.Response{data=[]AuthorityUserItem}
 // @Failure   400  {object}  response.Response
 // @Failure   401  {object}  response.Response
@@ -425,14 +391,10 @@ func (h *AuthorityHandler) GetAuthorityUsers(c *gin.Context) {
 	response.Success(c, items)
 }
 
-// ReplaceAuthorityUsers 全量替换角色下的用户列表
 // @Tags      Authority
-// @Summary   全量替换角色下的用户列表
 // @Security  BearerAuth
 // @Accept    json
 // @Produce   json
-// @Param     id    path      int                         true  "角色ID"
-// @Param     data  body      ReplaceAuthorityUsersRequest true  "用户ID列表"
 // @Success   200   {object}  response.Response
 // @Failure   400   {object}  response.Response
 // @Failure   401   {object}  response.Response

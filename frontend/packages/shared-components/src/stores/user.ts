@@ -44,8 +44,6 @@ export const useUserStore = defineStore('user', {
     },
 
     async login(loginForm: { email: string; password: string }) {
-      // 实际的登录 API 调用需要在应用中实现
-      // 这里只是模拟
       this.setToken('mock-token', 'mock-refresh-token')
       this.setUserInfo({
         id: 1,
@@ -61,7 +59,7 @@ export const useUserStore = defineStore('user', {
     },
 
     async logout() {
-      // TODO: 调用登出 API
+      // TODO: Call the logout API.
       this.reset()
     },
 
@@ -77,17 +75,14 @@ export const useUserStore = defineStore('user', {
     },
 
     hasPermission(permission: string): boolean {
-      // 如果有 * 通配符，拥有所有权限
       if (this.permissions.includes('*')) {
         return true
       }
 
-      // 精确匹配权限
       if (this.permissions.includes(permission)) {
         return true
       }
 
-      // 检查通配符模式 (例如 user:* 匹配 user:read)
       return this.permissions.some((p) => {
         if (p.endsWith(':*')) {
           const prefix = p.slice(0, -2)

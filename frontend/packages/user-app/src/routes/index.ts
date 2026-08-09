@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
-// 公共路由
 export const constantRoutes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -53,7 +52,6 @@ export const constantRoutes: RouteRecordRaw[] = [
   },
 ]
 
-// 需要根据权限动态加载的路由
 export const asyncRoutes: RouteRecordRaw[] = [
   {
     path: '/dashboard',
@@ -151,7 +149,6 @@ export const asyncRoutes: RouteRecordRaw[] = [
   },
 ]
 
-// 捕获所有未匹配的路由
 const catchAllRoute: RouteRecordRaw = {
   path: '/:pathMatch(.*)*',
   redirect: '/404',
@@ -162,7 +159,5 @@ const router = createRouter({
   routes: [...constantRoutes, ...asyncRoutes, catchAllRoute],
   scrollBehavior: () => ({ left: 0, top: 0 }),
 })
-
-// 设置路由守卫（已移至 main.ts，确保 pinia 先注册）
 
 export default router

@@ -1,6 +1,5 @@
 <template>
   <div class="admin-dashboard">
-    <!-- 统计卡片 -->
     <a-row :gutter="16" class="mb-6">
       <a-col :xs="24" :sm="12" :md="6">
         <a-statistic title="总用户数" :value="statistics.totalUsers" :value-from="0" animation>
@@ -39,7 +38,6 @@
     </a-row>
 
     <a-row :gutter="16">
-      <!-- 用户增长趋势 -->
       <a-col :xs="24" :lg="16">
         <a-card title="用户增长趋势" class="mb-6">
           <template #extra>
@@ -51,14 +49,12 @@
           </template>
 
           <div class="h-80">
-            <!-- 这里可以集成图表库如 ECharts 或 Chart.js -->
             <div class="flex h-full items-center justify-center text-gray-400">
               <icon-bar-chart class="mr-2" /> 用户增长图表
             </div>
           </div>
         </a-card>
 
-        <!-- 最新用户 -->
         <a-card title="最新注册用户">
           <template #extra>
             <a-link @click="$router.push('/users')">查看全部</a-link>
@@ -86,9 +82,7 @@
         </a-card>
       </a-col>
 
-      <!-- 右侧信息 -->
       <a-col :xs="24" :lg="8">
-        <!-- 系统状态 -->
         <a-card title="系统状态" class="mb-6">
           <a-descriptions :column="1" :label-style="{ width: '100px' }">
             <a-descriptions-item label="系统版本"> v1.0.0 </a-descriptions-item>
@@ -107,7 +101,6 @@
           </a-descriptions>
         </a-card>
 
-        <!-- 快捷操作 -->
         <a-card title="快捷操作" class="mb-6">
           <a-space direction="vertical" fill>
             <a-button long @click="$router.push('/users')">
@@ -137,7 +130,6 @@
           </a-space>
         </a-card>
 
-        <!-- 管理员公告 -->
         <a-card title="管理员公告">
           <a-alert
             type="info"
@@ -179,7 +171,6 @@ import type { UserListItem } from '@paigram/shared-components'
 
 const router = useRouter()
 
-// 统计数据
 const statistics = reactive({
   totalUsers: 15234,
   todayNewUsers: 128,
@@ -188,17 +179,13 @@ const statistics = reactive({
   onlineUsers: 1234,
 })
 
-// 图表周期
 const chartPeriod = ref('month')
 
-// 最新用户
 const latestUsers = ref<UserListItem[]>([])
 
-// 系统运行时间
 const systemUptime = ref('0天0小时')
 let uptimeTimer: ReturnType<typeof setInterval> | null = null
 
-// 计算系统运行时间
 const calculateUptime = () => {
   const startTime = new Date('2024-01-01').getTime()
   const now = Date.now()
@@ -211,7 +198,6 @@ const calculateUptime = () => {
   systemUptime.value = `${days}天${hours}小时${minutes}分钟`
 }
 
-// 格式化相对时间
 const formatRelativeTime = (date: string): string => {
   const now = Date.now()
   const then = new Date(date).getTime()
@@ -227,12 +213,10 @@ const formatRelativeTime = (date: string): string => {
   return `${days}天前`
 }
 
-// 查看用户
 const handleViewUser = (user: { id: number }) => {
   router.push(`/users/${user.id}`)
 }
 
-// 数据备份
 const handleBackup = () => {
   Message.loading('正在创建备份...')
   setTimeout(() => {
@@ -240,14 +224,12 @@ const handleBackup = () => {
   }, 2000)
 }
 
-// 加载数据
 const loadDashboardData = async () => {
   try {
-    // TODO: 调用 API 获取统计数据
+    // TODO: Call the statistics API.
     // const stats = await api.getStatistics()
     // Object.assign(statistics, stats)
 
-    // 获取最新用户
     const response = await userApi.getList()
     latestUsers.value = response.data.slice(0, 3)
   } catch (error) {
@@ -257,7 +239,7 @@ const loadDashboardData = async () => {
 
 onMounted(() => {
   calculateUptime()
-  uptimeTimer = setInterval(calculateUptime, 60000) // 每分钟更新一次
+  uptimeTimer = setInterval(calculateUptime, 60000)
   loadDashboardData()
 })
 

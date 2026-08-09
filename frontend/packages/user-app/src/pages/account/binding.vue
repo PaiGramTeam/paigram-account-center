@@ -69,7 +69,6 @@
         </template>
       </a-list>
 
-      <!-- 分页 -->
       <div v-if="pagination.total > pagination.page_size" class="mt-4 flex justify-end">
         <a-pagination
           v-model:current="pagination.page"
@@ -81,7 +80,6 @@
       </div>
     </a-card>
 
-    <!-- 绑定账号弹窗 -->
     <a-modal
       v-model:visible="bindModalVisible"
       title="绑定新账号"
@@ -133,7 +131,6 @@ import { useUserStore } from '@paigram/shared-components'
 import { profileApi } from '@/api'
 import type { BoundAccount } from '@paigram/shared-components'
 
-// 自定义 Provider 图标组件
 const IconTelegram = { template: '<span>📱</span>' }
 const IconGoogle = { template: '<span>🔍</span>' }
 const IconGithub = { template: '<span>🐙</span>' }
@@ -151,7 +148,6 @@ const pagination = ref({
   total_pages: 0,
 })
 
-// 获取 Provider 图标
 const getProviderIcon = (provider: string) => {
   const iconMap: Record<string, unknown> = {
     telegram: IconTelegram,
@@ -161,7 +157,6 @@ const getProviderIcon = (provider: string) => {
   return iconMap[provider] || IconEmpty
 }
 
-// 获取 Provider 名称
 const getProviderName = (provider: string): string => {
   const nameMap: Record<string, string> = {
     telegram: 'Telegram',
@@ -171,7 +166,6 @@ const getProviderName = (provider: string): string => {
   return nameMap[provider] || provider
 }
 
-// 格式化日期
 const formatDate = (date?: string): string => {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN', {
@@ -183,18 +177,15 @@ const formatDate = (date?: string): string => {
   })
 }
 
-// 检查 Provider 是否已绑定
 const isProviderBound = (provider: string): boolean => {
   return boundAccounts.value.some((account) => account.provider === provider)
 }
 
-// 所有支持的 Provider 是否都已绑定
 const allProvidersBound = computed(() => {
   const supportedProviders = ['telegram', 'google', 'github']
   return supportedProviders.every((provider) => isProviderBound(provider))
 })
 
-// 加载已绑定的账号列表
 const loadBoundAccounts = async (): Promise<void> => {
   const userId = userStore.userInfo?.id
   if (!userId) {
@@ -215,30 +206,20 @@ const loadBoundAccounts = async (): Promise<void> => {
   }
 }
 
-// 打开绑定账号弹窗
 const handleBindAccount = (): void => {
   bindModalVisible.value = true
 }
 
-// 绑定 Telegram
 const handleBindTelegram = (): void => {
   Message.info('Telegram 绑定功能开发中，请使用 Telegram Login Widget')
-  // TODO: 实现 Telegram 绑定逻辑
-  // 1. 显示 Telegram Login Widget
-  // 2. 获取 Telegram auth data
-  // 3. 调用 profileApi.bindAccount()
+  // TODO: Implement Telegram binding.
 }
 
-// 绑定 OAuth（Google/GitHub）
 const handleBindOAuth = async (provider: string): Promise<void> => {
   Message.info(`${getProviderName(provider)} 绑定功能开发中`)
-  // TODO: 实现 OAuth 绑定逻辑
-  // 1. 调用 authApi.initiateOAuth() 获取授权 URL
-  // 2. 跳转到 OAuth 授权页面
-  // 3. 在回调页面处理绑定结果
+  // TODO: Implement OAuth binding.
 }
 
-// 解绑账号
 const handleUnbind = async (account: BoundAccount): Promise<void> => {
   const userId = userStore.userInfo?.id
   if (!userId) {
@@ -246,7 +227,6 @@ const handleUnbind = async (account: BoundAccount): Promise<void> => {
     return
   }
 
-  // 检查是否至少保留一个绑定账号
   if (boundAccounts.value.length <= 1) {
     Message.warning('至少需要保留一种登录方式')
     return
@@ -257,7 +237,6 @@ const handleUnbind = async (account: BoundAccount): Promise<void> => {
     await profileApi.unbindAccount(userId, account.provider)
     Message.success(`已解绑 ${getProviderName(account.provider)}`)
 
-    // 重新加载列表
     await loadBoundAccounts()
   } catch (error) {
     console.error('解绑账号失败:', error)
@@ -268,7 +247,6 @@ const handleUnbind = async (account: BoundAccount): Promise<void> => {
   }
 }
 
-// 组件挂载时加载数据
 onMounted(() => {
   loadBoundAccounts()
 })

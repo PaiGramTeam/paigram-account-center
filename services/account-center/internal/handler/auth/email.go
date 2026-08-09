@@ -598,8 +598,8 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	if session.RevokedAt.Valid {
-		// Token已被撤销 - 可能是重用攻击！
-		// 撤销该用户的所有 session 作为安全措施
+		// A revoked token may indicate a replay attack.
+		// Revoke every session owned by the user as a safety measure.
 		log.Printf("[security] Attempt to use revoked refresh token detected for user %d - revoking all sessions", session.UserID)
 
 		var activeSessions []model.UserSession

@@ -1,7 +1,6 @@
 import type { App, Directive } from 'vue'
 import { useUserStore } from '../stores/user'
 
-// v-permission 指令
 const permissionDirective: Directive = {
   mounted(el, binding) {
     const { value } = binding
@@ -23,7 +22,6 @@ const permissionDirective: Directive = {
   },
 }
 
-// v-role 指令
 const roleDirective: Directive = {
   mounted(el, binding) {
     const { value } = binding

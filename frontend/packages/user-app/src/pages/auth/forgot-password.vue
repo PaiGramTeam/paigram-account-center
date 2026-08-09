@@ -27,7 +27,7 @@ const form = reactive({ email: '' })
 const handleSubmit = async (): Promise<void> => {
   loading.value = true
   try {
-    // TODO: 调用找回密码 API
+    // TODO: Call the password recovery API.
     Message.success('重置链接已发送到您的邮箱')
   } catch (_error) {
     Message.error('发送失败，请稍后重试')

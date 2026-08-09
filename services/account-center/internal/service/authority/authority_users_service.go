@@ -9,7 +9,6 @@ import (
 	pkgerrors "paigram/pkg/errors"
 )
 
-// AuthorityUserInfo 角色下的用户信息。
 type AuthorityUserInfo struct {
 	ID           uint64    `json:"id"`
 	DisplayName  string    `json:"display_name"`
@@ -18,7 +17,6 @@ type AuthorityUserInfo struct {
 	GrantedBy    uint64    `json:"granted_by"`
 }
 
-// GetAuthorityUsers 获取角色下的用户列表。
 func (s *AuthorityService) GetAuthorityUsers(roleID uint) ([]AuthorityUserInfo, error) {
 	if err := s.ensureAuthorityExists(s.db, roleID); err != nil {
 		return nil, err
@@ -40,7 +38,6 @@ func (s *AuthorityService) GetAuthorityUsers(roleID uint) ([]AuthorityUserInfo, 
 	return users, nil
 }
 
-// ReplaceAuthorityUsers 全量替换角色下的用户列表。
 func (s *AuthorityService) ReplaceAuthorityUsers(roleID uint, userIDs []uint64, grantedBy uint64) error {
 	normalizedUserIDs := normalizeAuthorityUserIDs(userIDs)
 

@@ -1,6 +1,5 @@
 <template>
   <div class="user-table-container">
-    <!-- 搜索栏 -->
     <a-card v-if="showSearch" class="mb-4">
       <a-form :model="searchForm" layout="inline">
         <a-row :gutter="16" class="w-full">
@@ -44,7 +43,6 @@
       </a-form>
     </a-card>
 
-    <!-- 表格操作栏 -->
     <a-card>
       <div v-if="showActions" class="mb-4 flex items-center justify-between">
         <a-space>
@@ -78,7 +76,6 @@
         </a-space>
       </div>
 
-      <!-- 数据表格 -->
       <a-table
         v-model:selected-keys="selectedKeys"
         :columns="tableColumns"
@@ -90,7 +87,6 @@
         @page-change="handlePageChange"
         @page-size-change="handlePageSizeChange"
       >
-        <!-- 用户信息列 -->
         <template #user="{ record }">
           <div class="flex items-center space-x-3">
             <a-avatar :size="32">
@@ -104,14 +100,12 @@
           </div>
         </template>
 
-        <!-- 状态列 -->
         <template #status="{ record }">
           <a-tag :color="getStatusColor(record.status)">
             {{ getStatusText(record.status) }}
           </a-tag>
         </template>
 
-        <!-- 角色列 -->
         <template #roles="{ record }">
           <a-space wrap>
             <a-tag v-for="role in record.roles" :key="role">
@@ -120,7 +114,6 @@
           </a-space>
         </template>
 
-        <!-- 操作列 -->
         <template #action="{ record }">
           <a-space>
             <a-button v-if="canView" type="text" size="small" @click="handleView(record)"> 查看 </a-button>
@@ -161,16 +154,13 @@ import {
 import type { UserListItem, UserListParams, UserListResponse } from '../../api/types'
 
 interface Props {
-  // API 实例（必需）
   userApi: {
     getList: (params?: UserListParams) => Promise<UserListResponse>
   }
 
-  // 功能开关
   showSearch?: boolean
   showActions?: boolean
 
-  // 权限控制
   canView?: boolean
   canEdit?: boolean
   canCreate?: boolean
@@ -179,7 +169,6 @@ interface Props {
   canResetPassword?: boolean
   canToggleStatus?: boolean
 
-  // 表格配置
   pageSize?: number
   columns?: string[]
 }
@@ -209,19 +198,16 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
-// 搜索表单
 const searchForm = reactive({
   keyword: '',
   status: undefined,
   dateRange: undefined,
 })
 
-// 表格数据
 const loading = ref(false)
 const tableData = ref<UserListItem[]>([])
 const selectedKeys = ref<(string | number)[]>([])
 
-// 分页配置
 const pagination = reactive({
   current: 1,
   pageSize: props.pageSize,
@@ -231,7 +217,6 @@ const pagination = reactive({
   showPageSize: true,
 })
 
-// 日期快捷选项
 const dateShortcuts = [
   {
     label: '最近7天',
@@ -253,7 +238,6 @@ const dateShortcuts = [
   },
 ]
 
-// 行选择配置
 const rowSelection = computed<TableRowSelection | undefined>(() => {
   if (!props.canBatchDelete) return undefined
 
@@ -264,7 +248,6 @@ const rowSelection = computed<TableRowSelection | undefined>(() => {
   }
 })
 
-// 表格列配置
 const tableColumns = computed<TableColumnData[]>(() => {
   const allColumns: Record<string, TableColumnData> = {
     user: {
@@ -305,7 +288,6 @@ const tableColumns = computed<TableColumnData[]>(() => {
   return props.columns.map((col) => allColumns[col]).filter(Boolean)
 })
 
-// 获取状态颜色
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
     active: 'green',
@@ -316,7 +298,6 @@ const getStatusColor = (status: string): string => {
   return colorMap[status] || 'gray'
 }
 
-// 获取状态文本
 const getStatusText = (status: string): string => {
   const textMap: Record<string, string> = {
     active: '正常',
@@ -327,13 +308,11 @@ const getStatusText = (status: string): string => {
   return textMap[status] || '未知'
 }
 
-// 格式化日期
 const formatDate = (date?: string): string => {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN')
 }
 
-// 获取用户列表
 const fetchUsers = async () => {
   loading.value = true
   try {
@@ -354,13 +333,11 @@ const fetchUsers = async () => {
   }
 }
 
-// 处理搜索
 const handleSearch = () => {
   pagination.current = 1
   fetchUsers()
 }
 
-// 处理重置
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.status = undefined
@@ -368,41 +345,34 @@ const handleReset = () => {
   handleSearch()
 }
 
-// 处理刷新
 const handleRefresh = () => {
   emit('refresh')
   fetchUsers()
 }
 
-// 处理页码变化
 const handlePageChange = (page: number) => {
   pagination.current = page
   fetchUsers()
 }
 
-// 处理每页条数变化
 const handlePageSizeChange = (pageSize: number) => {
   pagination.pageSize = pageSize
   pagination.current = 1
   fetchUsers()
 }
 
-// 处理查看
 const handleView = (record: UserListItem) => {
   emit('view', record)
 }
 
-// 处理编辑
 const handleEdit = (record: UserListItem) => {
   emit('edit', record)
 }
 
-// 处理创建
 const handleCreate = () => {
   emit('create')
 }
 
-// 处理删除
 const handleDelete = (record: UserListItem) => {
   Modal.confirm({
     title: '确认删除',
@@ -416,7 +386,6 @@ const handleDelete = (record: UserListItem) => {
   })
 }
 
-// 处理批量删除
 const handleBatchDelete = () => {
   const selectedUsers = tableData.value.filter((user) => selectedKeys.value.includes(user.id))
 
@@ -432,7 +401,6 @@ const handleBatchDelete = () => {
   })
 }
 
-// 处理重置密码
 const handleResetPassword = (record: UserListItem) => {
   Modal.confirm({
     title: '重置密码',
@@ -445,7 +413,6 @@ const handleResetPassword = (record: UserListItem) => {
   })
 }
 
-// 处理切换状态
 const handleToggleStatus = (record: UserListItem) => {
   const action = record.status === 'active' ? '停用' : '激活'
   Modal.confirm({
@@ -459,17 +426,14 @@ const handleToggleStatus = (record: UserListItem) => {
   })
 }
 
-// 处理导出
 const handleExport = () => {
   Message.info('导出功能开发中...')
 }
 
-// 初始化
 onMounted(() => {
   fetchUsers()
 })
 
-// 暴露方法
 defineExpose({
   refresh: fetchUsers,
 })

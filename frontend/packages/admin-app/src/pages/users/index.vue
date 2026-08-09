@@ -7,7 +7,6 @@
       </page-header>
     </div>
 
-    <!-- 用户表格 -->
     <UserTable
       ref="userTableRef"
       :user-api="userApi"
@@ -26,7 +25,6 @@
       @toggle-status="handleToggleStatusFor"
     />
 
-    <!-- 用户详情抽屉 -->
     <a-drawer v-model:visible="detailVisible" :width="600" :footer="false" unmount-on-close>
       <template #title>
         <span>用户详情</span>
@@ -128,7 +126,6 @@
       </div>
     </a-drawer>
 
-    <!-- 用户编辑弹窗 -->
     <a-modal
       v-model:visible="editVisible"
       :title="editMode === 'create' ? '新建用户' : '编辑用户'"
@@ -180,7 +177,6 @@ import type { RoleListItem, UserAuditLogItem, UserDetail, UserListItem, UserStat
 
 const userStore = useUserStore()
 
-// 权限检查
 const hasPermission = (permission: string): boolean => {
   const userPermissions = userStore.userInfo?.permissions || []
   return userPermissions.includes(permission)
@@ -190,14 +186,12 @@ const hasPermission = (permission: string): boolean => {
 const userTableRef = ref<InstanceType<typeof UserTable>>()
 const editFormRef = ref<FormInstance>()
 
-// 用户详情
 const detailVisible = ref(false)
 const currentUser = ref<UserDetail | null>(null)
 const userLogs = ref<UserAuditLogItem[]>([])
 const roleOptions = ref<RoleListItem[]>([])
 const editingUserId = ref<number | null>(null)
 
-// 用户编辑
 const editVisible = ref(false)
 const editMode = ref<'create' | 'edit'>('create')
 const editForm = reactive({
@@ -209,7 +203,6 @@ const editForm = reactive({
   locale: 'en_US',
 })
 
-// 表单验证规则
 const editRules = {
   display_name: [{ required: true, message: '请输入显示名称' }],
   email: [
@@ -223,7 +216,6 @@ const editRules = {
   roles: [{ required: true, message: '请选择用户角色' }],
 }
 
-// 获取状态颜色
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
     active: 'green',
@@ -234,7 +226,6 @@ const getStatusColor = (status: string): string => {
   return colorMap[status] || 'gray'
 }
 
-// 获取状态文本
 const getStatusText = (status: string): string => {
   const textMap: Record<string, string> = {
     active: '正常',
@@ -245,7 +236,6 @@ const getStatusText = (status: string): string => {
   return textMap[status] || '未知'
 }
 
-// 格式化日期
 const formatDate = (date?: string | Date): string => {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN')
@@ -284,7 +274,6 @@ const hasVerifiedPrimaryEmail = (user: UserDetail) => {
   return !!user.emails?.find((email) => email.is_primary && email.verified_at)
 }
 
-// 查看用户详情
 const handleViewUser = async (user: UserListItem) => {
   try {
     currentUser.value = await loadUserDetail(user.id)
@@ -295,7 +284,6 @@ const handleViewUser = async (user: UserListItem) => {
   }
 }
 
-// 编辑用户
 const handleEditUser = async (user: UserListItem) => {
   try {
     const userDetail = await loadUserDetail(user.id)
@@ -314,7 +302,6 @@ const handleEditUser = async (user: UserListItem) => {
   }
 }
 
-// 创建用户
 const handleCreateUser = () => {
   editingUserId.value = null
   editMode.value = 'create'
@@ -327,14 +314,12 @@ const handleCreateUser = () => {
   editVisible.value = true
 }
 
-// 保存用户
 const handleSaveUser = async () => {
   const valid = await editFormRef.value?.validate()
   if (!valid) return
 
   try {
     if (editMode.value === 'create') {
-      // 创建新用户
       await userApi.create({
         email: editForm.email,
         display_name: editForm.display_name,
@@ -345,7 +330,6 @@ const handleSaveUser = async () => {
       })
       Message.success('创建成功')
     } else {
-      // 更新用户
       if (editingUserId.value) {
         await userApi.update(editingUserId.value, {
           display_name: editForm.display_name,
@@ -368,7 +352,6 @@ const handleSaveUser = async () => {
   }
 }
 
-// 重置密码
 const handleResetPasswordFor = async (user: UserListItem | UserDetail) => {
   if (!user?.id) return
 
@@ -387,7 +370,6 @@ const handleResetPassword = async () => {
   await handleResetPasswordFor(currentUser.value)
 }
 
-// 强制登出
 const handleForceLogout = async () => {
   if (!currentUser.value) return
 

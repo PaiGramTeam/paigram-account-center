@@ -30,20 +30,12 @@ const (
 // UserServiceClient is the client API for UserService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// 用户服务定义
 type UserServiceClient interface {
-	// 获取单个用户信息
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
-	// 批量获取用户信息
 	GetUsersByIds(ctx context.Context, in *GetUsersByIdsRequest, opts ...grpc.CallOption) (*GetUsersByIdsResponse, error)
-	// 验证用户身份
 	VerifyUser(ctx context.Context, in *VerifyUserRequest, opts ...grpc.CallOption) (*VerifyUserResponse, error)
-	// 获取用户权限
 	GetUserPermissions(ctx context.Context, in *GetUserPermissionsRequest, opts ...grpc.CallOption) (*GetUserPermissionsResponse, error)
-	// 更新用户数据
 	UpdateUserData(ctx context.Context, in *UpdateUserDataRequest, opts ...grpc.CallOption) (*UpdateUserDataResponse, error)
-	// 获取用户统计信息
 	GetUserStats(ctx context.Context, in *GetUserStatsRequest, opts ...grpc.CallOption) (*GetUserStatsResponse, error)
 }
 
@@ -118,20 +110,12 @@ func (c *userServiceClient) GetUserStats(ctx context.Context, in *GetUserStatsRe
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility.
-//
-// 用户服务定义
 type UserServiceServer interface {
-	// 获取单个用户信息
 	GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error)
-	// 批量获取用户信息
 	GetUsersByIds(context.Context, *GetUsersByIdsRequest) (*GetUsersByIdsResponse, error)
-	// 验证用户身份
 	VerifyUser(context.Context, *VerifyUserRequest) (*VerifyUserResponse, error)
-	// 获取用户权限
 	GetUserPermissions(context.Context, *GetUserPermissionsRequest) (*GetUserPermissionsResponse, error)
-	// 更新用户数据
 	UpdateUserData(context.Context, *UpdateUserDataRequest) (*UpdateUserDataResponse, error)
-	// 获取用户统计信息
 	GetUserStats(context.Context, *GetUserStatsRequest) (*GetUserStatsResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }

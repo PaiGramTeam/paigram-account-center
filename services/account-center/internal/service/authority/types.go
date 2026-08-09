@@ -2,27 +2,23 @@ package authority
 
 import "time"
 
-// CreateAuthorityParams 创建角色参数
 type CreateAuthorityParams struct {
 	Name          string
 	Description   string
 	PermissionIDs []uint
 }
 
-// UpdateAuthorityParams 更新角色参数
 type UpdateAuthorityParams struct {
 	Name        *string
 	Description *string
 }
 
-// ListAuthoritiesParams 角色列表查询参数
 type ListAuthoritiesParams struct {
 	Page     int
 	PageSize int
-	Name     string // 模糊搜索
+	Name     string
 }
 
-// ListAuthoritiesResult 角色列表查询结果
 type ListAuthoritiesResult struct {
 	Total    int                   `json:"total"`
 	Page     int                   `json:"page"`
@@ -30,7 +26,6 @@ type ListAuthoritiesResult struct {
 	Data     []RoleWithPermissions `json:"data"`
 }
 
-// RoleWithPermissions 角色及其权限
 type RoleWithPermissions struct {
 	ID          uint             `json:"id"`
 	Name        string           `json:"name"`
@@ -41,7 +36,6 @@ type RoleWithPermissions struct {
 	Permissions []PermissionInfo `json:"permissions"`
 }
 
-// PermissionInfo 权限信息
 type PermissionInfo struct {
 	ID          uint   `json:"id"`
 	Name        string `json:"name"`

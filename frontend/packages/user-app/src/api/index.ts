@@ -8,7 +8,6 @@ import {
 import { useUserStore } from '@paigram/shared-components'
 import router from '@/routes'
 
-// 创建配置好的 request 实例
 export const request = createRequest({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
   timeout: 30000,
@@ -31,7 +30,6 @@ export const request = createRequest({
   },
 })
 
-// 创建 API 实例
 export const authApi = createAuthApi(request)
 export const userApi = createUserApi(request)
 export const profileApi = createProfileApi(request)

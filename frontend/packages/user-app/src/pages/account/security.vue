@@ -1,6 +1,5 @@
 <template>
   <div class="space-y-6">
-    <!-- 修改密码 -->
     <a-card title="修改密码" :bordered="false" class="shadow-sm">
       <a-form :model="passwordForm" layout="vertical" @submit="handleChangePassword">
         <a-form-item label="当前密码" field="old_password" :rules="[{ required: true, message: '请输入当前密码' }]">
@@ -52,7 +51,6 @@
       </a-form>
     </a-card>
 
-    <!-- 双因素认证 (2FA) -->
     <a-card title="双因素认证 (2FA)" :bordered="false" class="shadow-sm">
       <div class="space-y-4">
         <div class="flex items-center justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
@@ -96,7 +94,6 @@
       </div>
     </a-card>
 
-    <!-- 登录设备管理 -->
     <a-card title="登录设备" :bordered="false" class="shadow-sm">
       <a-spin :loading="devicesLoading" class="w-full">
         <div v-if="devices.length > 0" class="space-y-3">
@@ -137,7 +134,6 @@
       </a-spin>
     </a-card>
 
-    <!-- 启用 2FA 模态框 -->
     <a-modal v-model:visible="enable2FAModalVisible" title="启用双因素认证" :footer="false" width="500px">
       <div class="space-y-4">
         <a-spin :loading="twoFactorLoading" class="w-full">
@@ -151,7 +147,6 @@
               <img :src="twoFactorData.qr_code" alt="QR Code" class="h-48 w-48" />
             </div>
 
-            <!-- Secret Key (备用) -->
             <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
               <p class="text-sm text-gray-600 dark:text-gray-400">或手动输入密钥：</p>
               <p class="font-mono text-sm font-medium text-gray-900 dark:text-white">
@@ -159,7 +154,6 @@
               </p>
             </div>
 
-            <!-- 备用恢复码 -->
             <div class="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
               <p class="mb-2 text-sm font-medium text-yellow-800 dark:text-yellow-200">备用恢复码（请妥善保存）：</p>
               <div class="grid grid-cols-2 gap-2">
@@ -173,7 +167,6 @@
               </div>
             </div>
 
-            <!-- 验证码输入 -->
             <a-form :model="confirm2FAForm" layout="vertical" @submit="handleConfirm2FA">
               <a-form-item label="验证码" field="code" :rules="[{ required: true, message: '请输入 6 位验证码' }]">
                 <a-input
@@ -195,7 +188,6 @@
       </div>
     </a-modal>
 
-    <!-- 禁用 2FA 模态框 -->
     <a-modal v-model:visible="disable2FAModalVisible" title="禁用双因素认证" :footer="false" width="400px">
       <a-form :model="disable2FAForm" layout="vertical" @submit="handleDisable2FA">
         <a-alert type="warning" class="mb-4"> 禁用双因素认证会降低您的账号安全性，请谨慎操作 </a-alert>
@@ -238,7 +230,6 @@ import type { Device, UserSecuritySummary } from '@paigram/shared-components'
 // Stores
 const userStore = useUserStore()
 
-// 状态
 const passwordLoading = ref(false)
 const twoFactorLoading = ref(false)
 const devicesLoading = ref(false)
@@ -247,7 +238,6 @@ const twoFactorEnabled = ref(false)
 const enable2FAModalVisible = ref(false)
 const disable2FAModalVisible = ref(false)
 
-// 表单数据
 const passwordForm = ref({
   old_password: '',
   new_password: '',
@@ -272,7 +262,6 @@ const twoFactorData = ref<{
 const devices = ref<Device[]>([])
 const securitySummary = ref<UserSecuritySummary | null>(null)
 
-// 修改密码
 const handleChangePassword = async (): Promise<void> => {
   if (!userStore.userId) {
     Message.error('未找到用户信息')
@@ -288,7 +277,6 @@ const handleChangePassword = async (): Promise<void> => {
 
     Message.success('密码修改成功')
 
-    // 重置表单
     passwordForm.value = {
       old_password: '',
       new_password: '',
@@ -303,7 +291,6 @@ const handleChangePassword = async (): Promise<void> => {
   }
 }
 
-// 启用 2FA
 const handleEnable2FA = async (): Promise<void> => {
   if (!userStore.userId) {
     Message.error('未找到用户信息')
@@ -324,7 +311,6 @@ const handleEnable2FA = async (): Promise<void> => {
   }
 }
 
-// 确认启用 2FA
 const handleConfirm2FA = async (): Promise<void> => {
   if (!userStore.userId || !twoFactorData.value) {
     return
@@ -342,7 +328,6 @@ const handleConfirm2FA = async (): Promise<void> => {
     enable2FAModalVisible.value = false
     await fetchSecuritySummary()
 
-    // 重置表单
     confirm2FAForm.value.code = ''
     twoFactorData.value = null
   } catch (error) {
@@ -354,12 +339,10 @@ const handleConfirm2FA = async (): Promise<void> => {
   }
 }
 
-// 显示禁用 2FA 模态框
 const showDisable2FAModal = (): void => {
   disable2FAModalVisible.value = true
 }
 
-// 禁用 2FA
 const handleDisable2FA = async (): Promise<void> => {
   if (!userStore.userId) {
     Message.error('未找到用户信息')
@@ -378,7 +361,6 @@ const handleDisable2FA = async (): Promise<void> => {
     disable2FAModalVisible.value = false
     await fetchSecuritySummary()
 
-    // 重置表单
     disable2FAForm.value = {
       password: '',
       code: '',
@@ -392,7 +374,6 @@ const handleDisable2FA = async (): Promise<void> => {
   }
 }
 
-// 获取设备列表
 const fetchDevices = async (): Promise<void> => {
   if (!userStore.userId) {
     return
@@ -410,7 +391,6 @@ const fetchDevices = async (): Promise<void> => {
   }
 }
 
-// 获取安全概览
 const fetchSecuritySummary = async (): Promise<void> => {
   if (!userStore.userId) return
 
@@ -424,7 +404,6 @@ const fetchSecuritySummary = async (): Promise<void> => {
   }
 }
 
-// 移除设备
 const handleRemoveDevice = async (deviceId: string): Promise<void> => {
   if (!userStore.userId) {
     return
@@ -434,7 +413,7 @@ const handleRemoveDevice = async (deviceId: string): Promise<void> => {
   try {
     await securityApi.removeDevice(userStore.userId, deviceId)
     Message.success('设备已移除')
-    await fetchDevices() // 刷新列表
+    await fetchDevices()
     await fetchSecuritySummary()
   } catch (error) {
     console.error('Remove device error:', error)
@@ -445,36 +424,30 @@ const handleRemoveDevice = async (deviceId: string): Promise<void> => {
   }
 }
 
-// 格式化日期
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
-  // 小于 1 分钟
   if (diff < 60 * 1000) {
     return '刚刚'
   }
 
-  // 小于 1 小时
   if (diff < 60 * 60 * 1000) {
     const minutes = Math.floor(diff / (60 * 1000))
     return `${minutes} 分钟前`
   }
 
-  // 小于 1 天
   if (diff < 24 * 60 * 60 * 1000) {
     const hours = Math.floor(diff / (60 * 60 * 1000))
     return `${hours} 小时前`
   }
 
-  // 小于 7 天
   if (diff < 7 * 24 * 60 * 60 * 1000) {
     const days = Math.floor(diff / (24 * 60 * 60 * 1000))
     return `${days} 天前`
   }
 
-  // 超过 7 天，显示具体日期
   return date.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -489,7 +462,6 @@ const formatAbsoluteDate = (dateString?: string): string => {
   return new Date(dateString).toLocaleString('zh-CN')
 }
 
-// 页面加载时获取数据
 onMounted(async () => {
   await Promise.all([fetchDevices(), fetchSecuritySummary()])
 })

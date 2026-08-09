@@ -48,7 +48,7 @@ interface Props {
   menuItems?: MenuItem[]
   collapsed?: boolean
   accordion?: boolean
-  useRouteMenu?: boolean // 是否使用路由生成菜单
+  useRouteMenu?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -60,10 +60,8 @@ const props = withDefaults(defineProps<Props>(), {
 const route = useRoute()
 const router = useRouter()
 
-// 如果需要，从路由自动生成菜单
 const computedMenuItems = computed(() => {
   if (props.useRouteMenu && !props.menuItems) {
-    // 这里应该从路由生成菜单，但需要在具体应用中实现
     return []
   }
   return props.menuItems || []
@@ -72,41 +70,29 @@ const computedMenuItems = computed(() => {
 const selectedKeys = ref<string[]>([])
 const openKeys = ref<string[]>([])
 
-// 获取菜单标题（支持i18n）
 const getMenuTitle = (item: MenuItem): string => {
   if (item.meta?.locale) {
-    // 如果有locale，使用i18n
-    // 这里简单返回locale key，实际应用中需要使用i18n实例
     return item.meta.locale
   }
   return item.meta?.title || item.name || ''
 }
 
 /**
- * 获取菜单项的唯一键
- * 优先使用路由名称，确保导航正确
- * @param item 菜单项
- * @param parentName 父级路由名称（可选）
  */
 const getMenuItemKey = (item: MenuItem, parentName?: string): string => {
-  // 优先使用 name
   if (item.name) {
     return item.name
   }
-  // 如果有父级名称，组合使用
   if (parentName && item.path) {
     return `${parentName}-${item.path}`
   }
-  // 降级使用 path
   return item.path
 }
 
-// 获取当前路由对应的菜单路径
 const findMenuPath = (items: MenuItem[], routeName: string, parents: string[] = []): string[] => {
   for (const item of items) {
     const itemKey = getMenuItemKey(item)
 
-    // 优先使用路由名称匹配
     if (item.name === routeName) {
       return [...parents, itemKey]
     }
@@ -121,7 +107,6 @@ const findMenuPath = (items: MenuItem[], routeName: string, parents: string[] = 
   return []
 }
 
-// 监听路由变化，更新选中状态
 watch(
   () => route.name,
   (routeName) => {
@@ -141,23 +126,19 @@ watch(
   { immediate: true }
 )
 
-// 处理菜单点击
 const handleMenuClick = (key: string) => {
   console.log('菜单点击:', key)
 
-  // 尝试通过名称导航
   const routeExists = router.getRoutes().find((r) => r.name === key)
   if (routeExists) {
     console.log('找到路由，使用名称导航:', key)
     router.push({ name: key })
   } else {
-    // 降级使用路径导航
     console.log('路由名称未找到，使用路径导航:', key)
     router.push(key)
   }
 }
 
-// 处理子菜单展开/收起
 const handleSubMenuClick = (_key: string, newOpenKeys: string[]) => {
   if (!props.collapsed) {
     openKeys.value = newOpenKeys

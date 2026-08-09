@@ -2,9 +2,7 @@
   <div
     class="app-header flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6 shadow-sm dark:border-gray-700 dark:bg-gray-900"
   >
-    <!-- 左侧 -->
     <div class="flex items-center">
-      <!-- 折叠按钮 -->
       <a-button v-if="showCollapse" type="text" @click="handleToggleCollapse" class="mr-4">
         <template #icon>
           <icon-menu-fold v-if="!collapsed" />
@@ -12,19 +10,15 @@
         </template>
       </a-button>
 
-      <!-- Logo 和标题 -->
       <div class="flex items-center">
         <img v-if="logo" :src="logo" alt="logo" class="mr-3 h-8 w-8" />
         <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">{{ title }}</h1>
       </div>
     </div>
 
-    <!-- 右侧 -->
     <div class="flex items-center space-x-4">
-      <!-- 搜索 -->
       <a-input-search v-if="showSearch" placeholder="搜索..." class="w-64" @search="handleSearch" />
 
-      <!-- 主题切换 -->
       <a-dropdown trigger="click" @select="handleThemeChange">
         <a-button type="text">
           <template #icon>
@@ -55,7 +49,6 @@
         </template>
       </a-dropdown>
 
-      <!-- 消息通知 -->
       <a-badge :count="9" dot>
         <a-button type="text">
           <template #icon>
@@ -64,7 +57,6 @@
         </a-button>
       </a-badge>
 
-      <!-- 用户下拉菜单 -->
       <a-dropdown trigger="click" @select="handleUserMenuClick">
         <div class="flex cursor-pointer items-center rounded px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800">
           <a-avatar :size="32" class="mr-2">

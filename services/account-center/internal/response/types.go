@@ -1,15 +1,13 @@
 package response
 
-// PageData 分页数据结构
 type PageData struct {
-	List       interface{} `json:"list"`        // 数据列表
-	Total      int64       `json:"total"`       // 总数
-	Page       int         `json:"page"`        // 当前页码
-	PageSize   int         `json:"page_size"`   // 每页大小
-	TotalPages int         `json:"total_pages"` // 总页数
+	List       interface{} `json:"list"`
+	Total      int64       `json:"total"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
+	TotalPages int         `json:"total_pages"`
 }
 
-// NewPageData 创建分页数据
 func NewPageData(list interface{}, total int64, page, pageSize int) *PageData {
 	totalPages := int(total) / pageSize
 	if int(total)%pageSize > 0 {
@@ -25,7 +23,6 @@ func NewPageData(list interface{}, total int64, page, pageSize int) *PageData {
 	}
 }
 
-// EmptyPageData 返回空的分页数据
 func EmptyPageData(page, pageSize int) *PageData {
 	return &PageData{
 		List:       []interface{}{},
@@ -36,12 +33,10 @@ func EmptyPageData(page, pageSize int) *PageData {
 	}
 }
 
-// MessageData 仅包含消息的数据结构
 type MessageData struct {
 	Message string `json:"message"`
 }
 
-// NewMessageData 创建消息数据
 func NewMessageData(message string) *MessageData {
 	return &MessageData{Message: message}
 }

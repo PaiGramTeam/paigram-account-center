@@ -1,6 +1,5 @@
 <template>
   <div class="flex min-h-screen">
-    <!-- 左侧装饰区域 -->
     <div
       class="hidden bg-gradient-to-br from-blue-500 to-indigo-600 lg:flex lg:w-1/2 dark:from-blue-700 dark:to-indigo-800"
     >
@@ -10,11 +9,9 @@
       </div>
     </div>
 
-    <!-- 右侧登录表单 -->
     <div class="flex flex-1 items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 dark:bg-gray-900">
       <div class="w-full max-w-md">
         <div class="rounded-lg bg-white px-6 py-8 shadow-lg dark:bg-gray-800">
-          <!-- Logo 和标题 -->
           <div class="mb-8 text-center">
             <h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100">欢迎回来</h2>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -28,7 +25,6 @@
             </p>
           </div>
 
-          <!-- 登录表单 -->
           <a-form :model="loginForm" :rules="rules" layout="vertical" @submit="handleSubmit">
             <a-form-item field="email" label="邮箱地址">
               <a-input
@@ -91,12 +87,10 @@
             </a-button>
           </a-form>
 
-          <!-- 分割线 -->
           <a-divider v-if="!showTwoFactorStep" class="!my-8">
             <span class="text-sm text-gray-500 dark:text-gray-400">或使用其他方式登录</span>
           </a-divider>
 
-          <!-- 第三方登录 -->
           <div v-if="!showTwoFactorStep" class="grid grid-cols-2 gap-4">
             <a-button
               v-for="provider in oauthProviders"
@@ -137,7 +131,6 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-// 表单数据
 const loginForm = reactive<LoginEmailRequest>({
   email: '',
   password: '',
@@ -153,10 +146,8 @@ const showCaptcha = ref(false)
 const showTwoFactorStep = ref(false)
 const twoFactorMessage = ref('')
 
-// 加载状态
 const loading = ref(false)
 
-// 表单验证规则
 const rules = {
   email: [
     { required: true, message: '请输入邮箱地址' },
@@ -169,7 +160,6 @@ const rules = {
   totp_code: [{ minLength: 6, message: '验证码长度不能少于6位' }],
 }
 
-// OAuth 提供商
 const oauthProviders = [
   { name: 'google', label: 'Google', icon: IconGoogle },
   { name: 'github', label: 'GitHub', icon: IconGithub },
@@ -180,7 +170,6 @@ interface FormSubmitData {
   errors: Record<string, string> | undefined
 }
 
-// 提交登录
 const handleSubmit = async ({ values, errors }: FormSubmitData): Promise<void> => {
   if (errors) return
 
@@ -217,7 +206,6 @@ const handleSubmit = async ({ values, errors }: FormSubmitData): Promise<void> =
       return
     }
 
-    // 跳转到控制台或之前的页面
     const redirect = route.query.redirect as string
     await router.push(redirect || '/dashboard')
   } catch (error: unknown) {
@@ -266,24 +254,20 @@ function normalizeTOTPCode(code: string | undefined): string | undefined {
   return normalized || undefined
 }
 
-// OAuth 登录
 const handleOAuthLogin = async (provider: string): Promise<void> => {
   try {
     const authURL = await authStore.initiateOAuth(provider, `${window.location.origin}/auth/callback/${provider}`)
 
-    // 跳转到授权页面
     window.location.href = authURL
   } catch (_error) {
     // auth store already surfaces a user-facing error
   }
 }
 
-// 前往注册页
 const handleGoRegister = (): void => {
   router.push('/register')
 }
 
-// 忘记密码
 const handleForgotPassword = (): void => {
   router.push('/forgot-password')
 }

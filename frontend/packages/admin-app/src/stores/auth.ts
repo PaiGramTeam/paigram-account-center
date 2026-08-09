@@ -47,7 +47,6 @@ export const useAuthStore = defineStore('auth', {
   }),
 
   actions: {
-    // 邮箱密码登录
     async loginWithEmail(credentials: LoginEmailRequest): Promise<LoginWithEmailResult> {
       this.loading = true
       const userStore = useUserStore()
@@ -62,13 +61,11 @@ export const useAuthStore = defineStore('auth', {
           }
         }
 
-        // 保存认证信息
         userStore.setAuthData({
           accessToken: response.data.access_token,
           refreshToken: response.data.refresh_token,
         })
 
-        // 获取用户信息
         await this.fetchUserProfile(response.data.user_id)
 
         this.loginType = 'email'
@@ -82,7 +79,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // 获取用户资料
     async fetchUserProfile(userId?: number): Promise<void> {
       const userStore = useUserStore()
 
@@ -95,7 +91,6 @@ export const useAuthStore = defineStore('auth', {
         const response = await userApi.getDetail(id)
         const userDetail = response.data
 
-        // 转换并保存用户信息
         userStore.setUserInfo({
           id: userDetail.id,
           display_name: userDetail.display_name,
@@ -156,7 +151,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    // 登出
     async logout(): Promise<void> {
       const userStore = useUserStore()
 

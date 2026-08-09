@@ -63,7 +63,6 @@ function mapRoleDetail(role: BackendRole) {
 
 export function createRoleApi(request: ReturnType<typeof createRequest>) {
   return {
-    // 获取角色列表（带分页）
     async getList(params?: RoleListParams): Promise<RoleListResponse> {
       const response = await request.get<{ data: { data: BackendRole[]; pagination: RoleListResponse['pagination'] } }>(
         '/roles',
@@ -75,7 +74,6 @@ export function createRoleApi(request: ReturnType<typeof createRequest>) {
       }
     },
 
-    // 获取角色详情
     async getDetail(id: number | string): Promise<RoleDetailResponse> {
       const response = await request.get<BackendRole>(`/roles/${id}`)
       return {
@@ -83,17 +81,14 @@ export function createRoleApi(request: ReturnType<typeof createRequest>) {
       }
     },
 
-    // 创建角色
     async create(data: CreateRoleRequest): Promise<CreateRoleResponse> {
       return request.post('/roles', data)
     },
 
-    // 更新角色
     async update(id: number | string, data: UpdateRoleRequest): Promise<UpdateRoleResponse> {
       return request.put(`/roles/${id}`, data)
     },
 
-    // 删除角色
     async delete(id: number | string): Promise<DeleteRoleResponse> {
       return request.delete(`/roles/${id}`)
     },

@@ -7,28 +7,20 @@ option go_package = "paigram/internal/grpc/pb/v1;pb";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
-// 用户服务定义
 service UserService {
-  // 获取单个用户信息
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
   
-  // 批量获取用户信息
   rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
   
-  // 验证用户身份
   rpc VerifyUser(VerifyUserRequest) returns (VerifyUserResponse);
   
-  // 获取用户权限
   rpc GetUserPermissions(GetUserPermissionsRequest) returns (GetUserPermissionsResponse);
   
-  // 更新用户数据
   rpc UpdateUserData(UpdateUserDataRequest) returns (UpdateUserDataResponse);
   
-  // 获取用户统计信息
   rpc GetUserStats(GetUserStatsRequest) returns (GetUserStatsResponse);
 }
 
-// 用户状态枚举
 enum UserStatus {
   USER_STATUS_UNSPECIFIED = 0;
   USER_STATUS_PENDING = 1;
@@ -37,7 +29,6 @@ enum UserStatus {
   USER_STATUS_DELETED = 4;
 }
 
-// 用户信息
 message User {
   uint64 id = 1;
   string primary_login_type = 2;
@@ -46,13 +37,10 @@ message User {
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp updated_at = 6;
   
-  // 用户资料
   UserProfile profile = 10;
-  // 用户邮箱列表
   repeated UserEmail emails = 11;
 }
 
-// 用户资料
 message UserProfile {
   uint64 id = 1;
   uint64 user_id = 2;
@@ -62,7 +50,6 @@ message UserProfile {
   string locale = 6;
 }
 
-// 用户邮箱
 message UserEmail {
   uint64 id = 1;
   uint64 user_id = 2;
@@ -72,7 +59,6 @@ message UserEmail {
   google.protobuf.Timestamp verified_at = 6;
 }
 
-// 获取用户请求
 message GetUserRequest {
   oneof identifier {
     uint64 id = 1;
@@ -80,67 +66,55 @@ message GetUserRequest {
   }
 }
 
-// 获取用户响应
 message GetUserResponse {
   User user = 1;
 }
 
-// 批量获取用户请求
 message GetUsersByIdsRequest {
   repeated uint64 ids = 1;
 }
 
-// 批量获取用户响应
 message GetUsersByIdsResponse {
   repeated User users = 1;
 }
 
-// 验证用户请求
 message VerifyUserRequest {
   string email = 1;
   string password = 2;
 }
 
-// 验证用户响应
 message VerifyUserResponse {
   bool valid = 1;
   User user = 2;
   string message = 3;
 }
 
-// 获取用户权限请求
 message GetUserPermissionsRequest {
   uint64 user_id = 1;
 }
 
-// 获取用户权限响应
 message GetUserPermissionsResponse {
   repeated string permissions = 1;
   repeated string roles = 2;
 }
 
-// 更新用户数据请求
 message UpdateUserDataRequest {
   uint64 user_id = 1;
   
-  // 可选更新的字段
   optional string display_name = 10;
   optional string avatar_url = 11;
   optional string bio = 12;
   optional string locale = 13;
 }
 
-// 更新用户数据响应
 message UpdateUserDataResponse {
   User user = 1;
 }
 
-// 获取用户统计请求
 message GetUserStatsRequest {
   uint64 user_id = 1;
 }
 
-// 获取用户统计响应
 message GetUserStatsResponse {
   uint64 user_id = 1;
   uint32 login_count = 2;

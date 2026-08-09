@@ -22,7 +22,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 用户状态枚举
 type UserStatus int32
 
 const (
@@ -78,7 +77,6 @@ func (UserStatus) EnumDescriptor() ([]byte, []int) {
 	return file_proto_paigram_v1_user_proto_rawDescGZIP(), []int{0}
 }
 
-// 用户信息
 type User struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Id               uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -87,12 +85,10 @@ type User struct {
 	LastLoginAt      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_login_at,json=lastLoginAt,proto3" json:"last_login_at,omitempty"`
 	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	// 用户资料
-	Profile *UserProfile `protobuf:"bytes,10,opt,name=profile,proto3" json:"profile,omitempty"`
-	// 用户邮箱列表
-	Emails        []*UserEmail `protobuf:"bytes,11,rep,name=emails,proto3" json:"emails,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Profile          *UserProfile           `protobuf:"bytes,10,opt,name=profile,proto3" json:"profile,omitempty"`
+	Emails           []*UserEmail           `protobuf:"bytes,11,rep,name=emails,proto3" json:"emails,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *User) Reset() {
@@ -181,7 +177,6 @@ func (x *User) GetEmails() []*UserEmail {
 	return nil
 }
 
-// 用户资料
 type UserProfile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -266,7 +261,6 @@ func (x *UserProfile) GetLocale() string {
 	return ""
 }
 
-// 用户邮箱
 type UserEmail struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -351,7 +345,6 @@ func (x *UserEmail) GetVerifiedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// 获取用户请求
 type GetUserRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Identifier:
@@ -434,7 +427,6 @@ func (*GetUserRequest_Id) isGetUserRequest_Identifier() {}
 
 func (*GetUserRequest_Email) isGetUserRequest_Identifier() {}
 
-// 获取用户响应
 type GetUserResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
@@ -479,7 +471,6 @@ func (x *GetUserResponse) GetUser() *User {
 	return nil
 }
 
-// 批量获取用户请求
 type GetUsersByIdsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ids           []uint64               `protobuf:"varint,1,rep,packed,name=ids,proto3" json:"ids,omitempty"`
@@ -524,7 +515,6 @@ func (x *GetUsersByIdsRequest) GetIds() []uint64 {
 	return nil
 }
 
-// 批量获取用户响应
 type GetUsersByIdsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Users         []*User                `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
@@ -569,7 +559,6 @@ func (x *GetUsersByIdsResponse) GetUsers() []*User {
 	return nil
 }
 
-// 验证用户请求
 type VerifyUserRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
@@ -622,7 +611,6 @@ func (x *VerifyUserRequest) GetPassword() string {
 	return ""
 }
 
-// 验证用户响应
 type VerifyUserResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Valid         bool                   `protobuf:"varint,1,opt,name=valid,proto3" json:"valid,omitempty"`
@@ -683,7 +671,6 @@ func (x *VerifyUserResponse) GetMessage() string {
 	return ""
 }
 
-// 获取用户权限请求
 type GetUserPermissionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -728,7 +715,6 @@ func (x *GetUserPermissionsRequest) GetUserId() uint64 {
 	return 0
 }
 
-// 获取用户权限响应
 type GetUserPermissionsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Permissions   []string               `protobuf:"bytes,1,rep,name=permissions,proto3" json:"permissions,omitempty"`
@@ -781,15 +767,13 @@ func (x *GetUserPermissionsResponse) GetRoles() []string {
 	return nil
 }
 
-// 更新用户数据请求
 type UpdateUserDataRequest struct {
-	state  protoimpl.MessageState `protogen:"open.v1"`
-	UserId uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	// 可选更新的字段
-	DisplayName   *string `protobuf:"bytes,10,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
-	AvatarUrl     *string `protobuf:"bytes,11,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
-	Bio           *string `protobuf:"bytes,12,opt,name=bio,proto3,oneof" json:"bio,omitempty"`
-	Locale        *string `protobuf:"bytes,13,opt,name=locale,proto3,oneof" json:"locale,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	DisplayName   *string                `protobuf:"bytes,10,opt,name=display_name,json=displayName,proto3,oneof" json:"display_name,omitempty"`
+	AvatarUrl     *string                `protobuf:"bytes,11,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
+	Bio           *string                `protobuf:"bytes,12,opt,name=bio,proto3,oneof" json:"bio,omitempty"`
+	Locale        *string                `protobuf:"bytes,13,opt,name=locale,proto3,oneof" json:"locale,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -859,7 +843,6 @@ func (x *UpdateUserDataRequest) GetLocale() string {
 	return ""
 }
 
-// 更新用户数据响应
 type UpdateUserDataResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
@@ -904,7 +887,6 @@ func (x *UpdateUserDataResponse) GetUser() *User {
 	return nil
 }
 
-// 获取用户统计请求
 type GetUserStatsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -949,7 +931,6 @@ func (x *GetUserStatsRequest) GetUserId() uint64 {
 	return 0
 }
 
-// 获取用户统计响应
 type GetUserStatsResponse struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	UserId             uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`

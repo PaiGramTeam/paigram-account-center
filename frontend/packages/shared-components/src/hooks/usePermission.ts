@@ -4,7 +4,6 @@ import { useUserStore } from '../stores/user'
 export function usePermission() {
   const userStore = useUserStore()
 
-  // 检查是否有某个权限
   const hasPermission = (permission: string | string[]): boolean => {
     if (!permission) return true
 
@@ -12,7 +11,6 @@ export function usePermission() {
     return permissions.some((p) => userStore.hasPermission(p))
   }
 
-  // 检查是否有某个角色
   const hasRole = (role: string | string[]): boolean => {
     if (!role) return true
 
@@ -20,7 +18,6 @@ export function usePermission() {
     return roles.some((r) => userStore.hasRole(r))
   }
 
-  // 检查是否有任一权限或角色
   const hasAny = (options: { permissions?: string[]; roles?: string[] }): boolean => {
     const { permissions = [], roles = [] } = options
 
@@ -29,7 +26,6 @@ export function usePermission() {
     return permissions.some((p) => hasPermission(p)) || roles.some((r) => hasRole(r))
   }
 
-  // 检查是否拥有所有权限和角色
   const hasAll = (options: { permissions?: string[]; roles?: string[] }): boolean => {
     const { permissions = [], roles = [] } = options
 

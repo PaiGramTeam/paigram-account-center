@@ -21,7 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 错误代码
 type ErrorCode int32
 
 const (
@@ -95,7 +94,6 @@ func (ErrorCode) EnumDescriptor() ([]byte, []int) {
 	return file_proto_paigram_v1_common_proto_rawDescGZIP(), []int{0}
 }
 
-// 分页请求
 type PageRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
@@ -164,7 +162,6 @@ func (x *PageRequest) GetDesc() bool {
 	return false
 }
 
-// 分页响应
 type PageResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`

@@ -23,7 +23,6 @@ export interface RequestConfig {
   onUnauthorized?: () => void
 }
 
-// 创建 axios 实例工厂函数
 export function createRequest(config: RequestConfig = {}) {
   const {
     baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
@@ -42,10 +41,8 @@ export function createRequest(config: RequestConfig = {}) {
     },
   })
 
-  // 请求拦截器
   instance.interceptors.request.use(
     (config) => {
-      // 添加 token 到请求头
       const token = getToken?.()
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`
@@ -58,10 +55,8 @@ export function createRequest(config: RequestConfig = {}) {
     }
   )
 
-  // 响应拦截器
   instance.interceptors.response.use(
     (response: AxiosResponse<ApiResponse>) => {
-      // 直接返回响应数据
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return response.data as any
     },
@@ -72,38 +67,31 @@ export function createRequest(config: RequestConfig = {}) {
       if (response) {
         const { status, data } = response
 
-        // 处理 401 未授权错误
         if (status === 401 && config.url !== '/auth/refresh') {
           const refreshToken = getRefreshToken?.()
 
-          // 尝试刷新 token
           if (refreshToken && setAuthData) {
             try {
               const refreshResponse = await instance.post('/auth/refresh', {
                 refresh_token: refreshToken,
               })
 
-              // 更新 token
               setAuthData({
                 accessToken: refreshResponse.data.access_token,
                 refreshToken: refreshResponse.data.refresh_token,
               })
 
-              // 重试原请求
               config.headers.Authorization = `Bearer ${refreshResponse.data.access_token}`
               return instance(config)
             } catch (refreshError) {
-              // 刷新失败，触发未授权回调
               onUnauthorized?.()
               return Promise.reject(refreshError)
             }
           } else {
-            // 没有 refresh token，触发未授权回调
             onUnauthorized?.()
           }
         }
 
-        // 处理其他错误
         const errorData = normalizeApiError(data as ApiError)
         const errorMessage = errorData.message || errorData.error || getDefaultErrorMessage(status)
 
@@ -113,7 +101,6 @@ export function createRequest(config: RequestConfig = {}) {
         return Promise.reject(errorData)
       }
 
-      // 网络错误或超时
       if (!requestConfig.skipErrorToast) {
         Message.error('网络连接异常，请稍后重试')
       }
@@ -121,7 +108,6 @@ export function createRequest(config: RequestConfig = {}) {
     }
   )
 
-  // 封装请求方法
   return {
     instance,
 
@@ -178,7 +164,6 @@ export function normalizeApiError(error: ApiError | undefined): NormalizedApiErr
   }
 }
 
-// 获取默认错误消息
 function getDefaultErrorMessage(status: number): string {
   switch (status) {
     case 400:

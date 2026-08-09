@@ -91,11 +91,10 @@ const collapsed = computed(() => appStore.collapsed)
 const cachedRoutes = ref<string[]>([])
 const breadcrumbItems = ref<{ path: string; title: string }[]>([])
 
-// 更新面包屑
 watch(
   () => route.path,
   () => {
-    // TODO: 根据路由生成面包屑
+    // TODO: Generate breadcrumbs from the active route.
     breadcrumbItems.value = [
       { path: '/', title: '首页' },
       { path: route.path, title: (route.meta?.title as string) || '页面' },
@@ -104,7 +103,6 @@ watch(
   { immediate: true }
 )
 
-// 更新缓存路由
 watch(
   () => route.name,
   (name) => {
@@ -121,7 +119,6 @@ const handleSearch = (value: string) => {
   emit('search', value)
 }
 
-// 提供布局配置给子组件
 provide('layoutConfig', {
   collapsed,
   showSidebar: props.showSidebar,

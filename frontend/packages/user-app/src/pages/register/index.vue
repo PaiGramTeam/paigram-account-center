@@ -47,7 +47,6 @@
         >
       </div>
 
-      <!-- 注册成功提示 -->
       <a-modal
         v-model:visible="successModalVisible"
         title="注册成功"
@@ -99,7 +98,6 @@ const form = reactive<RegisterEmailRequest & { confirmPassword: string }>({
   locale: 'zh_CN',
 })
 
-// 表单验证规则
 const rules = {
   display_name: [
     { required: true, message: '请输入显示名称' },
@@ -153,10 +151,8 @@ const handleSubmit = async (): Promise<void> => {
 
     const response = await authApi.register(registerData)
 
-    // 检查是否需要邮箱验证
     requiresEmailVerification.value = response.data.requires_email_verification
 
-    // 显示成功提示
     successModalVisible.value = true
   } catch (error: unknown) {
     captchaToken.value = ''

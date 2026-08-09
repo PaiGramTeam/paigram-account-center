@@ -2,9 +2,7 @@
   <footer class="mt-auto border-t border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="py-8">
-        <!-- 主要内容区 -->
         <div class="grid grid-cols-1 gap-8 md:grid-cols-4">
-          <!-- 关于 -->
           <div class="col-span-1 md:col-span-2">
             <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">{{ brandName }}</h3>
             <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -25,7 +23,6 @@
             </div>
           </div>
 
-          <!-- 快速链接 -->
           <div>
             <h3 class="mb-4 text-sm font-semibold tracking-wider text-gray-900 uppercase dark:text-gray-100">
               快速链接
@@ -43,7 +40,6 @@
             </ul>
           </div>
 
-          <!-- 帮助与支持 -->
           <div>
             <h3 class="mb-4 text-sm font-semibold tracking-wider text-gray-900 uppercase dark:text-gray-100">
               帮助与支持
@@ -64,7 +60,6 @@
           </div>
         </div>
 
-        <!-- 底部信息 -->
         <div class="mt-8 border-t border-gray-200 pt-8 dark:border-gray-700">
           <div class="flex flex-col items-center justify-between md:flex-row">
             <p class="text-sm text-gray-500 dark:text-gray-400">
@@ -145,10 +140,8 @@ withDefaults(
 
 const router = useRouter()
 
-// 当前年份
 const currentYear = computed(() => new Date().getFullYear())
 
-// 处理链接点击
 const handleLinkClick = (link: Link): void => {
   if (!link.external && link.href.startsWith('/')) {
     router.push(link.href)

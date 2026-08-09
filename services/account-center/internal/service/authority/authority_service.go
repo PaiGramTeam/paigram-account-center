@@ -25,12 +25,10 @@ func (s *AuthorityService) DB() *gorm.DB {
 	return s.db
 }
 
-// CreateAuthority 创建角色
 func (s *AuthorityService) CreateAuthority(params CreateAuthorityParams) (*model.Role, error) {
 	var role *model.Role
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 检查名称是否重复
 		var count int64
 		if err := tx.Model(&model.Role{}).Where("name = ?", params.Name).Count(&count).Error; err != nil {
 			return err
@@ -39,10 +37,9 @@ func (s *AuthorityService) CreateAuthority(params CreateAuthorityParams) (*model
 			return errors.ErrRoleNameDuplicate
 		}
 
-		// 2. 创建角色
 		role = &model.Role{
 			Name:        params.Name,
-			DisplayName: params.Name, // 默认使用 Name 作为 DisplayName
+			DisplayName: params.Name,
 			Description: params.Description,
 			IsSystem:    false,
 		}
@@ -50,7 +47,6 @@ func (s *AuthorityService) CreateAuthority(params CreateAuthorityParams) (*model
 			return err
 		}
 
-		// 3. 分配权限
 		if len(params.PermissionIDs) > 0 {
 			for _, permID := range params.PermissionIDs {
 				rp := &model.RolePermission{
@@ -87,9 +83,7 @@ func (s *AuthorityService) CreateAuthority(params CreateAuthorityParams) (*model
 	return role, nil
 }
 
-// UpdateAuthority 更新角色信息
 func (s *AuthorityService) UpdateAuthority(roleID uint, params UpdateAuthorityParams) error {
-	// 检查角色存在性
 	var role model.Role
 	if err := s.db.First(&role, uint64(roleID)).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -98,12 +92,10 @@ func (s *AuthorityService) UpdateAuthority(roleID uint, params UpdateAuthorityPa
 		return err
 	}
 
-	// 检查系统角色保护
 	if role.IsSystem {
 		return errors.ErrSystemRoleProtect
 	}
 
-	// 检查名称重复
 	if params.Name != nil && *params.Name != role.Name {
 		var count int64
 		if err := s.db.Model(&model.Role{}).Where("name = ? AND id != ?", *params.Name, uint64(roleID)).Count(&count).Error; err != nil {
@@ -122,7 +114,6 @@ func (s *AuthorityService) UpdateAuthority(roleID uint, params UpdateAuthorityPa
 	return s.db.Save(&role).Error
 }
 
-// DeleteAuthority 删除角色
 func (s *AuthorityService) DeleteAuthority(roleID uint) error {
 	var role model.Role
 	if err := s.db.First(&role, uint64(roleID)).Error; err != nil {
@@ -179,7 +170,6 @@ func (s *AuthorityService) DeleteAuthority(roleID uint) error {
 	return nil
 }
 
-// GetAuthority 获取单个角色（预加载权限）
 func (s *AuthorityService) GetAuthority(roleID uint) (*model.Role, error) {
 	var role model.Role
 	if err := s.db.Preload("Permissions").First(&role, uint64(roleID)).Error; err != nil {
@@ -191,9 +181,7 @@ func (s *AuthorityService) GetAuthority(roleID uint) (*model.Role, error) {
 	return &role, nil
 }
 
-// ListAuthorities 获取角色列表（分页）
 func (s *AuthorityService) ListAuthorities(params ListAuthoritiesParams) (*ListAuthoritiesResult, error) {
-	// 防御性验证:确保分页参数合法
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -204,24 +192,20 @@ func (s *AuthorityService) ListAuthorities(params ListAuthoritiesParams) (*ListA
 	var roles []model.Role
 	query := s.db.Model(&model.Role{})
 
-	// 模糊搜索
 	if params.Name != "" {
 		query = query.Where("name LIKE ?", "%"+params.Name+"%")
 	}
 
-	// 查询总数
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return nil, err
 	}
 
-	// 分页查询
 	offset := (params.Page - 1) * params.PageSize
 	if err := query.Order("created_at DESC, id DESC").Offset(offset).Limit(params.PageSize).Find(&roles).Error; err != nil {
 		return nil, err
 	}
 
-	// 转换为结果
 	data := make([]RoleWithPermissions, len(roles))
 	for i, role := range roles {
 		data[i] = RoleWithPermissions{
@@ -231,7 +215,7 @@ func (s *AuthorityService) ListAuthorities(params ListAuthoritiesParams) (*ListA
 			IsSystem:    role.IsSystem,
 			CreatedAt:   role.CreatedAt,
 			UpdatedAt:   role.UpdatedAt,
-			Permissions: []PermissionInfo{}, // 需要时单独加载
+			Permissions: []PermissionInfo{},
 		}
 	}
 
@@ -243,7 +227,6 @@ func (s *AuthorityService) ListAuthorities(params ListAuthoritiesParams) (*ListA
 	}, nil
 }
 
-// AssignPermissions 为角色分配权限（全量覆盖）
 func (s *AuthorityService) AssignPermissions(roleID uint, permissionIDs []uint) error {
 	previousPermissions, err := s.loadRolePermissionIDs(roleID)
 	if err != nil {
@@ -254,7 +237,6 @@ func (s *AuthorityService) AssignPermissions(roleID uint, permissionIDs []uint) 
 	}
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 检查角色存在性
 		var role model.Role
 		if err := tx.First(&role, uint64(roleID)).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
@@ -263,12 +245,10 @@ func (s *AuthorityService) AssignPermissions(roleID uint, permissionIDs []uint) 
 			return err
 		}
 
-		// 删除旧关联
 		if err := tx.Where("role_id = ?", uint64(roleID)).Delete(&model.RolePermission{}).Error; err != nil {
 			return err
 		}
 
-		// 添加新关联
 		for _, permID := range permissionIDs {
 			rp := &model.RolePermission{
 				RoleID:       uint64(roleID),
@@ -299,7 +279,6 @@ func (s *AuthorityService) AssignPermissions(roleID uint, permissionIDs []uint) 
 	return nil
 }
 
-// GetRolePermissions 获取角色的所有权限
 func (s *AuthorityService) GetRolePermissions(roleID uint) ([]model.Permission, error) {
 	if err := s.ensureAuthorityExists(s.db, roleID); err != nil {
 		return nil, err

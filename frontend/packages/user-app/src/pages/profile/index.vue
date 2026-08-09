@@ -6,6 +6,4 @@
   </div>
 </template>
 
-<script setup lang="ts">
-// 个人中心页面
-</script>
+<script setup lang="ts"></script>

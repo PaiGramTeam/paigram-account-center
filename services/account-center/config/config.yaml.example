@@ -60,7 +60,6 @@ auth:
   # shared key above) but logs this list at startup as the operational record.
   bot_service_audience_allowlist:
     - paigram-genshin
-    # 未来新 game-service 加入时追加：
     # - paigram-starrail
     # - paigram-endfield
   captcha:

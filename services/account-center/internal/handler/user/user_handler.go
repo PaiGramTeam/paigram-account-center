@@ -985,8 +985,6 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 
 // swagger:route PATCH /api/v1/admin/users/{id}/status users updateUserStatus
 //
-// 更新用户状态（管理员功能）。
-//
 // Produces:
 //   - application/json
 //
@@ -1062,8 +1060,6 @@ func (h *Handler) UpdateUserStatus(c *gin.Context) {
 }
 
 // swagger:route POST /api/v1/admin/users/{id}/reset-password users resetUserPassword
-//
-// 重置用户密码（管理员功能）。
 //
 // Produces:
 //   - application/json
@@ -1156,8 +1152,6 @@ func (h *Handler) ResetUserPassword(c *gin.Context) {
 
 // swagger:route GET /api/v1/admin/users/{id}/audit-logs users getAuditLogs
 //
-// 获取用户操作日志。
-//
 // Produces:
 //   - application/json
 //
@@ -1235,8 +1229,6 @@ func (h *Handler) GetAuditLogs(c *gin.Context) {
 }
 
 // swagger:route GET /api/v1/admin/users/{id}/roles users getUserRoles
-//
-// 获取用户角色列表。
 //
 // Produces:
 //   - application/json
@@ -1464,8 +1456,6 @@ func uint64Ptr(value uint64) *uint64 {
 }
 
 // swagger:route GET /api/v1/admin/users/{id}/permissions users getUserPermissions
-//
-// 获取用户权限列表。
 //
 // Produces:
 //   - application/json

@@ -7,7 +7,6 @@
       <p class="mt-2 text-gray-600 dark:text-gray-400">这是您的账号中心控制台，您可以在这里管理您的账号信息</p>
     </div>
 
-    <!-- 统计卡片 -->
     <a-row :gutter="16" class="mb-6">
       <a-col :xs="24" :sm="12" :md="6">
         <a-statistic title="绑定账号" :value="stats.bindingCount" :value-style="{ color: '#165DFF' }">
@@ -43,7 +42,6 @@
     </a-row>
 
     <a-row :gutter="16">
-      <!-- 账号信息 -->
       <a-col :xs="24" :lg="16">
         <a-card title="账号信息" class="mb-6">
           <div class="flex items-start space-x-6">
@@ -98,7 +96,6 @@
         </a-card>
       </a-col>
 
-      <!-- 快捷操作 -->
       <a-col :xs="24" :lg="8">
         <a-card title="快捷操作" class="mb-6">
           <a-row :gutter="[16, 16]">
@@ -137,7 +134,6 @@
           </a-row>
         </a-card>
 
-        <!-- 安全提示 -->
         <a-card title="安全提示">
           <a-space direction="vertical" fill>
             <a-alert
@@ -153,7 +149,6 @@
       </a-col>
     </a-row>
 
-    <!-- 最近活动 -->
     <a-card title="最近活动">
       <a-timeline>
         <a-timeline-item v-for="activity in recentActivities" :key="activity.id">
@@ -190,7 +185,6 @@ import { profileApi } from '@/api'
 const router = useRouter()
 const userStore = useUserStore()
 
-// 统计数据
 const stats = reactive({
   bindingCount: 3,
   securityScore: 85,
@@ -198,11 +192,9 @@ const stats = reactive({
   lastLoginTime: new Date(),
 })
 
-// 安全状态
 const hasSecurePassword = ref(true)
 const hasTwoFactor = ref(false)
 
-// 最近活动
 const recentActivities = ref([
   { id: 1, action: '登录账号', time: new Date(), location: '北京' },
   { id: 2, action: '修改密码', time: new Date(Date.now() - 172800000), location: '上海' },
@@ -211,7 +203,6 @@ const recentActivities = ref([
   { id: 5, action: '开启登录保护', time: new Date(Date.now() - 691200000), location: '杭州' },
 ])
 
-// 获取状态颜色
 const getStatusColor = (status?: string): string => {
   const colorMap: Record<string, string> = {
     active: 'green',
@@ -222,7 +213,6 @@ const getStatusColor = (status?: string): string => {
   return colorMap[status || ''] || 'gray'
 }
 
-// 获取状态文本
 const getStatusText = (status?: string): string => {
   const textMap: Record<string, string> = {
     active: '正常',
@@ -233,7 +223,6 @@ const getStatusText = (status?: string): string => {
   return textMap[status || ''] || '未知'
 }
 
-// 格式化日期
 const formatDate = (date?: string | Date): string => {
   if (!date) return '-'
   const d = new Date(date)
@@ -246,7 +235,6 @@ const formatDate = (date?: string | Date): string => {
   })
 }
 
-// 格式化相对时间
 const formatRelativeTime = (date: Date): string => {
   const diff = Date.now() - date.getTime()
   const minutes = Math.floor(diff / 60000)
@@ -260,22 +248,18 @@ const formatRelativeTime = (date: Date): string => {
   return formatDate(date)
 }
 
-// 编辑资料
 const handleEditProfile = (): void => {
   router.push('/profile')
 }
 
-// 更换头像
 const handleChangeAvatar = (): void => {
   Message.info('功能开发中...')
 }
 
-// 加载用户数据
 const loadUserData = async (): Promise<void> => {
   if (!userStore.userInfo && userStore.userId) {
     try {
       const response = await profileApi.getProfile(userStore.userId)
-      // 更新用户信息
       userStore.setUserInfo({
         id: response.data.user_id,
         display_name: response.data.display_name,
@@ -293,9 +277,7 @@ const loadUserData = async (): Promise<void> => {
   }
 }
 
-// 页面挂载
 onMounted(() => {
-  // 检查登录状态
   if (!userStore.isLogin) {
     router.push('/login')
     return

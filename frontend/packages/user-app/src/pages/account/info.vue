@@ -3,7 +3,6 @@
     <a-card title="基本信息" :loading="loading">
       <a-form ref="formRef" :model="form" :rules="rules" layout="vertical" @submit="handleSubmit">
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <!-- 头像 -->
           <a-form-item field="avatar_url" label="头像" class="col-span-full">
             <div class="flex items-center space-x-4">
               <a-avatar :size="80" :image-url="form.avatar_url || undefined">
@@ -18,12 +17,10 @@
             </div>
           </a-form-item>
 
-          <!-- 显示名称 -->
           <a-form-item field="display_name" label="显示名称">
             <a-input v-model="form.display_name" placeholder="请输入显示名称" allow-clear />
           </a-form-item>
 
-          <!-- 主邮箱（只读） -->
           <a-form-item label="主邮箱">
             <a-input :model-value="profileData?.primary_email" disabled>
               <template #suffix>
@@ -32,7 +29,6 @@
             </a-input>
           </a-form-item>
 
-          <!-- 语言偏好 -->
           <a-form-item field="locale" label="语言偏好">
             <a-select v-model="form.locale" placeholder="选择语言偏好" allow-clear>
               <a-option value="zh_CN">简体中文</a-option>
@@ -41,14 +37,12 @@
             </a-select>
           </a-form-item>
 
-          <!-- 账号状态（只读） -->
           <a-form-item label="账号状态">
             <a-tag :color="getStatusColor(profileData?.status || 'active')">
               {{ getStatusText(profileData?.status || 'active') }}
             </a-tag>
           </a-form-item>
 
-          <!-- 个人简介 -->
           <a-form-item field="bio" label="个人简介" class="col-span-full">
             <a-textarea
               v-model="form.bio"
@@ -67,7 +61,6 @@
       </a-form>
     </a-card>
 
-    <!-- 账号详情 -->
     <a-card title="账号详情">
       <a-descriptions :column="{ xs: 1, sm: 2, md: 3 }" bordered>
         <a-descriptions-item label="用户ID">
@@ -85,7 +78,6 @@
       </a-descriptions>
     </a-card>
 
-    <!-- 邮箱列表 -->
     <a-card v-if="profileData?.emails && profileData.emails.length > 0" title="绑定邮箱">
       <a-list :data="profileData.emails" :bordered="false">
         <template #item="{ item }">
@@ -129,7 +121,6 @@ const form = reactive<UpdateProfileRequest>({
   locale: '',
 })
 
-// 表单验证规则
 const rules = {
   display_name: [
     { required: true, message: '请输入显示名称' },
@@ -139,7 +130,6 @@ const rules = {
   bio: [{ maxLength: 200, message: '个人简介不能超过200个字符' }],
 }
 
-// 获取状态颜色
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
     active: 'green',
@@ -150,7 +140,6 @@ const getStatusColor = (status: string): string => {
   return colorMap[status] || 'gray'
 }
 
-// 获取状态文本
 const getStatusText = (status: string): string => {
   const textMap: Record<string, string> = {
     active: '正常',
@@ -161,7 +150,6 @@ const getStatusText = (status: string): string => {
   return textMap[status] || '未知'
 }
 
-// 格式化日期
 const formatDate = (date?: string): string => {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN', {
@@ -173,7 +161,6 @@ const formatDate = (date?: string): string => {
   })
 }
 
-// 加载用户资料
 const loadProfile = async (): Promise<void> => {
   const userId = userStore.userInfo?.id
   if (!userId) {
@@ -186,7 +173,6 @@ const loadProfile = async (): Promise<void> => {
     const response = await profileApi.getProfile(userId)
     profileData.value = response.data
 
-    // 填充表单
     form.display_name = response.data.display_name || ''
     form.avatar_url = response.data.avatar_url || ''
     form.bio = response.data.bio || ''
@@ -199,7 +185,6 @@ const loadProfile = async (): Promise<void> => {
   }
 }
 
-// 重置表单
 const resetForm = (): void => {
   if (profileData.value) {
     form.display_name = profileData.value.display_name || ''
@@ -210,7 +195,6 @@ const resetForm = (): void => {
   }
 }
 
-// 提交表单
 const handleSubmit = async (): Promise<void> => {
   const valid = await formRef.value?.validate()
   if (!valid) return
@@ -223,7 +207,6 @@ const handleSubmit = async (): Promise<void> => {
 
   submitting.value = true
   try {
-    // 只提交有变化的字段
     const updateData: UpdateProfileRequest = {}
     if (form.display_name && form.display_name !== profileData.value?.display_name) {
       updateData.display_name = form.display_name
@@ -238,7 +221,6 @@ const handleSubmit = async (): Promise<void> => {
       updateData.locale = form.locale
     }
 
-    // 如果没有变化，提示用户
     if (Object.keys(updateData).length === 0) {
       Message.info('没有需要保存的更改')
       return
@@ -247,7 +229,6 @@ const handleSubmit = async (): Promise<void> => {
     const response = await profileApi.updateProfile(userId, updateData)
     profileData.value = response.data
 
-    // 更新 store 中的用户信息
     if (userStore.userInfo) {
       userStore.userInfo.display_name = response.data.display_name
       userStore.userInfo.avatar_url = response.data.avatar_url
@@ -263,7 +244,6 @@ const handleSubmit = async (): Promise<void> => {
   }
 }
 
-// 组件挂载时加载数据
 onMounted(() => {
   loadProfile()
 })

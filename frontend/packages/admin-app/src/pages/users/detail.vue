@@ -13,7 +13,6 @@
 
     <a-spin :loading="loading" class="w-full">
       <div v-if="userDetail" class="space-y-6">
-        <!-- 用户卡片 -->
         <a-card>
           <div class="flex items-start space-x-6">
             <a-avatar :size="100" :image-url="userDetail.avatar_url || undefined">
@@ -47,9 +46,7 @@
           </div>
         </a-card>
 
-        <!-- 详细信息 -->
         <a-row :gutter="16">
-          <!-- 基本信息 -->
           <a-col :span="12">
             <a-card title="基本信息">
               <a-descriptions :column="1" bordered>
@@ -87,7 +84,6 @@
             </a-card>
           </a-col>
 
-          <!-- 邮箱列表 -->
           <a-col :span="12">
             <a-card title="绑定邮箱">
               <a-list
@@ -114,7 +110,6 @@
           </a-col>
         </a-row>
 
-        <!-- 账号状态和操作 -->
         <a-row :gutter="16">
           <a-col :span="12">
             <a-card title="安全概览">
@@ -185,11 +180,9 @@
         </a-card>
       </div>
 
-      <!-- 空状态 -->
       <a-empty v-else description="用户不存在" />
     </a-spin>
 
-    <!-- 编辑用户弹窗 -->
     <a-modal
       v-model:visible="editVisible"
       title="编辑用户"
@@ -247,7 +240,6 @@ const editForm = reactive<UpdateUserRequest>({
   locale: '',
 })
 
-// 表单验证规则
 const editRules = {
   display_name: [
     { required: true, message: '请输入显示名称' },
@@ -255,7 +247,6 @@ const editRules = {
   ],
 }
 
-// 获取状态颜色
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
     active: 'green',
@@ -266,7 +257,6 @@ const getStatusColor = (status: string): string => {
   return colorMap[status] || 'gray'
 }
 
-// 获取状态文本
 const getStatusText = (status: string): string => {
   const textMap: Record<string, string> = {
     active: '正常',
@@ -277,7 +267,6 @@ const getStatusText = (status: string): string => {
   return textMap[status] || '未知'
 }
 
-// 格式化日期
 const formatDate = (date?: string): string => {
   if (!date) return '-'
   return new Date(date).toLocaleString('zh-CN', {
@@ -289,7 +278,6 @@ const formatDate = (date?: string): string => {
   })
 }
 
-// 加载用户详情
 const loadUserDetail = async (): Promise<void> => {
   const userId = route.params.id
   if (!userId) {
@@ -320,12 +308,10 @@ const loadUserDetail = async (): Promise<void> => {
   }
 }
 
-// 返回列表
 const handleBack = (): void => {
   router.push('/users/list')
 }
 
-// 打开编辑弹窗
 const handleEdit = (): void => {
   if (!userDetail.value) return
 
@@ -335,7 +321,6 @@ const handleEdit = (): void => {
   editVisible.value = true
 }
 
-// 保存编辑
 const handleSaveEdit = async (): Promise<void> => {
   const valid = await editFormRef.value?.validate()
   if (!valid) return
@@ -355,7 +340,6 @@ const handleSaveEdit = async (): Promise<void> => {
   }
 }
 
-// 删除用户
 const handleDelete = (): void => {
   if (!userDetail.value) return
 
@@ -382,7 +366,6 @@ const handleDelete = (): void => {
   })
 }
 
-// 重置密码
 const handleResetPassword = (): void => {
   if (!userDetail.value) return
 
@@ -407,7 +390,6 @@ const handleResetPassword = (): void => {
   })
 }
 
-// 切换账号状态
 const handleToggleStatus = (): void => {
   if (!userDetail.value) return
 
@@ -458,7 +440,6 @@ const handleRevokeSession = (sessionId: number): void => {
   })
 }
 
-// 组件挂载时加载数据
 onMounted(() => {
   loadUserDetail()
 })
