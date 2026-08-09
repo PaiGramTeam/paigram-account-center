@@ -28,6 +28,8 @@ Raw platform credentials must never be stored by Account Center, the SDK, or bot
 
 ## Local verification
 
+Required local tools are Go, Buf, Bun, uv, `protoc-gen-go`, and `protoc-gen-go-grpc`. Docker is not required by the repository verification flow.
+
 Run the complete local verification suite from the repository root:
 
 ```powershell
@@ -36,3 +38,8 @@ pwsh ./scripts/verify.ps1
 
 The repository intentionally does not copy build or deployment systems from the source repositories.
 
+Regenerate Go and Python contract bindings directly when a `.proto` file changes:
+
+```powershell
+pwsh ./contracts/generate.ps1
+```
