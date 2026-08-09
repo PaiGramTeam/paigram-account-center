@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	pb "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
 	"google.golang.org/grpc/codes"
 	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -14,7 +15,6 @@ import (
 	"gorm.io/gorm"
 
 	"paigram/internal/grpc/interceptor"
-	pb "paigram/internal/grpc/pb/v1"
 	"paigram/internal/model"
 	serviceaudit "paigram/internal/service/audit"
 	"paigram/internal/service/botaccess"

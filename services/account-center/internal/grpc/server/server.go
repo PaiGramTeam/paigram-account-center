@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 
+	accountv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -73,7 +74,7 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 	if err != nil {
 		return nil, fmt.Errorf("init bot access services: %w", err)
 	}
-	pb.RegisterBotAccessServiceServer(server, grpcservice.NewBotAccessService(&botAccessGroup.AccountRefService, &botAccessGroup.TicketService, db))
+	accountv1.RegisterBotAccessServiceServer(server, grpcservice.NewBotAccessService(&botAccessGroup.AccountRefService, &botAccessGroup.TicketService, db))
 
 	botRouteService := botroute.NewService(db, zap.L())
 	pb.RegisterBotRouteServiceServer(server, grpcservice.NewBotRouteService(botRouteService))

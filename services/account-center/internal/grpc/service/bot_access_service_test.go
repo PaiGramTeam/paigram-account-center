@@ -21,9 +21,9 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	pb "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
 	"paigram/internal/config"
 	"paigram/internal/grpc/interceptor"
-	pb "paigram/internal/grpc/pb/v1"
 	grpcservice "paigram/internal/grpc/service"
 	"paigram/internal/model"
 	"paigram/internal/service/botaccess"

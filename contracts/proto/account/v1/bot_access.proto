@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package paigram.v1;
 
-option go_package = "paigram/internal/grpc/pb/v1;pb";
+option go_package = "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1;accountv1";
 
 import "google/protobuf/timestamp.proto";
 
