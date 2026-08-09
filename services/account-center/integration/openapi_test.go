@@ -216,7 +216,7 @@ func TestSpecializedHumaContractsPreserveWireSemantics(t *testing.T) {
 	largeToken := httptest.NewRequest(
 		http.MethodPost,
 		"/api/v1/oauth/token",
-		strings.NewReader("grant_type=client_credentials&client_id="+strings.Repeat("x", 11<<20)),
+		strings.NewReader("grant_type=client_credentials&client_id="+strings.Repeat("x", 9<<20)),
 	)
 	largeToken.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	largeTokenResponse := httptest.NewRecorder()

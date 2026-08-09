@@ -2,12 +2,14 @@ package httpserver
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gin-gonic/gin"
@@ -232,7 +234,7 @@ func TestRuntimeValidatesFormContractBeforeGinHandler(t *testing.T) {
 	require.Equal(t, 1, handlerCalls)
 }
 
-func TestRuntimePreservesHandlerManagedBody(t *testing.T) {
+func TestRuntimeAppliesLimitsToHandlerManagedBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	runtime, err := Attach(engine, Options{
@@ -246,12 +248,14 @@ func TestRuntimePreservesHandlerManagedBody(t *testing.T) {
 		}{}, nil, http.StatusNoContent, http.StatusBadRequest,
 	).WithHandlerManagedBody())
 
-	payload := "client_id=" + strings.Repeat("x", 32)
-	var received string
+	payload := "client_id=client-1"
+	var bodyError error
 	tokens.POST("", func(c *gin.Context) {
-		body, readErr := io.ReadAll(c.Request.Body)
-		require.NoError(t, readErr)
-		received = string(body)
+		_, bodyError = io.ReadAll(c.Request.Body)
+		if bodyError != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+			return
+		}
 		c.Status(http.StatusNoContent)
 	})
 
@@ -259,8 +263,27 @@ func TestRuntimePreservesHandlerManagedBody(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/tokens", strings.NewReader(payload))
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	engine.ServeHTTP(response, request)
-	require.Equal(t, http.StatusNoContent, response.Code)
-	require.Equal(t, payload, received)
+	require.Equal(t, http.StatusBadRequest, response.Code)
+	var maxBytesError *http.MaxBytesError
+	require.ErrorAs(t, bodyError, &maxBytesError)
+	require.Equal(t, int64(8), maxBytesError.Limit)
+	require.JSONEq(t, `{"error":"invalid_request"}`, response.Body.String())
+}
+
+func TestHandlerManagedBodyLimitAppliesConfiguredReadDeadline(t *testing.T) {
+	contract := JSONContract(struct{}{}, nil, http.StatusNoContent).
+		WithHandlerManagedBody().
+		WithBodyLimits(32, 5*time.Second)
+	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{}"))
+	var deadline time.Time
+	before := time.Now()
+
+	applyHandlerManagedBodyLimits(&contract, request, httptest.NewRecorder(), func(value time.Time) error {
+		deadline = value
+		return errors.New("unsupported in test recorder")
+	})
+
+	require.WithinDuration(t, before.Add(5*time.Second), deadline, time.Second)
 }
 
 func TestRuntimeValidatesTypedPathAndQueryParameters(t *testing.T) {

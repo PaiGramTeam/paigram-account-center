@@ -8,10 +8,14 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"paigram/internal/logging"
 )
 
 type ginBridgeInput struct{}
@@ -44,6 +48,14 @@ func registerGinBridge[I any](api huma.API, op huma.Operation, endpoint gin.Hand
 			ginContext.Request.Body = io.NopCloser(bytes.NewReader(body))
 			ginContext.Request.ContentLength = int64(len(body))
 		}
+		if contract != nil && contract.handlerManagedBody {
+			applyHandlerManagedBodyLimits(
+				contract,
+				ginContext.Request,
+				ginContext.Writer,
+				humaContext.SetReadDeadline,
+			)
+		}
 
 		originalWriter := ginContext.Writer
 		captured := newBufferedGinWriter(originalWriter)
@@ -75,6 +87,26 @@ func registerGinBridge[I any](api huma.API, op huma.Operation, endpoint gin.Hand
 		copyHeaders(humaContext, captured.Header())
 		return &ginBridgeOutput{Status: captured.Status(), Body: append([]byte(nil), captured.body.Bytes()...)}, nil
 	})
+}
+
+func applyHandlerManagedBodyLimits(
+	contract *Contract,
+	request *http.Request,
+	writer http.ResponseWriter,
+	setReadDeadline func(time.Time) error,
+) {
+	if contract.bodyReadTimeout > 0 {
+		if err := setReadDeadline(time.Now().Add(contract.bodyReadTimeout)); err != nil {
+			logging.Debug("failed to set handler-managed request body deadline", zap.Error(err))
+		}
+	} else if contract.bodyReadTimeout < 0 {
+		if err := setReadDeadline(time.Time{}); err != nil {
+			logging.Debug("failed to clear handler-managed request body deadline", zap.Error(err))
+		}
+	}
+	if contract.maxBodyBytes > 0 && request.Body != nil {
+		request.Body = http.MaxBytesReader(writer, request.Body, contract.maxBodyBytes)
+	}
 }
 
 type registrationAPI struct {
