@@ -1,8 +1,14 @@
 $ErrorActionPreference = "Stop"
+$breakingBaseline = "../.git#branch=main,subdir=contracts"
 
 Push-Location $PSScriptRoot
 try {
     buf lint
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
+    buf breaking . --against $breakingBaseline
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

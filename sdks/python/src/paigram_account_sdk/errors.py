@@ -25,6 +25,10 @@ class ConflictError(AccountSDKError):
     """The request conflicts with the current remote state."""
 
 
+class CredentialError(AccountSDKError):
+    """Credential or binding state prevents the requested operation."""
+
+
 class DeadlineExceededError(AccountSDKError):
     """The remote operation exceeded the configured timeout."""
 

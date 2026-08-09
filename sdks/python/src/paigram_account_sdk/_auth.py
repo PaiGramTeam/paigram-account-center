@@ -7,7 +7,14 @@ from dataclasses import dataclass
 
 import httpx
 
-from .errors import AuthenticationError, AuthorizationError, InvalidRequestError, TransportError
+from .errors import (
+    AuthenticationError,
+    AuthorizationError,
+    DeadlineExceededError,
+    InvalidRequestError,
+    ServiceUnavailableError,
+    TransportError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +40,7 @@ class _ClientCredentialsTokenProvider:
         self._cached: _AccessToken | None = None
         self._lock = asyncio.Lock()
 
-    async def get(self) -> str:
+    async def get(self, request_id: str) -> str:
         cached = self._cached
         if cached is not None and cached.expires_at > time.monotonic():
             return cached.value
@@ -42,11 +49,11 @@ class _ClientCredentialsTokenProvider:
             cached = self._cached
             if cached is not None and cached.expires_at > time.monotonic():
                 return cached.value
-            issued = await self._issue()
+            issued = await self._issue(request_id)
             self._cached = issued
             return issued.value
 
-    async def _issue(self) -> _AccessToken:
+    async def _issue(self, request_id: str) -> _AccessToken:
         try:
             response = await self._http_client.post(
                 "/api/v1/oauth/token",
@@ -57,11 +64,12 @@ class _ClientCredentialsTokenProvider:
                     "audience": "account-center",
                     "scope": "bot.access.read bot.access.issue_ticket",
                 },
+                headers={"x-request-id": request_id},
                 timeout=self._timeout,
             )
         except httpx.TimeoutException as error:
             logger.warning("Account Center token request timed out")
-            raise TransportError("Account Center token request timed out") from error
+            raise DeadlineExceededError("Account Center token request timed out") from error
         except httpx.RequestError as error:
             logger.error("Account Center token request failed: %s", type(error).__name__)
             raise TransportError("Account Center token request failed") from error
@@ -93,6 +101,9 @@ class _ClientCredentialsTokenProvider:
             code = ""
             description = ""
         message = description or code or f"Account Center token request failed with HTTP {response.status_code}"
+        if response.status_code == 429 or response.status_code >= 500:
+            logger.warning("Account Center token endpoint is unavailable with HTTP %s", response.status_code)
+            raise ServiceUnavailableError(message)
         if code == "invalid_client" or response.status_code == 401:
             logger.warning("Account Center rejected the configured client credentials")
             raise AuthenticationError(message)

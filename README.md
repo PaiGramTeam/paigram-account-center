@@ -36,6 +36,8 @@ Run the complete local verification suite from the repository root:
 pwsh ./scripts/verify.ps1
 ```
 
+The default verification checks the pinned current PaiGram `main` baseline and requires a clean worktree. During development, `-AllowDirty` permits intentional local edits and `-SkipPaiGramCompatibility` permits an offline run.
+
 The repository intentionally does not copy build or deployment systems from the source repositories.
 
 Regenerate Go and Python contract bindings directly when a `.proto` file changes:

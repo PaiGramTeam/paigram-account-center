@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 from importlib.resources import files
 from pathlib import Path
@@ -15,13 +16,17 @@ PROTO_FILES = (
     "platform/v1/platform.proto",
     "mihomo/v1/credential.proto",
 )
+logger = logging.getLogger(__name__)
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     if OUTPUT_ROOT.exists():
+        logger.info("Removing generated Python contracts from %s", OUTPUT_ROOT)
         shutil.rmtree(OUTPUT_ROOT)
     OUTPUT_ROOT.mkdir(parents=True)
 
+    logger.info("Generating Python contracts from %d proto files", len(PROTO_FILES))
     result = protoc.main(
         [
             "grpc_tools.protoc",
@@ -34,19 +39,27 @@ def main() -> int:
         ]
     )
     if result != 0:
+        logger.error("Python contract generation failed with exit code %d", result)
         return result
 
-    for package in ("", "account", "account/v1", "platform", "platform/v1", "mihomo", "mihomo/v1"):
+    package_directories = {Path()}
+    for proto_file in PROTO_FILES:
+        parent = Path(proto_file).parent
+        package_directories.update(parent.parents)
+        package_directories.add(parent)
+    for package in package_directories:
         (OUTPUT_ROOT / package / "__init__.py").touch()
 
+    top_level_packages = {Path(proto_file).parts[0] for proto_file in PROTO_FILES}
     for generated_stub in OUTPUT_ROOT.rglob("*_pb2_grpc.py"):
         source = generated_stub.read_text(encoding="utf-8")
-        for package in ("account", "platform", "mihomo"):
+        for package in top_level_packages:
             source = source.replace(
                 f"from {package}.v1 import ",
                 f"from paigram_account_sdk._generated.{package}.v1 import ",
             )
         generated_stub.write_text(source, encoding="utf-8", newline="\n")
+    logger.info("Python contract generation completed")
     return 0
 
 

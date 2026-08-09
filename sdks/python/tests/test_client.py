@@ -7,11 +7,13 @@ import pytest
 
 from paigram_account_sdk import (
     AuthenticationError,
+    CredentialError,
     CredentialStatus,
     NotFoundError,
     PaiGramAccountClient,
     PlatformAccountStatus,
     PlatformEndpoint,
+    ServiceUnavailableError,
 )
 from paigram_account_sdk._generated.account.v1 import bot_access_pb2, bot_access_pb2_grpc
 from paigram_account_sdk._generated.platform.v1 import platform_pb2, platform_pb2_grpc
@@ -22,8 +24,12 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
         metadata = dict(context.invocation_metadata())
         if metadata.get("authorization") != "Bearer machine-token":
             await context.abort(grpc.StatusCode.UNAUTHENTICATED, "missing machine token")
+        if metadata.get("x-request-id") != "request-123":
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing request ID")
         if request.external_user_id == "missing":
             await context.abort(grpc.StatusCode.NOT_FOUND, "user not found")
+        if request.external_user_id == "inactive":
+            await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "binding is inactive")
         return bot_access_pb2.ResolveBotUserResponse(
             user_id=42,
             bot_id="paigram",
@@ -32,9 +38,11 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
         )
 
     async def ListAccessibleBindings(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_account_metadata(context)
         return bot_access_pb2.ListAccessibleBindingsResponse(bindings=[binding_proto()])
 
     async def IssueServiceTicket(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_account_metadata(context)
         if request.audience != "mihomo-service" or list(request.requested_scopes) not in (
             ["mihomo.credential.read_meta"],
             ["mihomo.credential.refresh"],
@@ -50,6 +58,7 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
 
 class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
     async def DescribePlatform(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
         return platform_pb2.DescribePlatformResponse(
             platform_key="mihomo",
             display_name="Mihomo",
@@ -63,6 +72,7 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
         )
 
     async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
         if request.service_ticket != "service-ticket" or request.platform_account_id != "binding_7_10001":
             await context.abort(grpc.StatusCode.PERMISSION_DENIED, "invalid service ticket")
         return platform_pb2.GetCredentialSummaryResponse(
@@ -89,10 +99,25 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
         )
 
     async def RefreshCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
         return platform_pb2.RefreshCredentialResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
 
     async def DeleteCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
         return platform_pb2.DeleteCredentialResponse(success=True)
+
+
+async def require_request_id(context):  # type: ignore[no-untyped-def, no-untyped-call]
+    metadata = dict(context.invocation_metadata())
+    if metadata.get("x-request-id") != "request-123":
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "missing request ID")
+
+
+async def require_account_metadata(context):  # type: ignore[no-untyped-def, no-untyped-call]
+    metadata = dict(context.invocation_metadata())
+    if metadata.get("authorization") != "Bearer machine-token":
+        await context.abort(grpc.StatusCode.UNAUTHENTICATED, "missing machine token")
+    await require_request_id(context)
 
 
 def binding_proto():  # type: ignore[no-untyped-def]
@@ -134,6 +159,7 @@ async def platform_server() -> AsyncIterator[str]:
 def token_transport() -> httpx.MockTransport:
     def issue_token(request: httpx.Request) -> httpx.Response:
         assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
+        assert request.headers["x-request-id"] == "request-123"
         assert b"client_secret=secret" in request.content
         return httpx.Response(
             200,
@@ -162,7 +188,7 @@ async def test_resolve_user_returns_public_model() -> None:
             http_transport=token_transport(),
         ) as client,
     ):
-        user = await client.resolve_user("telegram:10001")
+        user = await client.resolve_user("telegram:10001", request_id="request-123")
 
     assert user.user_id == 42
     assert user.bot_id == "paigram"
@@ -185,7 +211,7 @@ async def test_resolve_user_maps_grpc_not_found() -> None:
         ) as client,
     ):
         with pytest.raises(NotFoundError, match="user not found"):
-            await client.resolve_user("missing")
+            await client.resolve_user("missing", request_id="request-123")
 
 
 @pytest.mark.asyncio
@@ -202,7 +228,11 @@ async def test_list_bindings_returns_stable_public_models() -> None:
             http_transport=token_transport(),
         ) as client,
     ):
-        bindings = await client.list_bindings("telegram:10001", platform="mihomo")
+        bindings = await client.list_bindings(
+            "telegram:10001",
+            platform="mihomo",
+            request_id="request-123",
+        )
 
     assert len(bindings) == 1
     assert bindings[0].platform_service_key == "mihomo"
@@ -225,10 +255,11 @@ async def test_get_credential_summary_orchestrates_service_ticket() -> None:
             http_transport=token_transport(),
         ) as client,
     ):
-        binding = (await client.list_bindings("telegram:10001"))[0]
+        binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
         summary = await client.get_credential_summary(
             external_user_id="telegram:10001",
             binding=binding,
+            request_id="request-123",
         )
 
     assert summary.platform_account_id == "binding_7_10001"
@@ -252,9 +283,17 @@ async def test_refresh_and_delete_credentials_use_authorized_platform_calls() ->
             http_transport=token_transport(),
         ) as client,
     ):
-        binding = (await client.list_bindings("telegram:10001"))[0]
-        refreshed = await client.refresh_credential(external_user_id="telegram:10001", binding=binding)
-        deleted = await client.delete_credential(external_user_id="telegram:10001", binding=binding)
+        binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
+        refreshed = await client.refresh_credential(
+            external_user_id="telegram:10001",
+            binding=binding,
+            request_id="request-123",
+        )
+        deleted = await client.delete_credential(
+            external_user_id="telegram:10001",
+            binding=binding,
+            request_id="request-123",
+        )
 
     assert refreshed.status is CredentialStatus.ACTIVE
     assert deleted is True
@@ -278,4 +317,43 @@ async def test_invalid_client_maps_oauth_error() -> None:
         http_transport=transport,
     ) as client:
         with pytest.raises(AuthenticationError, match="client authentication failed"):
-            await client.resolve_user("telegram:10001")
+            await client.resolve_user("telegram:10001", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_oauth_server_failure_is_retryable() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            503,
+            json={"error": "server_error", "error_description": "temporarily unavailable"},
+        )
+    )
+    async with PaiGramAccountClient(
+        account_http_url="https://account.example.test",
+        account_grpc_target="127.0.0.1:1",
+        account_grpc_secure=False,
+        client_id="paigram",
+        client_secret="secret",
+        platform_endpoints={},
+        http_transport=transport,
+    ) as client:
+        with pytest.raises(ServiceUnavailableError, match="temporarily unavailable"):
+            await client.resolve_user("telegram:10001", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_failed_precondition_maps_credential_state() -> None:
+    async with (
+        account_server() as target,
+        PaiGramAccountClient(
+            account_http_url="https://account.example.test",
+            account_grpc_target=target,
+            account_grpc_secure=False,
+            client_id="paigram",
+            client_secret="secret",
+            platform_endpoints={},
+            http_transport=token_transport(),
+        ) as client,
+    ):
+        with pytest.raises(CredentialError, match="binding is inactive"):
+            await client.resolve_user("inactive", request_id="request-123")

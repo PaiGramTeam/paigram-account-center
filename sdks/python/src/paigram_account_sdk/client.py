@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from types import TracebackType
 from typing import TypeVar, cast
+from uuid import uuid4
 
 import grpc
 import httpx
@@ -20,6 +21,7 @@ from .errors import (
     AuthenticationError,
     AuthorizationError,
     ConflictError,
+    CredentialError,
     DeadlineExceededError,
     InvalidRequestError,
     NotFoundError,
@@ -57,8 +59,10 @@ class PaiGramAccountClient:
         account_root_certificates: bytes | None = None,
         timeout: float = 10.0,
         http_transport: httpx.AsyncBaseTransport | None = None,
+        request_id_factory: Callable[[], str] | None = None,
     ) -> None:
         if timeout <= 0:
+            logger.warning("PaiGram Account SDK rejected a non-positive timeout")
             raise InvalidRequestError("timeout must be greater than zero")
         self._timeout = timeout
         self._platform_endpoints = dict(platform_endpoints)
@@ -76,6 +80,7 @@ class PaiGramAccountClient:
         self._account = bot_access_pb2_grpc.BotAccessServiceStub(self._account_channel)  # type: ignore[no-untyped-call]
         self._platform_channels: dict[str, grpc.aio.Channel] = {}
         self._platform_stubs: dict[str, platform_pb2_grpc.PlatformServiceStub] = {}
+        self._request_id_factory = request_id_factory or (lambda: uuid4().hex)
         self._closed = False
 
     async def __aenter__(self) -> PaiGramAccountClient:
@@ -98,15 +103,18 @@ class PaiGramAccountClient:
         for channel in self._platform_channels.values():
             await channel.close()
 
-    async def resolve_user(self, external_user_id: str) -> BotUser:
+    async def resolve_user(self, external_user_id: str, *, request_id: str | None = None) -> BotUser:
         self._ensure_open()
         if not external_user_id:
+            logger.warning("PaiGram Account SDK rejected an empty external_user_id")
             raise InvalidRequestError("external_user_id is required")
+        resolved_request_id = self._resolve_request_id(request_id)
         response = cast(
             bot_access_pb2.ResolveBotUserResponse,
             await self._account_call(
                 self._account.ResolveBotUser,
                 bot_access_pb2.ResolveBotUserRequest(external_user_id=external_user_id),
+                resolved_request_id,
             ),
         )
         return BotUser(
@@ -116,10 +124,18 @@ class PaiGramAccountClient:
             external_username=response.external_username,
         )
 
-    async def list_bindings(self, external_user_id: str, platform: str = "") -> tuple[PlatformBinding, ...]:
+    async def list_bindings(
+        self,
+        external_user_id: str,
+        platform: str = "",
+        *,
+        request_id: str | None = None,
+    ) -> tuple[PlatformBinding, ...]:
         self._ensure_open()
         if not external_user_id:
+            logger.warning("PaiGram Account SDK rejected an empty external_user_id")
             raise InvalidRequestError("external_user_id is required")
+        resolved_request_id = self._resolve_request_id(request_id)
         response = cast(
             bot_access_pb2.ListAccessibleBindingsResponse,
             await self._account_call(
@@ -128,6 +144,7 @@ class PaiGramAccountClient:
                     external_user_id=external_user_id,
                     platform=platform,
                 ),
+                resolved_request_id,
             ),
         )
         return tuple(_binding_from_proto(binding) for binding in response.bindings)
@@ -140,12 +157,33 @@ class PaiGramAccountClient:
         requested_scopes: Sequence[str],
         audience: str,
         profile_id: int = 0,
+        request_id: str | None = None,
     ) -> ServiceTicket:
         self._ensure_open()
         if not external_user_id or binding_id <= 0 or not requested_scopes or not audience:
+            logger.warning("PaiGram Account SDK rejected an incomplete service ticket request")
             raise InvalidRequestError(
                 "external_user_id, a positive binding_id, requested_scopes, and audience are required"
             )
+        return await self._issue_service_ticket(
+            external_user_id=external_user_id,
+            binding_id=binding_id,
+            requested_scopes=requested_scopes,
+            audience=audience,
+            profile_id=profile_id,
+            request_id=self._resolve_request_id(request_id),
+        )
+
+    async def _issue_service_ticket(
+        self,
+        *,
+        external_user_id: str,
+        binding_id: int,
+        requested_scopes: Sequence[str],
+        audience: str,
+        profile_id: int,
+        request_id: str,
+    ) -> ServiceTicket:
         response = cast(
             bot_access_pb2.IssueServiceTicketResponse,
             await self._account_call(
@@ -157,6 +195,7 @@ class PaiGramAccountClient:
                     audience=audience,
                     profile_id=profile_id,
                 ),
+                request_id,
             ),
         )
         return ServiceTicket(
@@ -166,10 +205,18 @@ class PaiGramAccountClient:
             binding=_binding_from_proto(response.binding),
         )
 
-    async def describe_platform(self, service_key: str) -> PlatformDescriptor:
+    async def describe_platform(self, service_key: str, *, request_id: str | None = None) -> PlatformDescriptor:
+        return await self._describe_platform(service_key, self._resolve_request_id(request_id))
+
+    async def _describe_platform(self, service_key: str, request_id: str) -> PlatformDescriptor:
         stub = self._platform_stub(service_key)
         response = await _grpc_call(
-            stub.DescribePlatform(platform_pb2.DescribePlatformRequest(), timeout=self._timeout)
+            stub.DescribePlatform(
+                platform_pb2.DescribePlatformRequest(),
+                metadata=_correlation_metadata(request_id),
+                timeout=self._timeout,
+            ),
+            request_id,
         )
         schema = MessageToDict(response.credential_schema, preserving_proto_field_name=True)
         return PlatformDescriptor(
@@ -186,23 +233,25 @@ class PaiGramAccountClient:
         *,
         external_user_id: str,
         binding: PlatformBinding,
+        request_id: str | None = None,
     ) -> CredentialSummary:
-        descriptor = await self.describe_platform(binding.platform_service_key)
-        ticket = await self._ticket_for_action(
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            descriptor=descriptor,
             action_suffix="credential.read_meta",
+            request_id=resolved_request_id,
         )
-        stub = self._platform_stub(binding.platform_service_key)
         response = await _grpc_call(
             stub.GetCredentialSummary(
                 platform_pb2.GetCredentialSummaryRequest(
                     service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
+                metadata=_correlation_metadata(resolved_request_id),
                 timeout=self._timeout,
-            )
+            ),
+            resolved_request_id,
         )
         return _credential_summary_from_proto(response)
 
@@ -211,78 +260,97 @@ class PaiGramAccountClient:
         *,
         external_user_id: str,
         binding: PlatformBinding,
+        request_id: str | None = None,
     ) -> RefreshResult:
-        descriptor = await self.describe_platform(binding.platform_service_key)
-        ticket = await self._ticket_for_action(
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            descriptor=descriptor,
             action_suffix="credential.refresh",
+            request_id=resolved_request_id,
         )
-        stub = self._platform_stub(binding.platform_service_key)
         response = await _grpc_call(
             stub.RefreshCredential(
                 platform_pb2.RefreshCredentialRequest(
                     service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
+                metadata=_correlation_metadata(resolved_request_id),
                 timeout=self._timeout,
-            )
+            ),
+            resolved_request_id,
         )
         return RefreshResult(
             status=_credential_status(response.status),
             refreshed_at=_datetime_from_timestamp(response.refreshed_at),
         )
 
-    async def delete_credential(self, *, external_user_id: str, binding: PlatformBinding) -> bool:
-        descriptor = await self.describe_platform(binding.platform_service_key)
-        ticket = await self._ticket_for_action(
+    async def delete_credential(
+        self,
+        *,
+        external_user_id: str,
+        binding: PlatformBinding,
+        request_id: str | None = None,
+    ) -> bool:
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            descriptor=descriptor,
             action_suffix="credential.delete",
+            request_id=resolved_request_id,
         )
-        stub = self._platform_stub(binding.platform_service_key)
         response = await _grpc_call(
             stub.DeleteCredential(
                 platform_pb2.DeleteCredentialRequest(
                     service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
+                metadata=_correlation_metadata(resolved_request_id),
                 timeout=self._timeout,
-            )
+            ),
+            resolved_request_id,
         )
         return bool(response.success)
 
-    async def _account_call(self, method: Callable[..., Awaitable[object]], request: object) -> object:
-        token = await self._tokens.get()
+    async def _account_call(
+        self,
+        method: Callable[..., Awaitable[object]],
+        request: object,
+        request_id: str,
+    ) -> object:
+        token = await self._tokens.get(request_id)
         call = method(
             request,
-            metadata=(("authorization", f"Bearer {token}"),),
+            metadata=(("authorization", f"Bearer {token}"), *_correlation_metadata(request_id)),
             timeout=self._timeout,
         )
-        return await _grpc_call(call)
+        return await _grpc_call(call, request_id)
 
-    async def _ticket_for_action(
+    async def _authorize_platform_action(
         self,
         *,
         external_user_id: str,
         binding: PlatformBinding,
-        descriptor: PlatformDescriptor,
         action_suffix: str,
-    ) -> ServiceTicket:
+        request_id: str,
+    ) -> tuple[platform_pb2_grpc.PlatformServiceStub, ServiceTicket]:
+        descriptor = await self._describe_platform(binding.platform_service_key, request_id)
         action = _find_action(descriptor.supported_actions, action_suffix)
-        return await self.issue_service_ticket(
+        ticket = await self._issue_service_ticket(
             external_user_id=external_user_id,
             binding_id=binding.id,
             requested_scopes=(action,),
             audience=descriptor.service_audience,
+            profile_id=0,
+            request_id=request_id,
         )
+        return self._platform_stub(binding.platform_service_key), ticket
 
     def _platform_stub(self, service_key: str) -> platform_pb2_grpc.PlatformServiceStub:
         self._ensure_open()
         endpoint = self._platform_endpoints.get(service_key)
         if endpoint is None:
+            logger.warning("PaiGram Account SDK has no endpoint for platform service %s", service_key)
             raise InvalidRequestError(f"platform endpoint is not configured: {service_key}")
         existing = self._platform_stubs.get(service_key)
         if existing is not None:
@@ -299,7 +367,15 @@ class PaiGramAccountClient:
 
     def _ensure_open(self) -> None:
         if self._closed:
+            logger.warning("PaiGram Account SDK rejected an operation after close")
             raise TransportError("client is closed")
+
+    def _resolve_request_id(self, request_id: str | None) -> str:
+        resolved = request_id or self._request_id_factory()
+        if not resolved:
+            logger.error("PaiGram Account SDK request ID factory returned an empty value")
+            raise InvalidRequestError("request_id must not be empty")
+        return resolved
 
 
 def _create_channel(
@@ -309,6 +385,7 @@ def _create_channel(
     root_certificates: bytes | None,
 ) -> grpc.aio.Channel:
     if not target:
+        logger.warning("PaiGram Account SDK rejected an empty gRPC target")
         raise InvalidRequestError("gRPC target is required")
     if not secure:
         return grpc.aio.insecure_channel(target)
@@ -316,12 +393,17 @@ def _create_channel(
     return grpc.aio.secure_channel(target, credentials)
 
 
-async def _grpc_call(call: Awaitable[T]) -> T:
+async def _grpc_call(call: Awaitable[T], request_id: str) -> T:
     try:
         return await call
     except grpc.aio.AioRpcError as error:
         mapped = _map_grpc_error(error)
-        logger.warning("gRPC request failed with %s: %s", error.code().name, error.details())
+        logger.warning(
+            "gRPC request %s failed with %s: %s",
+            request_id,
+            error.code().name,
+            error.details(),
+        )
         raise mapped from error
 
 
@@ -338,9 +420,11 @@ def _map_grpc_error(error: grpc.aio.AioRpcError) -> AccountSDKError:
         error_type = NotFoundError
     elif error.code() in (grpc.StatusCode.ALREADY_EXISTS, grpc.StatusCode.ABORTED):
         error_type = ConflictError
+    elif error.code() == grpc.StatusCode.FAILED_PRECONDITION:
+        error_type = CredentialError
     elif error.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
         error_type = DeadlineExceededError
-    elif error.code() == grpc.StatusCode.UNAVAILABLE:
+    elif error.code() == grpc.StatusCode.UNAVAILABLE or error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
         error_type = ServiceUnavailableError
     else:
         error_type = TransportError
@@ -418,6 +502,7 @@ def _datetime_from_timestamp(value: Timestamp) -> datetime | None:
         return None
     converted = value.ToDatetime(tzinfo=timezone.utc)
     if not isinstance(converted, datetime):
+        logger.error("Remote service returned an invalid protobuf timestamp")
         raise TransportError("remote service returned an invalid timestamp")
     return converted
 
@@ -425,5 +510,10 @@ def _datetime_from_timestamp(value: Timestamp) -> datetime | None:
 def _find_action(actions: Sequence[str], suffix: str) -> str:
     matches = [action for action in actions if action == suffix or action.endswith(f".{suffix}")]
     if len(matches) != 1:
+        logger.warning("Platform does not advertise exactly one %s action", suffix)
         raise AuthorizationError(f"platform does not advertise exactly one {suffix} action")
     return matches[0]
+
+
+def _correlation_metadata(request_id: str) -> tuple[tuple[str, str]]:
+    return (("x-request-id", request_id),)
