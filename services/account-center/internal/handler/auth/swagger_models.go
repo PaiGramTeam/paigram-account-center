@@ -28,15 +28,15 @@ type RegisterEmailRequest struct {
 	// User email address
 	// required: true
 	// example: user@example.com
-	Email string `json:"email"`
+	Email string `json:"email" format:"email"`
 	// User password (8-72 characters)
 	// required: true
 	// example: SecurePassword123
-	Password string `json:"password"`
+	Password string `json:"password" minLength:"8" maxLength:"72"`
 	// Display name for the user
 	// required: true
 	// example: John Doe
-	DisplayName string `json:"display_name"`
+	DisplayName string `json:"display_name" minLength:"1"`
 	// User locale preference
 	// example: en_US
 	Locale string `json:"locale,omitempty"`
@@ -47,7 +47,9 @@ type RegisterEmailRequest struct {
 
 // swagger:model registerEmailResponse
 type RegisterEmailResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// New user ID
 		// example: 12345
 		UserID uint64 `json:"user_id"`
@@ -79,11 +81,11 @@ type LoginEmailRequest struct {
 	// User email address
 	// required: true
 	// example: user@example.com
-	Email string `json:"email"`
+	Email string `json:"email" format:"email"`
 	// User password
 	// required: true
 	// example: SecurePassword123
-	Password string `json:"password"`
+	Password string `json:"password" minLength:"8" maxLength:"72"`
 	// CAPTCHA token issued by Cloudflare Turnstile when risk checks require it
 	// example: 0.zrSnR7...
 	CaptchaToken string `json:"captcha_token,omitempty"`
@@ -91,7 +93,9 @@ type LoginEmailRequest struct {
 
 // swagger:model loginResponse
 type LoginResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// User ID
 		// example: 12345
 		UserID uint64 `json:"user_id"`
@@ -150,7 +154,9 @@ type LogoutRequest struct {
 
 // swagger:model logoutResponse
 type LogoutResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// Success message
 		// example: logout successful
 		Message string `json:"message"`
@@ -176,7 +182,7 @@ type VerifyEmailRequest struct {
 	// Email address to verify
 	// required: true
 	// example: user@example.com
-	Email string `json:"email"`
+	Email string `json:"email" format:"email"`
 	// Verification token
 	// required: true
 	// example: abcd1234efgh5678
@@ -185,7 +191,9 @@ type VerifyEmailRequest struct {
 
 // swagger:model verifyEmailResponse
 type VerifyEmailResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// Success message
 		// example: email verified
 		Message string `json:"message"`
@@ -221,7 +229,9 @@ type InitiateOAuthRequest struct {
 
 // swagger:model initiateOAuthResponse
 type InitiateOAuthResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// OAuth provider authorization URL
 		// example: https://accounts.google.com/o/oauth2/v2/auth?...
 		AuthURL string `json:"auth_url"`
@@ -270,7 +280,9 @@ type OAuthCallbackRequest struct {
 
 // swagger:model oauthCallbackResponse
 type OAuthCallbackResponse struct {
-	Data struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
 		// User ID. Returned for both login and bind callback success payloads.
 		// example: 12345
 		UserID uint64 `json:"user_id,omitempty"`

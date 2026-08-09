@@ -82,6 +82,10 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 	runtime, err := httpserver.Attach(engine, httpserver.Options{
 		Title:   appCfg.Name + " API",
 		Version: "1.0.0",
+		Body: httpserver.BodyOptions{
+			MaxBytes:    appCfg.MaxBodyBytes,
+			ReadTimeout: appCfg.BodyReadTimeout,
+		},
 		OpenAPI: httpserver.OpenAPIOptions{
 			Enabled: cfg.OpenAPI.Enabled,
 			Path:    cfg.OpenAPI.Path,
@@ -133,6 +137,7 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 	// Public routes - no authentication required
 	authHandler := &handler.ApiGroupApp.AuthApiGroup.Handler
 	authGroup := v1.Group("/auth")
+	registerAuthContracts(authGroup)
 	{
 		// Apply rate limiting to auth endpoints if enabled
 		if rateLimitCfg.Enabled && rateLimitStore != nil {

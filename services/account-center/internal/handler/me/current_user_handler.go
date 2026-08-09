@@ -35,15 +35,15 @@ type CurrentUserReader interface {
 	DeleteLoginMethod(context.Context, uint64, string) error
 }
 
-type createEmailRequest struct {
-	Email string `json:"email" binding:"required,email"`
+type CreateEmailRequest struct {
+	Email string `json:"email" binding:"required,email" format:"email"`
 }
 
-type patchMeRequest struct {
-	DisplayName *string `json:"display_name" binding:"omitempty,min=1,max=255"`
-	AvatarURL   *string `json:"avatar_url" binding:"omitempty,url,max=512"`
-	Bio         *string `json:"bio" binding:"omitempty,max=500"`
-	Locale      *string `json:"locale" binding:"omitempty,max=10"`
+type PatchMeRequest struct {
+	DisplayName *string `json:"display_name,omitempty" binding:"omitempty,min=1,max=255" minLength:"1" maxLength:"255"`
+	AvatarURL   *string `json:"avatar_url,omitempty" binding:"omitempty,url,max=512" format:"uri" maxLength:"512"`
+	Bio         *string `json:"bio,omitempty" binding:"omitempty,max=500" maxLength:"500"`
+	Locale      *string `json:"locale,omitempty" binding:"omitempty,max=10" maxLength:"10"`
 }
 
 var patchMeAllowedFields = map[string]struct{}{
@@ -96,7 +96,7 @@ func (h *CurrentUserHandler) PatchMe(c *gin.Context) {
 		return
 	}
 
-	var req patchMeRequest
+	var req PatchMeRequest
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		logging.Error("patch me: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)
@@ -282,7 +282,7 @@ func (h *CurrentUserHandler) CreateEmail(c *gin.Context) {
 		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	var req createEmailRequest
+	var req CreateEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("create email: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)

@@ -24,13 +24,13 @@ import (
 
 // ForgotPasswordRequest is the request payload for forgot password
 type ForgotPasswordRequest struct {
-	Email string `json:"email" binding:"required,email"`
+	Email string `json:"email" binding:"required,email" format:"email"`
 }
 
 // ResetPasswordRequest is the request payload for reset password
 type ResetPasswordRequest struct {
-	Token       string `json:"token" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=8,max=72"`
+	Token       string `json:"token" binding:"required" minLength:"1"`
+	NewPassword string `json:"new_password" binding:"required,min=8,max=72" minLength:"8" maxLength:"72"`
 }
 
 // ForgotPassword initiates password reset flow

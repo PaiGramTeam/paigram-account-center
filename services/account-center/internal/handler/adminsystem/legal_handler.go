@@ -17,7 +17,7 @@ type LegalReader interface {
 	UpsertDocuments(context.Context, []servicesystemconfig.UpsertLegalDocumentInput, uint64) ([]servicesystemconfig.LegalDocumentView, error)
 }
 
-type upsertLegalDocumentsRequest struct {
+type UpsertLegalDocumentsRequest struct {
 	Documents []servicesystemconfig.UpsertLegalDocumentInput `json:"documents"`
 }
 
@@ -45,7 +45,7 @@ func (h *LegalHandler) GetPublishedDocuments(c *gin.Context) {
 // swagger:route PATCH /api/v1/admin/system/settings/legal admin-system upsertLegalDocuments
 // Upsert legal documents and return all revisions.
 func (h *LegalHandler) UpsertDocuments(c *gin.Context) {
-	var req upsertLegalDocumentsRequest
+	var req UpsertLegalDocumentsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "invalid request payload")
 		return

@@ -22,7 +22,9 @@ func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
 }
 
 func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
-	adminAudit := rg.Group("/admin")
+	adminAudit := httpserver.WithAccess(rg.Group("/admin"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+	})
 	adminAudit.Use(middleware.RequireRoleMiddleware("admin"), middleware.CasbinMiddleware())
 	{
 		adminAudit.GET("/audit-logs", handler.ApiGroupApp.AdminAuditApiGroup.AuditHandler.ListAuditLogs)

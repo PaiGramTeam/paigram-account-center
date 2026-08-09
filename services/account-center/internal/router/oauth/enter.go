@@ -1,11 +1,15 @@
 package oauth
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	"paigram/internal/handler"
+	handleroauth "paigram/internal/handler/oauth"
 	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
+	"paigram/internal/service/credentials"
 )
 
 // RouterGroup wires the public OAuth 2.0 token endpoint plus the admin
@@ -26,6 +30,10 @@ func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
 }
 
 func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
+	rg.RegisterContract(http.MethodPost, "/oauth/token", httpserver.FormContract(
+		handleroauth.TokenRequest{}, credentials.IssuedToken{}, http.StatusOK,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusInternalServerError,
+	))
 	registerPublic(r, rg)
 }
 
@@ -41,6 +49,7 @@ func (r *RouterGroup) InitAdmin(rg *gin.RouterGroup) {
 }
 
 func (r *RouterGroup) RegisterAdmin(rg *httpserver.Group) {
+	registerAdminContracts(rg)
 	registerAdmin(r, rg)
 }
 
@@ -49,7 +58,9 @@ func registerAdmin[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	permissionCheck := middleware.CasbinMiddleware()
 	credentialsHandler := &handler.ApiGroupApp.OAuthApiGroup.CredentialsHandler
 
-	credentialsAdmin := rg.Group("/admin/service-credentials")
+	credentialsAdmin := httpserver.WithAccess(rg.Group("/admin/service-credentials"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+	})
 	credentialsAdmin.Use(adminGate, permissionCheck)
 	{
 		credentialsAdmin.GET("", credentialsHandler.List)

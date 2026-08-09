@@ -4,9 +4,10 @@ import "sync"
 
 // Access describes the authentication boundary of an HTTP operation.
 type Access struct {
-	Public        bool
-	Authenticated bool
-	Permission    string
+	Public             bool
+	Authenticated      bool
+	Permission         string
+	DynamicPermissions []string
 }
 
 // Route is the stable catalog entry emitted for a registered operation.

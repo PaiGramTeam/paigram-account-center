@@ -1,5 +1,11 @@
 package response
 
+type Envelope[T any] struct {
+	Code    int    `json:"code"`
+	Data    T      `json:"data"`
+	Message string `json:"message"`
+}
+
 type PageData struct {
 	List       interface{} `json:"list"`
 	Total      int64       `json:"total"`

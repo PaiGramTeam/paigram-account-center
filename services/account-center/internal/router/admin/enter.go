@@ -18,6 +18,7 @@ func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
 }
 
 func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	registerContracts(rg)
 	registerRoutes(r, rg)
 }
 
@@ -25,7 +26,9 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	adminGate := middleware.RequireRoleMiddleware("admin")
 	permissionCheck := middleware.CasbinMiddleware()
 	userHandler := &handler.ApiGroupApp.UserApiGroup.Handler
-	users := rg.Group("/admin/users")
+	users := httpserver.WithAccess(rg.Group("/admin/users"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+	})
 	users.Use(adminGate)
 	{
 		users.GET("", permissionCheck, userHandler.ListUsers)
@@ -49,7 +52,9 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	}
 
 	authorityHandler := &handler.ApiGroupApp.AuthorityApiGroup.AuthorityHandler
-	roles := rg.Group("/admin/roles")
+	roles := httpserver.WithAccess(rg.Group("/admin/roles"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+	})
 	roles.Use(adminGate)
 	{
 		roles.POST("", permissionCheck, authorityHandler.CreateAuthority)

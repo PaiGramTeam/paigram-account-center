@@ -10,6 +10,8 @@
 package meidentities
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -32,6 +34,10 @@ func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
 }
 
 func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	rg.RegisterContract(http.MethodDelete, "/me/bot-identities/:botId", httpserver.ResponseContract(
+		nil, http.StatusNoContent,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError,
+	))
 	registerRoutes(r, rg)
 }
 

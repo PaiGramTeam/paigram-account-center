@@ -71,8 +71,8 @@ type PutConsumerGrantRequest struct {
 }
 
 type PatchBindingRequest struct {
-	DisplayName        *string         `json:"display_name"`
-	PlatformServiceKey json.RawMessage `json:"platform_service_key"`
+	DisplayName        *string         `json:"display_name,omitempty"`
+	PlatformServiceKey json.RawMessage `json:"platform_service_key,omitempty"`
 }
 
 type PatchPrimaryProfileRequest struct {

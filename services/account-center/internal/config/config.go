@@ -82,14 +82,16 @@ type FrontendConfig struct {
 
 // AppConfig holds HTTP server configuration.
 type AppConfig struct {
-	Name           string     `mapstructure:"name"`
-	Host           string     `mapstructure:"host"`
-	Port           int        `mapstructure:"port"`
-	Mode           string     `mapstructure:"mode"`
-	TrustedProxies []string   `mapstructure:"trusted_proxies"` // Trusted proxy CIDR ranges for X-Forwarded-For
-	RealIPHeader   string     `mapstructure:"real_ip_header"`  // Custom header for real IP (e.g., "CF-Connecting-IP")
-	IPv6Subnet     int        `mapstructure:"ipv6_subnet"`     // IPv6 subnet prefix length for rate limiting (default: 64)
-	CORS           CORSConfig `mapstructure:"cors"`
+	Name            string        `mapstructure:"name"`
+	Host            string        `mapstructure:"host"`
+	Port            int           `mapstructure:"port"`
+	Mode            string        `mapstructure:"mode"`
+	MaxBodyBytes    int64         `mapstructure:"max_body_bytes"`
+	BodyReadTimeout time.Duration `mapstructure:"body_read_timeout"`
+	TrustedProxies  []string      `mapstructure:"trusted_proxies"` // Trusted proxy CIDR ranges for X-Forwarded-For
+	RealIPHeader    string        `mapstructure:"real_ip_header"`  // Custom header for real IP (e.g., "CF-Connecting-IP")
+	IPv6Subnet      int           `mapstructure:"ipv6_subnet"`     // IPv6 subnet prefix length for rate limiting (default: 64)
+	CORS            CORSConfig    `mapstructure:"cors"`
 }
 
 // CORSConfig holds HTTP CORS configuration.

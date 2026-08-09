@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -28,6 +29,17 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 	})
 
 	widgets := runtime.V1.Group("/widgets").WithAccess(Access{Authenticated: true})
+	widgets.RegisterContract(http.MethodPost, "", JSONContract(
+		struct {
+			Name string `json:"name" minLength:"1"`
+		}{},
+		struct {
+			Name string `json:"name"`
+		}{},
+		http.StatusCreated,
+		http.StatusBadRequest,
+	))
+	widgets.RegisterContract(http.MethodPost, "/:widgetId/refresh", ResponseContract(nil, http.StatusAccepted))
 	widgets.GET("/:widgetId", func(c *gin.Context) {
 		c.Set("route_middleware", true)
 		c.Next()
@@ -68,19 +80,31 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 	require.JSONEq(t, `{"name":"created"}`, createResponse.Body.String())
 	require.Equal(t, 2, humaCalls)
 
+	invalidResponse := httptest.NewRecorder()
+	invalidRequest := httptest.NewRequest(http.MethodPost, "/api/v1/widgets", strings.NewReader(`{}`))
+	invalidRequest.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(invalidResponse, invalidRequest)
+	require.Equal(t, http.StatusBadRequest, invalidResponse.Code)
+	var invalidBody humaCompatibilityError
+	require.NoError(t, json.Unmarshal(invalidResponse.Body.Bytes(), &invalidBody))
+	require.Equal(t, http.StatusBadRequest, invalidBody.Code)
+	require.Equal(t, "request body validation failed", invalidBody.Message)
+	require.NotNil(t, invalidBody.Data)
+	require.Equal(t, 3, humaCalls)
+
 	deleteResponse := httptest.NewRecorder()
 	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/widgets/widget-1", nil)
 	engine.ServeHTTP(deleteResponse, deleteRequest)
 	require.Equal(t, http.StatusNoContent, deleteResponse.Code)
 	require.Empty(t, deleteResponse.Body.String())
-	require.Equal(t, 3, humaCalls)
+	require.Equal(t, 4, humaCalls)
 
 	refreshResponse := httptest.NewRecorder()
 	refreshRequest := httptest.NewRequest(http.MethodPost, "/api/v1/widgets/widget-1/refresh", nil)
 	engine.ServeHTTP(refreshResponse, refreshRequest)
 	require.Equal(t, http.StatusAccepted, refreshResponse.Code)
 	require.Empty(t, refreshResponse.Body.String())
-	require.Equal(t, 4, humaCalls)
+	require.Equal(t, 5, humaCalls)
 
 	specResponse := httptest.NewRecorder()
 	specRequest := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
@@ -88,6 +112,13 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 	require.Equal(t, http.StatusOK, specResponse.Code)
 	var spec struct {
 		Paths map[string]map[string]struct {
+			RequestBody *struct {
+				Required bool `json:"required"`
+				Content  map[string]struct {
+					Schema json.RawMessage `json:"schema"`
+				} `json:"content"`
+			} `json:"requestBody"`
+			Responses  map[string]json.RawMessage `json:"responses"`
 			Parameters []struct {
 				Name     string `json:"name"`
 				In       string `json:"in"`
@@ -103,6 +134,18 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 	require.Equal(t, "widgetId", parameters[0].Name)
 	require.Equal(t, "path", parameters[0].In)
 	require.True(t, parameters[0].Required)
+	createOperation := spec.Paths["/api/v1/widgets"]["post"]
+	require.NotNil(t, createOperation.RequestBody)
+	require.True(t, createOperation.RequestBody.Required)
+	require.Contains(t, createOperation.RequestBody.Content, "application/json")
+	require.NotEmpty(t, createOperation.RequestBody.Content["application/json"].Schema)
+	require.Contains(t, createOperation.Responses, "201")
+	require.Contains(t, createOperation.Responses, "400")
+	require.NotContains(t, createOperation.Responses, "200")
+	require.NotContains(t, createOperation.Responses, "202")
+	refreshOperation := spec.Paths["/api/v1/widgets/{widgetId}/refresh"]["post"]
+	require.Nil(t, refreshOperation.RequestBody)
+	require.Contains(t, refreshOperation.Responses, "202")
 
 	routes := runtime.Catalog.Routes()
 	require.Len(t, routes, 4)
@@ -110,10 +153,79 @@ func TestRuntimeRegistersGinRouteAndHumaOperation(t *testing.T) {
 	require.True(t, routes[0].Access.Authenticated)
 }
 
-func TestCompatibilitySuccessResponsesCoverGinStatusVariants(t *testing.T) {
-	require.Contains(t, compatibilitySuccessResponses(http.MethodPost), "201")
-	require.Contains(t, compatibilitySuccessResponses(http.MethodPost), "202")
-	require.Contains(t, compatibilitySuccessResponses(http.MethodDelete), "204")
+func TestRuntimeUsesConfiguredBodyLimitAndCompatibilityError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	runtime, err := Attach(engine, Options{
+		Title: "Test API", Version: "1.0.0", Body: BodyOptions{MaxBytes: 8},
+	})
+	require.NoError(t, err)
+	widgets := runtime.V1.Group("/widgets").WithAccess(Access{Public: true})
+	widgets.RegisterContract(http.MethodPost, "", JSONContract(
+		struct {
+			Name string `json:"name"`
+		}{}, nil, http.StatusNoContent, http.StatusBadRequest, http.StatusRequestEntityTooLarge,
+	))
+	handlerCalled := false
+	widgets.POST("", func(c *gin.Context) {
+		handlerCalled = true
+		c.Status(http.StatusNoContent)
+	})
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/widgets", strings.NewReader(`{"name":"too long"}`))
+	request.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(response, request)
+	require.Equal(t, http.StatusRequestEntityTooLarge, response.Code)
+	require.False(t, handlerCalled)
+	var body humaCompatibilityError
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	require.Equal(t, http.StatusRequestEntityTooLarge, body.Code)
+	require.NotEmpty(t, body.Message)
+}
+
+func TestRuntimeValidatesFormContractBeforeGinHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	runtime, err := Attach(engine, Options{Title: "Test API", Version: "1.0.0"})
+	require.NoError(t, err)
+	tokens := runtime.V1.Group("/tokens").WithAccess(Access{Public: true})
+	tokens.RegisterContract(http.MethodPost, "", FormContract(
+		struct {
+			ClientID string `json:"client_id" minLength:"1"`
+			Audience string `json:"audience" minLength:"1"`
+		}{}, nil, http.StatusNoContent, http.StatusBadRequest,
+	))
+	handlerCalls := 0
+	tokens.POST("", func(c *gin.Context) {
+		handlerCalls++
+		require.NoError(t, c.Request.ParseForm())
+		require.Equal(t, "client-1", c.Request.Form.Get("client_id"))
+		c.Status(http.StatusNoContent)
+	})
+
+	validForm := url.Values{"client_id": {"client-1"}, "audience": {"paigram"}}
+	validResponse := httptest.NewRecorder()
+	validRequest := httptest.NewRequest(http.MethodPost, "/api/v1/tokens", strings.NewReader(validForm.Encode()))
+	validRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	engine.ServeHTTP(validResponse, validRequest)
+	require.Equal(t, http.StatusNoContent, validResponse.Code)
+	require.Equal(t, 1, handlerCalls)
+
+	invalidForm := url.Values{"client_id": {"client-1"}}
+	invalidResponse := httptest.NewRecorder()
+	invalidRequest := httptest.NewRequest(http.MethodPost, "/api/v1/tokens", strings.NewReader(invalidForm.Encode()))
+	invalidRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	engine.ServeHTTP(invalidResponse, invalidRequest)
+	require.Equal(t, http.StatusBadRequest, invalidResponse.Code)
+	require.Equal(t, 1, handlerCalls)
+}
+
+func TestCompatibilitySuccessResponsesAreRouteSpecific(t *testing.T) {
+	require.Equal(t, http.StatusCreated, compatibilitySuccessStatus(http.MethodPost, "/api/v1/auth/register"))
+	require.Equal(t, http.StatusOK, compatibilitySuccessStatus(http.MethodPost, "/api/v1/auth/login"))
+	require.Equal(t, http.StatusNoContent, compatibilitySuccessStatus(http.MethodDelete, "/api/v1/me/sessions/{sessionId}"))
+	require.NotContains(t, compatibilitySuccessResponses(http.MethodPost, "/api/v1/auth/login"), "201")
 }
 
 func TestRuntimeCanDisableDocumentationRoutes(t *testing.T) {

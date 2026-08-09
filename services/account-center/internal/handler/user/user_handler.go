@@ -62,7 +62,7 @@ type UserServiceInterface interface {
 
 type ReplaceUserRolesRequest struct {
 	RoleIDs       []uint64 `json:"role_ids"`
-	PrimaryRoleID *uint64  `json:"primary_role_id"`
+	PrimaryRoleID *uint64  `json:"primary_role_id,omitempty"`
 }
 
 type PatchPrimaryRoleRequest struct {

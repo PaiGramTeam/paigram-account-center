@@ -37,15 +37,15 @@ type CreatePlatformServiceRequest struct {
 }
 
 type UpdatePlatformServiceRequest struct {
-	PlatformKey      *string         `json:"platform_key"`
-	DisplayName      *string         `json:"display_name"`
-	ServiceKey       *string         `json:"service_key"`
-	ServiceAudience  *string         `json:"service_audience"`
-	DiscoveryType    *string         `json:"discovery_type"`
-	Endpoint         *string         `json:"endpoint"`
-	Enabled          *bool           `json:"enabled"`
-	SupportedActions *[]string       `json:"supported_actions"`
-	CredentialSchema *map[string]any `json:"credential_schema"`
+	PlatformKey      *string         `json:"platform_key,omitempty"`
+	DisplayName      *string         `json:"display_name,omitempty"`
+	ServiceKey       *string         `json:"service_key,omitempty"`
+	ServiceAudience  *string         `json:"service_audience,omitempty"`
+	DiscoveryType    *string         `json:"discovery_type,omitempty"`
+	Endpoint         *string         `json:"endpoint,omitempty"`
+	Enabled          *bool           `json:"enabled,omitempty"`
+	SupportedActions *[]string       `json:"supported_actions,omitempty"`
+	CredentialSchema *map[string]any `json:"credential_schema,omitempty"`
 }
 
 // AdminHandler manages admin platform registry endpoints.

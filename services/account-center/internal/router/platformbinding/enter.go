@@ -18,6 +18,7 @@ func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
 }
 
 func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	registerContracts(rg)
 	registerRoutes(r, rg)
 }
 
@@ -41,7 +42,9 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 		me.PUT("/platform-accounts/:bindingId/consumer-grants/:consumer", meHandler.PutConsumerGrant)
 	}
 
-	admin := rg.Group("/admin/platform-accounts")
+	admin := httpserver.WithAccess(rg.Group("/admin/platform-accounts"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+	})
 	admin.Use(middleware.RequireRoleMiddleware("admin"), middleware.CasbinMiddleware())
 	{
 		admin.GET("", adminHandler.ListBindings)

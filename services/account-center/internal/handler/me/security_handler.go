@@ -13,27 +13,27 @@ import (
 	serviceme "paigram/internal/service/me"
 )
 
-type updatePasswordRequest struct {
-	OldPassword         string `json:"old_password" binding:"required"`
-	NewPassword         string `json:"new_password" binding:"required,min=8,max=72"`
-	RevokeOtherSessions bool   `json:"revoke_other_sessions"`
+type UpdatePasswordRequest struct {
+	OldPassword         string `json:"old_password" binding:"required" minLength:"1"`
+	NewPassword         string `json:"new_password" binding:"required,min=8,max=72" minLength:"8" maxLength:"72"`
+	RevokeOtherSessions bool   `json:"revoke_other_sessions,omitempty"`
 }
 
-type setupTwoFactorRequest struct {
-	Password string `json:"password" binding:"required"`
+type SetupTwoFactorRequest struct {
+	Password string `json:"password" binding:"required" minLength:"1"`
 }
 
-type confirmTwoFactorRequest struct {
-	Code string `json:"code" binding:"required,len=6"`
+type ConfirmTwoFactorRequest struct {
+	Code string `json:"code" binding:"required,len=6" minLength:"6" maxLength:"6"`
 }
 
-type disableTwoFactorRequest struct {
-	Password string `json:"password" binding:"required"`
-	Code     string `json:"code" binding:"required,len=6"`
+type DisableTwoFactorRequest struct {
+	Password string `json:"password" binding:"required" minLength:"1"`
+	Code     string `json:"code" binding:"required,len=6" minLength:"6" maxLength:"6"`
 }
 
-type regenerateBackupCodesRequest struct {
-	Password string `json:"password" binding:"required"`
+type RegenerateBackupCodesRequest struct {
+	Password string `json:"password" binding:"required" minLength:"1"`
 }
 
 // SecurityReaderWriter describes the security service dependency.
@@ -117,7 +117,7 @@ func (h *SecurityHandler) UpdatePassword(c *gin.Context) {
 		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	var req updatePasswordRequest
+	var req UpdatePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("update password: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)
@@ -161,7 +161,7 @@ func (h *SecurityHandler) SetupTwoFactor(c *gin.Context) {
 		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	var req setupTwoFactorRequest
+	var req SetupTwoFactorRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("setup 2FA: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)
@@ -203,7 +203,7 @@ func (h *SecurityHandler) ConfirmTwoFactor(c *gin.Context) {
 		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	var req confirmTwoFactorRequest
+	var req ConfirmTwoFactorRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("confirm 2FA: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)
@@ -246,7 +246,7 @@ func (h *SecurityHandler) DisableTwoFactor(c *gin.Context) {
 		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	var req disableTwoFactorRequest
+	var req DisableTwoFactorRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("disable 2FA: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)
@@ -289,7 +289,7 @@ func (h *SecurityHandler) RegenerateBackupCodes(c *gin.Context) {
 		response.Unauthorized(c, "user not authenticated")
 		return
 	}
-	var req regenerateBackupCodesRequest
+	var req RegenerateBackupCodesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logging.Error("regenerate backup codes: invalid request body", zap.Error(err), zap.Uint64("user_id", userID))
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid request body", nil)

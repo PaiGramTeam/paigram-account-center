@@ -10,6 +10,8 @@
 package telegramoidc
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	"paigram/internal/handler"
@@ -32,6 +34,14 @@ func (r *RouterGroup) InitPublic(rg *gin.RouterGroup) {
 }
 
 func (r *RouterGroup) RegisterPublic(rg *httpserver.Group) {
+	rg.RegisterContract(http.MethodGet, "/auth/telegram/start", httpserver.ResponseContract(
+		nil, http.StatusFound,
+		http.StatusBadRequest, http.StatusServiceUnavailable, http.StatusInternalServerError,
+	))
+	rg.RegisterContract(http.MethodGet, "/auth/telegram/callback", httpserver.ResponseContract(
+		nil, http.StatusFound,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusBadGateway, http.StatusInternalServerError,
+	))
 	registerPublic(r, rg)
 }
 

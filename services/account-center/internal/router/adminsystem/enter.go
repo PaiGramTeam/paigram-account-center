@@ -18,13 +18,16 @@ func (r *RouterGroup) Init(rg *gin.RouterGroup, _ *gorm.DB) {
 }
 
 func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
+	registerContracts(rg)
 	registerRoutes(r, rg)
 }
 
 func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	adminGate := middleware.RequireRoleMiddleware("admin")
 	permissionCheck := middleware.CasbinMiddleware()
-	adminSystem := rg.Group("/admin/system")
+	adminSystem := httpserver.WithAccess(rg.Group("/admin/system"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"},
+	})
 	adminSystem.Use(adminGate, permissionCheck)
 	{
 		settings := adminSystem.Group("/settings")

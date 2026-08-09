@@ -13,9 +13,19 @@ import (
 
 // rfc6749ErrorResponse is the RFC 6749 §5.2 token-error-response shape.
 // Content-Type stays application/json per the same section.
-type rfc6749ErrorResponse struct {
+type TokenErrorResponse struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description,omitempty"`
+}
+
+type rfc6749ErrorResponse = TokenErrorResponse
+
+type TokenRequest struct {
+	GrantType    string `json:"grant_type" enum:"client_credentials"`
+	ClientID     string `json:"client_id" minLength:"1"`
+	ClientSecret string `json:"client_secret" minLength:"1"`
+	Audience     string `json:"audience" minLength:"1"`
+	Scope        string `json:"scope,omitempty"`
 }
 
 // rfc6749 error codes (§5.2) we emit.

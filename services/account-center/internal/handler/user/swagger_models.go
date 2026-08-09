@@ -216,15 +216,18 @@ type CreateUserRequest struct {
 	// User email address
 	// required: true
 	// example: user@example.com
-	Email string `json:"email"`
+	Email string `json:"email" format:"email"`
 	// User display name
 	// required: true
 	// example: John Doe
-	DisplayName string `json:"display_name"`
+	DisplayName string `json:"display_name" minLength:"1" maxLength:"255"`
 	// User password (8-72 characters)
 	// required: true
 	// example: SecurePassword123
-	Password string `json:"password"`
+	Password         string `json:"password" minLength:"8" maxLength:"72"`
+	PrimaryLoginType string `json:"primary_login_type" enum:"email,google,github,telegram"`
+	AvatarURL        string `json:"avatar_url,omitempty" format:"uri"`
+	Bio              string `json:"bio,omitempty" maxLength:"500"`
 	// User roles
 	// example: ["user"]
 	Roles []string `json:"roles,omitempty"`
@@ -265,16 +268,15 @@ type updateUserParams struct {
 type UpdateUserRequest struct {
 	// User display name
 	// example: John Doe
-	DisplayName string `json:"display_name,omitempty"`
-	// User status
-	// example: suspended
-	Status string `json:"status,omitempty"`
+	DisplayName *string `json:"display_name,omitempty" minLength:"1" maxLength:"255"`
+	AvatarURL   *string `json:"avatar_url,omitempty" format:"uri"`
+	Bio         *string `json:"bio,omitempty" maxLength:"500"`
 	// User roles
 	// example: ["user", "moderator"]
-	Roles []string `json:"roles,omitempty"`
+	Roles *[]string `json:"roles,omitempty"`
 	// User locale
 	// example: en_US
-	Locale string `json:"locale,omitempty"`
+	Locale *string `json:"locale,omitempty"`
 }
 
 // swagger:model updateUserResponse
