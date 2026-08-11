@@ -12,7 +12,7 @@ type AccountProfile struct {
 	Nickname             string    `gorm:"size:255;not null"`
 	Level                int       `gorm:"not null;default:0"`
 	IsDefault            bool      `gorm:"not null;default:false"`
-	DefaultProfileMarker *int      `gorm:"->;type:tinyint generated always as (if(is_default = true, 1, null)) stored;uniqueIndex:uniq_default_profile_per_binding,priority:2"`
+	DefaultProfileMarker *int      `gorm:"->;type:smallint generated always as (case when is_default then 1 else null end) stored;uniqueIndex:uniq_default_profile_per_binding,priority:2"`
 	DiscoveredAt         time.Time `gorm:"not null;default:CURRENT_TIMESTAMP(3)"`
 	UpdatedAt            time.Time
 }

@@ -315,8 +315,7 @@ func (x *Server_GRPC) GetTimeoutSeconds() int32 {
 
 type Data_Database struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Driver        string                 `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
-	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Dsn           string                 `protobuf:"bytes,2,opt,name=dsn,proto3" json:"dsn,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -351,16 +350,9 @@ func (*Data_Database) Descriptor() ([]byte, []int) {
 	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
 }
 
-func (x *Data_Database) GetDriver() string {
+func (x *Data_Database) GetDsn() string {
 	if x != nil {
-		return x.Driver
-	}
-	return ""
-}
-
-func (x *Data_Database) GetSource() string {
-	if x != nil {
-		return x.Source
+		return x.Dsn
 	}
 	return ""
 }
@@ -447,13 +439,12 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12'\n" +
-	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\"\x9c\x02\n" +
+	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\"\x84\x02\n" +
 	"\x04Data\x12?\n" +
 	"\bdatabase\x18\x01 \x01(\v2#.platform.mihomo.conf.Data.DatabaseR\bdatabase\x126\n" +
-	"\x05redis\x18\x02 \x01(\v2 .platform.mihomo.conf.Data.RedisR\x05redis\x1a:\n" +
-	"\bDatabase\x12\x16\n" +
-	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\x1a_\n" +
+	"\x05redis\x18\x02 \x01(\v2 .platform.mihomo.conf.Data.RedisR\x05redis\x1a\"\n" +
+	"\bDatabase\x12\x10\n" +
+	"\x03dsn\x18\x02 \x01(\tR\x03dsnJ\x04\b\x01\x10\x02\x1a_\n" +
 	"\x05Redis\x12\x12\n" +
 	"\x04addr\x18\x01 \x01(\tR\x04addr\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x0e\n" +

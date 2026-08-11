@@ -14,10 +14,35 @@ func TestBindingFirstMigrationDoesNotDeleteRows(t *testing.T) {
 	migration := readMigrationForStaticTest(t, "000006_binding_first_devices_profiles_and_grant_invalidations.up.sql")
 	normalized := normalizeSQLForStaticTest(migration)
 
-	require.Regexp(t, regexp.MustCompile(`(?is)SIGNAL\s+SQLSTATE\s+'45000'[^;]*DEVICE_RECORDS`), migration)
-	require.Regexp(t, regexp.MustCompile(`(?is)SIGNAL\s+SQLSTATE\s+'45000'[^;]*ACCOUNT_PROFILES`), migration)
+	require.Regexp(t, regexp.MustCompile(`(?is)RAISE\s+EXCEPTION[^;]*DEVICE_RECORDS`), migration)
+	require.Regexp(t, regexp.MustCompile(`(?is)RAISE\s+EXCEPTION[^;]*ACCOUNT_PROFILES`), migration)
 	assertNoDestructiveTableMutation(t, normalized, "DEVICE_RECORDS")
 	assertNoDestructiveTableMutation(t, normalized, "ACCOUNT_PROFILES")
+}
+
+func TestMigrationsUsePostgreSQLDialect(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("..", "..", "initialize", "migrate", "sql", "*.sql"))
+	require.NoError(t, err)
+	require.NotEmpty(t, paths)
+
+	forbidden := []string{
+		"AUTO_INCREMENT",
+		"BIGINT UNSIGNED",
+		"CREATE PROCEDURE",
+		"DATETIME(3)",
+		"ENGINE=INNODB",
+		"ON UPDATE CURRENT_TIMESTAMP",
+		"SIGNAL SQLSTATE",
+		"SUBSTRING_INDEX",
+	}
+	for _, path := range paths {
+		contents, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		normalized := strings.ToUpper(string(contents))
+		for _, token := range forbidden {
+			require.NotContains(t, normalized, token, "%s contains MySQL-only token %q", filepath.Base(path), token)
+		}
+	}
 }
 
 func TestBindingFirstMigrationPrechecksProfileDuplicatesBeforeDDL(t *testing.T) {

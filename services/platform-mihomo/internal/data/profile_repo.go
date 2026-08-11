@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -118,8 +118,8 @@ func mapDefaultProfileDuplicateError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var mysqlErr *mysql.MySQLError
-	if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 && strings.Contains(mysqlErr.Message, "uniq_default_profile_per_binding") {
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) && postgresErr.Code == "23505" && postgresErr.ConstraintName == "uniq_default_profile_per_binding" {
 		return ErrDefaultProfileAlreadyExists
 	}
 	if strings.Contains(err.Error(), "default_profile_marker") || strings.Contains(err.Error(), "uniq_default_profile_per_binding") {

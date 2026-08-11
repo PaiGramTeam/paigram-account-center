@@ -13,11 +13,10 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/redis/go-redis/v9"
 )
-
-const defaultDatabaseConfig = "charset=utf8mb4&parseTime=True&loc=UTC&multiStatements=true"
 
 type Source string
 
@@ -28,17 +27,13 @@ const (
 )
 
 type Env struct {
-	DatabaseAddr     string
-	DatabaseUsername string
-	DatabasePassword string
-	DatabaseBaseName string
-	DatabaseConfig   string
-	RedisAddr        string
-	RedisPassword    string
-	RedisDB          int
-	RedisPrefix      string
-	EnvFile          string
-	Sources          map[string]Source
+	DatabaseDSN   string
+	RedisAddr     string
+	RedisPassword string
+	RedisDB       int
+	RedisPrefix   string
+	EnvFile       string
+	Sources       map[string]Source
 }
 
 func Load(repoRoot string) (Env, error) {
@@ -49,11 +44,7 @@ func Load(repoRoot string) (Env, error) {
 	}
 
 	env := Env{EnvFile: envFile, Sources: map[string]Source{}}
-	env.DatabaseAddr = pickString(env.Sources, "PAI_TEST_DATABASE_ADDR", fileValues)
-	env.DatabaseUsername = pickString(env.Sources, "PAI_TEST_DATABASE_USERNAME", fileValues)
-	env.DatabasePassword = pickString(env.Sources, "PAI_TEST_DATABASE_PASSWORD", fileValues)
-	env.DatabaseBaseName = pickString(env.Sources, "PAI_TEST_DATABASE_DBNAME", fileValues)
-	env.DatabaseConfig = pickStringDefault(env.Sources, "PAI_TEST_DATABASE_CONFIG", fileValues, defaultDatabaseConfig)
+	env.DatabaseDSN = pickString(env.Sources, "PAI_TEST_DATABASE_DSN", fileValues)
 	env.RedisAddr = pickString(env.Sources, "PAI_TEST_REDIS_ADDR", fileValues)
 	env.RedisPassword = pickString(env.Sources, "PAI_TEST_REDIS_PASSWORD", fileValues)
 	redisDB, err := pickIntDefault(env.Sources, "PAI_TEST_REDIS_DB", fileValues, 0)
@@ -73,12 +64,8 @@ func (e Env) Summary(generatedDBName, generatedRedisPrefix, gowork string, requi
 
 	return []string{
 		fmt.Sprintf("env.file=%s", valueOrUnset(e.EnvFile)),
-		fmt.Sprintf("database.addr=%s (source=%s)", valueOrUnset(e.DatabaseAddr), sourceOrUnset(e.Sources, "PAI_TEST_DATABASE_ADDR")),
-		fmt.Sprintf("database.username=%s (source=%s)", valueOrUnset(e.DatabaseUsername), sourceOrUnset(e.Sources, "PAI_TEST_DATABASE_USERNAME")),
-		fmt.Sprintf("database.password=%s (source=%s)", redactSecret(e.DatabasePassword), sourceOrUnset(e.Sources, "PAI_TEST_DATABASE_PASSWORD")),
-		fmt.Sprintf("database.base=%s (source=%s)", valueOrUnset(e.DatabaseBaseName), sourceOrUnset(e.Sources, "PAI_TEST_DATABASE_DBNAME")),
+		fmt.Sprintf("postgres.dsn=%s (source=%s)", redactSecret(e.DatabaseDSN), sourceOrUnset(e.Sources, "PAI_TEST_DATABASE_DSN")),
 		fmt.Sprintf("database.name=%s", valueOrUnset(generatedDBName)),
-		fmt.Sprintf("database.config=%s (source=%s)", valueOrUnset(e.DatabaseConfig), sourceOrUnset(e.Sources, "PAI_TEST_DATABASE_CONFIG")),
 		fmt.Sprintf("redis.required=%t", requireRedis),
 		fmt.Sprintf("redis.addr=%s (source=%s)", valueOrUnset(e.RedisAddr), sourceOrUnset(e.Sources, "PAI_TEST_REDIS_ADDR")),
 		fmt.Sprintf("redis.password=%s (source=%s)", redactSecret(e.RedisPassword), sourceOrUnset(e.Sources, "PAI_TEST_REDIS_PASSWORD")),
@@ -88,16 +75,27 @@ func (e Env) Summary(generatedDBName, generatedRedisPrefix, gowork string, requi
 	}
 }
 
+func (e Env) DatabaseName() (string, error) {
+	config, err := pgx.ParseConfig(e.DatabaseDSN)
+	if err != nil {
+		return "", fmt.Errorf("parse PostgreSQL DSN: %w", err)
+	}
+	if strings.TrimSpace(config.Database) == "" {
+		return "", fmt.Errorf("PostgreSQL DSN database name is required")
+	}
+	return config.Database, nil
+}
+
 func UniqueDatabaseName(baseName, testName string) string {
 	base := sanitizeIdentifier(baseName, '_', "itest")
 	name := sanitizeIdentifier(testName, '_', "test")
 	suffix := randomSuffix()
 	value := strings.Join([]string{base, name, suffix}, "_")
-	if len(value) <= 64 {
+	if len(value) <= 63 {
 		return value
 	}
 
-	maxBaseLen := 64 - len(name) - len(suffix) - 2
+	maxBaseLen := 63 - len(name) - len(suffix) - 2
 	if maxBaseLen < 8 {
 		maxBaseLen = 8
 	}
@@ -109,8 +107,8 @@ func UniqueDatabaseName(baseName, testName string) string {
 	}
 
 	value = strings.Join([]string{base, name, suffix}, "_")
-	if len(value) > 64 {
-		value = value[len(value)-64:]
+	if len(value) > 63 {
+		value = value[len(value)-63:]
 	}
 	return strings.Trim(value, "_")
 }
@@ -121,31 +119,21 @@ func UniqueRedisPrefix(basePrefix, testName string) string {
 	return strings.Join([]string{base, name, randomSuffix()}, ":")
 }
 
-func CheckMySQL(env Env) error {
-	if strings.TrimSpace(env.DatabaseAddr) == "" {
-		return fmt.Errorf("PAI_TEST_DATABASE_ADDR is required")
+func CheckPostgreSQL(env Env) error {
+	if strings.TrimSpace(env.DatabaseDSN) == "" {
+		return fmt.Errorf("PAI_TEST_DATABASE_DSN is required")
 	}
-	if strings.TrimSpace(env.DatabaseUsername) == "" {
-		return fmt.Errorf("PAI_TEST_DATABASE_USERNAME is required")
-	}
-	if strings.TrimSpace(env.DatabaseBaseName) == "" {
-		return fmt.Errorf("PAI_TEST_DATABASE_DBNAME is required")
-	}
-
-	dsn := mysqlDSN(env, "")
-	db, err := sql.Open("mysql", dsn)
+	db, err := sql.Open("pgx", env.DatabaseDSN)
 	if err != nil {
-		return fmt.Errorf("open mysql: %w", err)
+		return fmt.Errorf("open PostgreSQL: %w", err)
 	}
 	defer db.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping mysql: %w", err)
+		return fmt.Errorf("ping PostgreSQL: %w", err)
 	}
-
 	return nil
 }
 
@@ -166,11 +154,9 @@ func CheckRedis(env Env, requireRedis bool) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
 	if err := client.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("ping redis: %w", err)
+		return fmt.Errorf("ping Redis: %w", err)
 	}
-
 	return nil
 }
 
@@ -194,13 +180,11 @@ func readDotEnv(path string) (map[string]string, error) {
 		if !ok {
 			return nil, fmt.Errorf("parse %s: invalid line %q", path, rawLine)
 		}
-
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
 		if key == "" {
 			return nil, fmt.Errorf("parse %s: empty key in line %q", path, rawLine)
 		}
-
 		if len(value) >= 2 {
 			if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
 				value = strings.Trim(value, "\"")
@@ -209,10 +193,8 @@ func readDotEnv(path string) (map[string]string, error) {
 				value = strings.Trim(value, "'")
 			}
 		}
-
 		values[key] = value
 	}
-
 	return values, nil
 }
 
@@ -262,12 +244,10 @@ func FindRepoRoot(start string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve start path: %w", err)
 	}
-
 	for {
 		if isRepoRoot(current) {
 			return current, nil
 		}
-
 		parent := filepath.Dir(current)
 		if parent == current {
 			return "", errors.New("repository root not found from current working directory")
@@ -283,14 +263,6 @@ func isRepoRoot(dir string) bool {
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
-}
-
-func mysqlDSN(env Env, dbName string) string {
-	query := strings.TrimPrefix(env.DatabaseConfig, "?")
-	if query == "" {
-		return fmt.Sprintf("%s:%s@tcp(%s)/%s", env.DatabaseUsername, env.DatabasePassword, env.DatabaseAddr, dbName)
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s)/%s?%s", env.DatabaseUsername, env.DatabasePassword, env.DatabaseAddr, dbName, query)
 }
 
 func randomSuffix() string {

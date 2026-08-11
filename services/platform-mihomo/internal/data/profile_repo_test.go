@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
@@ -249,4 +250,22 @@ func TestProfileRepoSetDefaultReturnsNotFoundForMissingProfile(t *testing.T) {
 
 	err := repo.SetDefaultByBindingAndPlayerID(context.Background(), 42, "binding_42_10001", "missing")
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+func TestMapDefaultProfileDuplicateErrorMapsPostgreSQLConstraint(t *testing.T) {
+	err := mapDefaultProfileDuplicateError(&pgconn.PgError{
+		Code:           "23505",
+		ConstraintName: "uniq_default_profile_per_binding",
+	})
+
+	require.ErrorIs(t, err, ErrDefaultProfileAlreadyExists)
+}
+
+func TestMapDefaultProfileDuplicateErrorPreservesOtherPostgreSQLErrors(t *testing.T) {
+	databaseErr := &pgconn.PgError{
+		Code:           "23505",
+		ConstraintName: "uniq_profile_binding_player_region",
+	}
+
+	require.ErrorIs(t, mapDefaultProfileDuplicateError(databaseErr), databaseErr)
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/require"
 
 	"platform-mihomo-service/internal/conf"
 )
@@ -18,25 +19,19 @@ var mainTestServiceTicketPrivateKey = ed25519.NewKeyFromSeed([]byte("0123456789a
 
 func TestValidateBootstrap(t *testing.T) {
 	t.Run("accepts valid bootstrap", func(t *testing.T) {
-		bc := &conf.Bootstrap{
-			Server: &conf.Server{
-				Grpc: &conf.Server_GRPC{
-					Network:        "tcp",
-					Addr:           "127.0.0.1:9000",
-					TimeoutSeconds: 5,
-				},
-			},
-			Security: &conf.Security{
-				CredentialEncryptionKey:   "0123456789abcdef0123456789abcdef",
-				ServiceTicketIssuer:       "paigram-account-center",
-				ServiceTicketKeyId:        mainTestServiceTicketKeyID,
-				ServiceTicketPublicKeyPem: mainTestPublicKeyPEM(t),
-			},
-		}
+		bc := validMainTestBootstrap(t)
 
 		if err := validateBootstrap(bc); err != nil {
 			t.Fatalf("validateBootstrap() error = %v", err)
 		}
+	})
+
+	t.Run("rejects missing PostgreSQL database DSN", func(t *testing.T) {
+		bc := validMainTestBootstrap(t)
+		bc.Data.Database.Dsn = ""
+
+		err := validateBootstrap(bc)
+		require.EqualError(t, err, "data.database.dsn is required")
 	})
 
 	t.Run("rejects missing grpc address", func(t *testing.T) {
@@ -101,6 +96,30 @@ func TestValidateBootstrap(t *testing.T) {
 			t.Fatal("validateBootstrap() error = nil, want non-nil")
 		}
 	})
+}
+
+func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {
+	t.Helper()
+	return &conf.Bootstrap{
+		Server: &conf.Server{
+			Grpc: &conf.Server_GRPC{
+				Network:        "tcp",
+				Addr:           "127.0.0.1:9000",
+				TimeoutSeconds: 5,
+			},
+		},
+		Data: &conf.Data{
+			Database: &conf.Data_Database{
+				Dsn: "postgres://platform_mihomo:password@127.0.0.1:5432/platform_mihomo?sslmode=disable",
+			},
+		},
+		Security: &conf.Security{
+			CredentialEncryptionKey:   "0123456789abcdef0123456789abcdef",
+			ServiceTicketIssuer:       "paigram-account-center",
+			ServiceTicketKeyId:        mainTestServiceTicketKeyID,
+			ServiceTicketPublicKeyPem: mainTestPublicKeyPEM(t),
+		},
+	}
 }
 
 func TestNewTicketVerifierFromSecurityUsesConfiguredEd25519PublicKeyAndKID(t *testing.T) {

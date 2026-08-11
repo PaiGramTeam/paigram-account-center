@@ -5,8 +5,7 @@ server:
     timeout_seconds: 5
 data:
   database:
-    driver: mysql
-    source: "paigram_hoyo:paigram_hoyo@tcp(127.0.0.1:3306)/platform_mihomo?charset=utf8mb4&parseTime=True&loc=UTC"
+    dsn: "postgres://platform_mihomo:password@127.0.0.1:5432/platform_mihomo?sslmode=disable"
   redis:
     addr: "127.0.0.1:6379"
     password: ""

@@ -18,8 +18,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 
 	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/data"
@@ -43,7 +41,6 @@ var (
 
 func TestBindThenGetAuthKeyFlow(t *testing.T) {
 	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
 	client := newMihomoClientForTest(t, stack)
 
 	bindResp, err := client.BindCredential(testTicket(t), validBindRequest())
@@ -71,7 +68,6 @@ func TestBindThenGetAuthKeyFlow(t *testing.T) {
 
 func TestUpdateThenDeleteCredentialFlow(t *testing.T) {
 	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
 	client := newMihomoClientForTest(t, stack)
 
 	bindResp, err := client.BindCredential(testTicket(t), validBindRequest())
@@ -130,16 +126,11 @@ type testMihomoClient struct {
 func newMihomoClientForTest(t *testing.T, stack *integrationStack) *testMihomoClient {
 	t.Helper()
 
-	requireMigrationsApplied(t, stack.SQLDB)
-
-	db, err := gorm.Open(mysql.Open(stack.DatabaseCfg.Source), &gorm.Config{})
-	require.NoError(t, err)
-
-	credentialRepo := data.NewCredentialRepo(db)
-	deviceRepo := data.NewDeviceRepo(db)
-	profileRepo := data.NewProfileRepo(db)
-	artifactRepo := data.NewArtifactRepo(db, stack.Redis, stack.RedisPrefix)
-	managementRepo := data.NewManagementRepo(db, stack.Redis, stack.RedisPrefix)
+	credentialRepo := data.NewCredentialRepo(stack.DB)
+	deviceRepo := data.NewDeviceRepo(stack.DB)
+	profileRepo := data.NewProfileRepo(stack.DB)
+	artifactRepo := data.NewArtifactRepo(stack.DB, stack.Redis, stack.RedisPrefix)
+	managementRepo := data.NewManagementRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	hoyoClient := platformmihomo.StubClient{}
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, hoyoClient, integrationEncryptionKey, artifactRepo)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
@@ -250,7 +241,7 @@ func requireRuntimeArtifact(t *testing.T, db *sql.DB, platformAccountID string, 
 	const query = `
 		SELECT binding_id, artifact_value, scope_key
 		FROM runtime_artifacts
-		WHERE platform_account_id = ? AND artifact_type = ? AND scope_key = ?
+		WHERE platform_account_id = $1 AND artifact_type = $2 AND scope_key = $3
 		LIMIT 1
 	`
 
@@ -264,7 +255,7 @@ func requireRuntimeArtifactCount(t *testing.T, db *sql.DB, platformAccountID str
 	t.Helper()
 
 	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM runtime_artifacts WHERE platform_account_id = ?`, platformAccountID).Scan(&count)
+	err := db.QueryRow(`SELECT COUNT(*) FROM runtime_artifacts WHERE platform_account_id = $1`, platformAccountID).Scan(&count)
 	require.NoError(t, err)
 	require.Equal(t, want, count)
 }

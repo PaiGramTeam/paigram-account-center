@@ -38,7 +38,7 @@ pwsh ./scripts/verify.ps1
 
 The default verification checks the pinned current PaiGram `main` baseline and requires a clean worktree. During development, `-AllowDirty` permits intentional local edits and `-SkipPaiGramCompatibility` permits an offline run.
 
-The command does not claim the external MySQL/Redis integration suites: those require separately provisioned isolated services and remain a production-cutover gate.
+The command does not run the container-backed PostgreSQL/Redis integration suites; run each module's integration-tagged tests separately as a production-cutover gate.
 
 The repository intentionally does not copy build or deployment systems from the source repositories.
 

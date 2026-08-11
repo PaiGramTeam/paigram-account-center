@@ -23,7 +23,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := integrationenv.CheckMySQL(env); err != nil {
+	if err := integrationenv.CheckPostgreSQL(env); err != nil {
 		log.Fatal(err)
 	}
 	if env.RedisAddr != "" {
@@ -32,7 +32,11 @@ func main() {
 		}
 	}
 
-	generatedDBName := integrationenv.UniqueDatabaseName(env.DatabaseBaseName, "doctor")
+	baseDatabaseName, err := env.DatabaseName()
+	if err != nil {
+		log.Fatal(err)
+	}
+	generatedDBName := integrationenv.UniqueDatabaseName(baseDatabaseName, "doctor")
 	generatedRedisPrefix := integrationenv.UniqueRedisPrefix(env.RedisPrefix, "doctor")
 	for _, line := range env.Summary(generatedDBName, generatedRedisPrefix, os.Getenv("GOWORK"), false) {
 		fmt.Println(line)

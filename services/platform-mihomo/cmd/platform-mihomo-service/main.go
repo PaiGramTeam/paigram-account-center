@@ -10,11 +10,10 @@ import (
 	"github.com/go-kratos/kratos/v2/config/file"
 	_ "github.com/go-kratos/kratos/v2/encoding/yaml"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 
 	"platform-mihomo-service/internal/conf"
 	"platform-mihomo-service/internal/data"
+	internaldatabase "platform-mihomo-service/internal/database"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/server"
 	"platform-mihomo-service/internal/service"
@@ -41,7 +40,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	database, err := gorm.Open(mysql.Open(bc.GetData().GetDatabase().GetSource()), &gorm.Config{})
+	databaseConfig := bc.GetData().GetDatabase()
+	database, err := internaldatabase.Connect(internaldatabase.Config{DSN: databaseConfig.GetDsn()})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -102,6 +102,10 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	}
 	if grpcConf.GetTimeoutSeconds() <= 0 {
 		return errors.New("server.grpc.timeout_seconds must be greater than zero")
+	}
+	databaseConf := bc.GetData().GetDatabase()
+	if databaseConf.GetDsn() == "" {
+		return errors.New("data.database.dsn is required")
 	}
 
 	security := bc.GetSecurity()

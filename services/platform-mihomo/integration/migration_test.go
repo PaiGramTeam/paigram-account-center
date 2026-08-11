@@ -15,19 +15,18 @@ import (
 )
 
 func TestMigrationsCreateCoreTables(t *testing.T) {
-	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
+	stack := newEmptyIntegrationStack(t)
 
 	requireMigrationsApplied(t, stack.SQLDB)
-	requireTableExists(t, stack.SQLDB, stack.DatabaseCfg.Dbname, "credential_records")
-	requireTableExists(t, stack.SQLDB, stack.DatabaseCfg.Dbname, "device_records")
-	requireTableExists(t, stack.SQLDB, stack.DatabaseCfg.Dbname, "account_profiles")
-	requireTableExists(t, stack.SQLDB, stack.DatabaseCfg.Dbname, "runtime_artifacts")
+	requireTableExists(t, stack.SQLDB, "public", "credential_records")
+	requireTableExists(t, stack.SQLDB, "public", "device_records")
+	requireTableExists(t, stack.SQLDB, "public", "account_profiles")
+	requireTableExists(t, stack.SQLDB, "public", "runtime_artifacts")
+	requireTableExists(t, stack.SQLDB, "public", "consumer_grant_invalidations")
 }
 
 func TestBindingMigrationRejectsUnknownLegacyPlatformAccountIDs(t *testing.T) {
-	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
+	stack := newEmptyIntegrationStack(t)
 
 	applyMigrationFile(t, stack.SQLDB, migrationPath(t, "000001_create_credential_records.up.sql"))
 	applyMigrationFile(t, stack.SQLDB, migrationPath(t, "000003_create_account_profiles.up.sql"))
@@ -35,7 +34,7 @@ func TestBindingMigrationRejectsUnknownLegacyPlatformAccountIDs(t *testing.T) {
 	_, err := stack.SQLDB.Exec(`
 		INSERT INTO credential_records (
 			platform_account_id, platform, account_id, region, credential_blob, credential_version, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, "legacy_10001", "mihomo", "10001", "cn_gf01", "{}", "v1", "active")
 	if err != nil {
 		t.Fatalf("insert legacy credential row: %v", err)
@@ -44,7 +43,7 @@ func TestBindingMigrationRejectsUnknownLegacyPlatformAccountIDs(t *testing.T) {
 	_, err = stack.SQLDB.Exec(`
 		INSERT INTO account_profiles (
 			platform_account_id, game_biz, region, player_id, nickname, level, is_default
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, "legacy_10001", "hk4e_cn", "cn_gf01", "1008611", "Traveler", 1, true)
 	if err != nil {
 		t.Fatalf("insert legacy profile row: %v", err)
@@ -57,8 +56,7 @@ func TestBindingMigrationRejectsUnknownLegacyPlatformAccountIDs(t *testing.T) {
 }
 
 func TestRuntimeArtifactMigrationRejectsDuplicateDefaultProfiles(t *testing.T) {
-	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
+	stack := newEmptyIntegrationStack(t)
 	applyMigrations(t, stack.SQLDB,
 		"000001_create_credential_records.up.sql",
 		"000002_create_device_records.up.sql",
@@ -84,8 +82,7 @@ func TestRuntimeArtifactMigrationRejectsDuplicateDefaultProfiles(t *testing.T) {
 }
 
 func TestRuntimeArtifactMigrationRejectsUnmappableArtifacts(t *testing.T) {
-	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
+	stack := newEmptyIntegrationStack(t)
 	applyMigrations(t, stack.SQLDB,
 		"000001_create_credential_records.up.sql",
 		"000002_create_device_records.up.sql",
@@ -111,8 +108,7 @@ func TestRuntimeArtifactMigrationRejectsUnmappableArtifacts(t *testing.T) {
 }
 
 func TestRuntimeArtifactMigrationRejectsDuplicateBindingArtifacts(t *testing.T) {
-	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
+	stack := newEmptyIntegrationStack(t)
 	applyMigrations(t, stack.SQLDB,
 		"000001_create_credential_records.up.sql",
 		"000002_create_device_records.up.sql",
@@ -141,8 +137,7 @@ func TestRuntimeArtifactMigrationRejectsDuplicateBindingArtifacts(t *testing.T) 
 }
 
 func TestRuntimeArtifactRollbackRejectsDuplicatePlatformArtifacts(t *testing.T) {
-	stack := newIntegrationStack(t)
-	t.Cleanup(stack.cleanup)
+	stack := newEmptyIntegrationStack(t)
 	requireMigrationsApplied(t, stack.SQLDB)
 
 	insertRuntimeArtifactWithBindingID(t, stack.SQLDB, 42, "binding_42_10001", "authkey", "first-authkey", "1008611")
@@ -201,7 +196,7 @@ func insertLegacyCredential(t *testing.T, db *sql.DB, platformAccountID string, 
 	_, err := db.Exec(`
 		INSERT INTO credential_records (
 			platform_account_id, platform, account_id, region, credential_blob, credential_version, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, platformAccountID, "mihomo", accountID, "cn_gf01", "{}", "v1", "active")
 	if err != nil {
 		t.Fatalf("insert legacy credential row: %v", err)
@@ -213,7 +208,7 @@ func insertLegacyProfile(t *testing.T, db *sql.DB, platformAccountID string, pla
 	_, err := db.Exec(`
 		INSERT INTO account_profiles (
 			platform_account_id, game_biz, region, player_id, nickname, level, is_default
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, platformAccountID, "hk4e_cn", "cn_gf01", playerID, "Traveler", 1, isDefault)
 	if err != nil {
 		t.Fatalf("insert legacy profile row: %v", err)
@@ -225,7 +220,7 @@ func insertLegacyRuntimeArtifact(t *testing.T, db *sql.DB, platformAccountID str
 	_, err := db.Exec(`
 		INSERT INTO runtime_artifacts (
 			platform_account_id, artifact_type, artifact_value, scope_key, expires_at
-		) VALUES (?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 1 HOUR))
+		) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP + INTERVAL '1 hour')
 	`, platformAccountID, artifactType, artifactValue, scopeKey)
 	if err != nil {
 		t.Fatalf("insert legacy runtime artifact row: %v", err)
@@ -234,7 +229,7 @@ func insertLegacyRuntimeArtifact(t *testing.T, db *sql.DB, platformAccountID str
 
 func allowDuplicateCredentialBindingIDs(t *testing.T, db *sql.DB) {
 	t.Helper()
-	if _, err := db.Exec(`ALTER TABLE credential_records DROP INDEX uniq_credential_binding_id`); err != nil {
+	if _, err := db.Exec(`DROP INDEX uniq_credential_binding_id`); err != nil {
 		t.Fatalf("drop credential binding uniqueness: %v", err)
 	}
 }
@@ -244,7 +239,7 @@ func insertCredentialWithBindingID(t *testing.T, db *sql.DB, bindingID uint64, p
 	_, err := db.Exec(`
 		INSERT INTO credential_records (
 			binding_id, platform_account_id, platform, account_id, region, credential_blob, credential_version, status
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`, bindingID, platformAccountID, "mihomo", accountID, "cn_gf01", "{}", "v1", "active")
 	if err != nil {
 		t.Fatalf("insert credential row with binding_id: %v", err)
@@ -256,7 +251,7 @@ func insertRuntimeArtifactWithBindingID(t *testing.T, db *sql.DB, bindingID uint
 	_, err := db.Exec(`
 		INSERT INTO runtime_artifacts (
 			binding_id, platform_account_id, artifact_type, artifact_value, scope_key, expires_at
-		) VALUES (?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 1 HOUR))
+		) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP + INTERVAL '1 hour')
 	`, bindingID, platformAccountID, artifactType, artifactValue, scopeKey)
 	if err != nil {
 		t.Fatalf("insert runtime artifact row with binding_id: %v", err)
@@ -280,7 +275,7 @@ func requireTableExists(t *testing.T, db *sql.DB, schema string, table string) {
 	const query = `
 		SELECT 1
 		FROM information_schema.tables
-		WHERE table_schema = ? AND table_name = ?
+		WHERE table_schema = $1 AND table_name = $2
 		LIMIT 1
 	`
 

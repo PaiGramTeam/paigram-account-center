@@ -11,7 +11,7 @@ import (
 func TestFindRepoRootFindsAncestorWithGoModAndEnvFile(t *testing.T) {
 	repoRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module platform-mihomo-service\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(repoRoot, ".env.integration.local"), []byte("PAI_TEST_DATABASE_ADDR=127.0.0.1:3306\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(repoRoot, ".env.integration.local"), []byte("PAI_TEST_DATABASE_DSN=postgres://platform:password@127.0.0.1:5432/platform_mihomo_test?sslmode=disable\n"), 0o600))
 
 	start := filepath.Join(repoRoot, "cmd", "integration-doctor")
 	require.NoError(t, os.MkdirAll(start, 0o755))
