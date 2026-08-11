@@ -44,7 +44,7 @@ The repository intentionally does not copy build or deployment systems from the 
 
 ## Podman deployment
 
-The Account Center API can be built and run with Podman while keeping PostgreSQL, Redis, and gRPC private to the container network. See [deploy/podman/README.md](deploy/podman/README.md) for the local single-host workflow.
+The complete Account Center stack can be built and run with Podman. A single Nginx entry point serves the user and admin frontends and proxies the API, while PostgreSQL, Redis, backend HTTP, and gRPC stay private to the container network. See [deploy/podman/README.md](deploy/podman/README.md) for the local single-host workflow.
 
 Regenerate Go and Python contract bindings directly when a `.proto` file changes:
 

@@ -197,7 +197,7 @@ const handleCaptchaError = (message: string): void => {
 const handleOAuthLogin = async (provider: string): Promise<void> => {
   try {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-    const callbackURL = new URL(`${window.location.origin}/auth/callback/${provider}`)
+    const callbackURL = new URL(`${import.meta.env.BASE_URL}auth/callback/${provider}`, window.location.origin)
     if (redirect) {
       callbackURL.searchParams.set('redirect_to', redirect)
     }

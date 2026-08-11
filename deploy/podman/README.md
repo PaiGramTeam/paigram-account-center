@@ -1,6 +1,6 @@
 # Podman 单机部署
 
-该部署配置只发布 Account Center HTTP 端口。PostgreSQL、Redis 和 Account Center gRPC 端口仅在 Podman 内部网络中可达，不映射到宿主机。前端与 Platform Mihomo 保持仓库既定的独立部署边界，不包含在此 Compose 项目中。
+该部署配置包含用户端、管理端和 Account Center 后端，只发布 Nginx 的统一 HTTP 入口。PostgreSQL、Redis、后端 HTTP 和 gRPC 端口仅在 Podman 内部网络中可达，不映射到宿主机。Platform Mihomo 保持独立部署边界，不包含在此 Compose 项目中。
 
 ## 准备环境
 
@@ -21,7 +21,7 @@ cd deploy/podman
 ./deploy.ps1
 ```
 
-部署脚本会构建 Account Center 镜像、启动服务、等待健康检查，并确认 PostgreSQL 与 Redis 没有发布宿主机端口。服务就绪后可检查：
+部署脚本会构建前后端镜像、启动服务、等待健康检查，并确认 Account Center、PostgreSQL 与 Redis 没有发布宿主机端口。用户端位于 `/`，管理端位于 `/admin/`，API 与 OpenAPI 文档由同一入口反向代理。服务就绪后可检查：
 
 已有同名、同标签镜像时，可使用 `./deploy.ps1 -NoBuild` 跳过构建，仅更新并验证运行容器。
 
@@ -32,12 +32,15 @@ $healthHost = if ($settings.PAI_HTTP_BIND -eq "0.0.0.0") { "127.0.0.1" } else { 
 
 Invoke-RestMethod "http://${healthHost}:$($settings.PAI_HTTP_PORT)/healthz"
 podman ps --filter "label=com.docker.compose.project=$instance"
+Invoke-WebRequest "http://${healthHost}:$($settings.PAI_HTTP_PORT)/"
+Invoke-WebRequest "http://${healthHost}:$($settings.PAI_HTTP_PORT)/admin/"
+podman port "$instance-frontend"
 podman port $instance
 podman port "$instance-postgres"
 podman port "$instance-redis"
 ```
 
-最后两个 `podman port` 命令应无输出。只有 Account Center 容器应显示 `8080/tcp` 的宿主机映射。
+后三个 `podman port` 命令应无输出。只有前端 Nginx 容器应显示 `8080/tcp` 的宿主机映射。
 
 停止服务但保留数据卷：
 

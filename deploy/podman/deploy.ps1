@@ -40,7 +40,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Podman Compose deployment failed"
 }
 
-$container = $instance
+$container = "$instance-frontend"
 for ($attempt = 1; $attempt -le 60; $attempt++) {
     $status = & podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $container 2>$null
     if ($status -eq "healthy") {
@@ -57,7 +57,7 @@ for ($attempt = 1; $attempt -le 60; $attempt++) {
     Start-Sleep -Seconds 2
 }
 
-foreach ($privateContainer in @("$instance-postgres", "$instance-redis")) {
+foreach ($privateContainer in @($instance, "$instance-postgres", "$instance-redis")) {
     $publishedPorts = & podman port $privateContainer
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to inspect $privateContainer ports"
@@ -80,4 +80,11 @@ if ($response.code -ne 200 -or $response.data.status -ne "ok") {
     throw "Account Center health check returned an unexpected response"
 }
 
-Write-Host "PaiGram Account Center is ready at http://${httpBind}:$httpPort"
+foreach ($path in @("/", "/admin/", "/api-docs")) {
+    $page = Invoke-WebRequest -Uri "http://${httpBind}:$httpPort$path" -TimeoutSec 10
+    if ($page.StatusCode -ne 200 -or $page.Headers["Content-Type"] -notlike "text/html*") {
+        throw "Frontend check for $path returned an unexpected response"
+    }
+}
+
+Write-Host "PaiGram Account Center is ready at http://${httpBind}:$httpPort (admin: /admin/)"
