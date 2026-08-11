@@ -42,6 +42,10 @@ The command does not run the container-backed PostgreSQL/Redis integration suite
 
 The repository intentionally does not copy build or deployment systems from the source repositories.
 
+## Podman deployment
+
+The Account Center API can be built and run with Podman while keeping PostgreSQL, Redis, and gRPC private to the container network. See [deploy/podman/README.md](deploy/podman/README.md) for the local single-host workflow.
+
 Regenerate Go and Python contract bindings directly when a `.proto` file changes:
 
 ```powershell

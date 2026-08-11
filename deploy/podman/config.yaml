@@ -1,0 +1,59 @@
+app:
+  name: "PaiGram Account Center"
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"
+  max_body_bytes: 8388608
+  body_read_timeout: 15s
+  trusted_proxies: []
+  cors:
+    enabled: false
+
+database:
+  dsn: ""
+  migrations_dir: "/opt/paigram/migrations"
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 1h
+  conn_max_idle_time: 30m
+  log_mode: "warn"
+  log_zap: true
+  slow_threshold: 1000
+  auto_migrate: true
+  auto_seed: true
+
+openapi:
+  enabled: true
+  path: "/openapi"
+
+auth:
+  service_ticket_ttl: 300
+  service_ticket_issuer: "paigram-account-center"
+  service_ticket_signing_key: ""
+
+frontend:
+  base_url: ""
+
+redis:
+  enabled: true
+  addr: "redis:6379"
+  password: ""
+  db: 0
+  prefix: "paigram:"
+
+grpc:
+  enabled: true
+  port: 50051
+
+email:
+  enabled: false
+  use_async: false
+
+security:
+  encryption_key: ""
+  require_redis_for_2fa: true
+  security_headers:
+    assume_https: false
+
+sentry:
+  enabled: false

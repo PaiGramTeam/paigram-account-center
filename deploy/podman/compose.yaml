@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:16-alpine
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-postgres"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: paigram
+      POSTGRES_USER: paigram
+      POSTGRES_PASSWORD: "${PAI_POSTGRES_PASSWORD:?set PAI_POSTGRES_PASSWORD in .env}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paigram -d paigram"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [account-center]
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-redis"
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [account-center]
+
+  account-center:
+    build:
+      context: ../..
+      dockerfile: deploy/podman/account-center.Containerfile
+    image: "localhost/${PAI_INSTANCE:-paigram-account-center}:${PAI_IMAGE_TAG:-latest}"
+    container_name: "${PAI_INSTANCE:-paigram-account-center}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PAI_DATABASE_DSN: "postgres://paigram:${PAI_POSTGRES_PASSWORD:?set PAI_POSTGRES_PASSWORD in .env}@postgres:5432/paigram?sslmode=disable"
+      PAI_REDIS_PASSWORD: "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
+      PAI_AUTH_SERVICE_TICKET_SIGNING_KEY: "${PAI_SERVICE_TICKET_SIGNING_KEY:?set PAI_SERVICE_TICKET_SIGNING_KEY in .env}"
+      PAI_SECURITY_ENCRYPTION_KEY: "${PAI_SECURITY_ENCRYPTION_KEY:?set PAI_SECURITY_ENCRYPTION_KEY in .env}"
+      PAI_FRONTEND_BASE_URL: "${PAI_FRONTEND_BASE_URL:-http://localhost:18080}"
+      ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
+      ADMIN_PASSWORD: "${PAI_ADMIN_PASSWORD:?set PAI_ADMIN_PASSWORD in .env}"
+      ADMIN_NAME: "${PAI_ADMIN_NAME:-Administrator}"
+    ports:
+      - "${PAI_HTTP_BIND:-127.0.0.1}:${PAI_HTTP_PORT:-18080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges
+    networks: [account-center]
+
+networks:
+  account-center:
+    name: "${PAI_INSTANCE:-paigram-account-center}"
+    ipam:
+      config:
+        - subnet: "${PAI_NETWORK_SUBNET:-10.90.0.0/24}"
+
+volumes:
+  postgres-data:
+    name: "${PAI_INSTANCE:-paigram-account-center}-postgres-data"
+  redis-data:
+    name: "${PAI_INSTANCE:-paigram-account-center}-redis-data"
