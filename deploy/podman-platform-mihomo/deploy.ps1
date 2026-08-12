@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath $PSScriptRoot
+Import-Module (Join-Path $PSScriptRoot "../PodmanCompose.psm1") -Force
 
 if (-not (Test-Path -LiteralPath ".env")) {
     throw "Missing deploy/podman-platform-mihomo/.env"
@@ -11,6 +12,7 @@ if (-not (Test-Path -LiteralPath ".env")) {
 if (-not (Get-Command podman -ErrorAction SilentlyContinue)) {
     throw "podman is required"
 }
+$podmanCompose = Assert-PodmanComposeAvailable
 
 function Get-EnvValue {
     param([Parameter(Mandatory)][string]$Name)
@@ -49,8 +51,8 @@ if ($LASTEXITCODE -ne 0) {
     if ($LASTEXITCODE -ne 0) { throw "Could not create shared Platform network $network" }
 }
 
-$composeArguments = @("compose", "--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
-& podman @composeArguments up --no-build -d
+$composeArguments = @("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
+& $podmanCompose @composeArguments up --no-build -d
 if ($LASTEXITCODE -ne 0) { throw "Platform Mihomo deployment failed" }
 
 for ($attempt = 1; $attempt -le 60; $attempt++) {

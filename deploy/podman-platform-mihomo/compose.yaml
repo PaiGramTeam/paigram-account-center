@@ -6,8 +6,8 @@ services:
     environment:
       POSTGRES_DB: platform_mihomo
       POSTGRES_USER: platform_mihomo
-      POSTGRES_PASSWORD_FILE: /run/secrets/platform_postgres_password
-    secrets: [platform_postgres_password]
+      POSTGRES_PASSWORD_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-postgres-password"
+    secrets: ["${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-postgres-password"]
     volumes: [platform-postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U platform_mihomo -d platform_mihomo"]
@@ -20,11 +20,13 @@ services:
     image: docker.io/library/redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     container_name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis"
     restart: unless-stopped
-    command: ["redis-server", "/run/secrets/platform_redis_config", "--appendonly", "yes"]
-    secrets: [platform_redis_config, platform_redis_password]
+    command: ["redis-server", "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-config", "--appendonly", "yes"]
+    secrets:
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-config"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"
     volumes: [platform-redis-data:/data]
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/platform_redis_password) redis-cli --no-auth-warning ping | grep -q PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password) redis-cli --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -39,30 +41,32 @@ services:
       redis: {condition: service_healthy}
     environment:
       PAI_UPSTREAM_BASE_URL: "${PAI_MIHOMO_UPSTREAM_BASE_URL:?set the HTTPS Mihomo upstream URL}"
+      PAI_DATA_DATABASE_DSN_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"
+      PAI_DATA_REDIS_PASSWORD_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"
+      PAI_SECURITY_CREDENTIAL_ENCRYPTION_KEYRING_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring"
+      PAI_SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE: "/run/secrets/paigram-account-center-service-ticket-public-keyring"
+      PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"
+      PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"
+      PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE: "/run/secrets/paigram-account-center-control-client-ca"
+      PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
+      PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
+      PAI_UPSTREAM_BEARER_TOKEN_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"
     secrets:
-      - platform_database_dsn
-      - platform_redis_password
-      - source: platform_encryption_keyring
-        target: platform_encryption_keyring.json
-      - source: account_service_ticket_public_keyring
-        target: account_service_ticket_public_keyring.json
-      - source: platform_control_cert
-        target: platform_control_cert.pem
-      - source: platform_control_key
-        target: platform_control_key.pem
-      - source: account_control_client_ca
-        target: account_control_client_ca.pem
-      - source: platform_runtime_cert
-        target: platform_runtime_cert.pem
-      - source: platform_runtime_key
-        target: platform_runtime_key.pem
-      - source: platform_runtime_ca
-        target: platform_runtime_ca.pem
-      - mihomo_upstream_bearer_token
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring"
+      - paigram-account-center-service-ticket-public-keyring
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"
+      - paigram-account-center-control-client-ca
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"
     ports:
       - "${PAI_RUNTIME_BIND:-127.0.0.1}:${PAI_RUNTIME_PORT:-19001}:9001"
     healthcheck:
-      test: ["CMD", "/usr/local/bin/platform-mihomo-healthcheck", "-target", "127.0.0.1:9001", "-root-ca", "/run/secrets/platform_runtime_ca.pem", "-server-name", "${PAI_RUNTIME_SERVER_NAME:?set PAI_RUNTIME_SERVER_NAME to the runtime certificate SAN}"]
+      test: ["CMD", "/usr/local/bin/platform-mihomo-healthcheck", "-target", "127.0.0.1:9001", "-root-ca", "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca", "-server-name", "${PAI_RUNTIME_SERVER_NAME:?set PAI_RUNTIME_SERVER_NAME to the runtime certificate SAN}"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -88,16 +92,16 @@ volumes:
   platform-redis-data: {name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-data"}
 
 secrets:
-  platform_postgres_password: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-postgres-password"}
-  platform_redis_config: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-config"}
-  platform_redis_password: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"}
-  platform_database_dsn: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"}
-  platform_encryption_keyring: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring"}
-  account_service_ticket_public_keyring: {external: true, name: "paigram-account-center-service-ticket-public-keyring"}
-  platform_control_cert: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"}
-  platform_control_key: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"}
-  account_control_client_ca: {external: true, name: "paigram-account-center-control-client-ca"}
-  platform_runtime_cert: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"}
-  platform_runtime_key: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"}
-  platform_runtime_ca: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca"}
-  mihomo_upstream_bearer_token: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-postgres-password": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-config": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring": {external: true}
+  paigram-account-center-service-ticket-public-keyring: {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key": {external: true}
+  paigram-account-center-control-client-ca: {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token": {external: true}

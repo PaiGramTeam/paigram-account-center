@@ -6,8 +6,8 @@ services:
     environment:
       POSTGRES_DB: paigram
       POSTGRES_USER: paigram
-      POSTGRES_PASSWORD_FILE: /run/secrets/account_postgres_password
-    secrets: [account_postgres_password]
+      POSTGRES_PASSWORD_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-postgres-password"
+    secrets: ["${PAI_INSTANCE:-paigram-account-center}-postgres-password"]
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U paigram -d paigram"]
@@ -20,11 +20,13 @@ services:
     image: docker.io/library/redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     container_name: "${PAI_INSTANCE:-paigram-account-center}-redis"
     restart: unless-stopped
-    command: ["redis-server", "/run/secrets/account_redis_config", "--appendonly", "yes"]
-    secrets: [account_redis_config, account_redis_password]
+    command: ["redis-server", "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-redis-config", "--appendonly", "yes"]
+    secrets:
+      - "${PAI_INSTANCE:-paigram-account-center}-redis-config"
+      - "${PAI_INSTANCE:-paigram-account-center}-redis-password"
     volumes: [redis-data:/data]
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/account_redis_password) redis-cli --no-auth-warning ping | grep -q PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/${PAI_INSTANCE:-paigram-account-center}-redis-password) redis-cli --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -41,27 +43,31 @@ services:
       PAI_AUTH_REQUIRE_VERIFIED_EMAIL_LOGIN: "${PAI_REQUIRE_EMAIL_VERIFICATION:-false}"
       PAI_FRONTEND_BASE_URL: "${PAI_FRONTEND_BASE_URL:?set PAI_FRONTEND_BASE_URL to the public HTTPS origin}"
       PAI_APP_TRUSTED_PROXIES: "10.77.20.10"
+      PAI_DATABASE_DSN_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-database-dsn"
+      PAI_REDIS_PASSWORD_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-redis-password"
+      PAI_AUTH_SERVICE_TICKET_SIGNING_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"
+      PAI_AUTH_OAUTH_SIGNING_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"
+      PAI_SECURITY_ENCRYPTION_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-encryption-key"
+      PAI_PLATFORM_CONTROL_ROOT_CA_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"
+      PAI_PLATFORM_CONTROL_CERTIFICATE_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-control-client-cert"
+      PAI_PLATFORM_CONTROL_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-control-client-key"
+      PAI_GRPC_CERTIFICATE_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
+      PAI_GRPC_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-key"
       ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
-      ADMIN_PASSWORD_FILE: /run/secrets/account_admin_password
+      ADMIN_PASSWORD_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-admin-password"
       ADMIN_NAME: "${PAI_ADMIN_NAME:-Administrator}"
     secrets:
-      - account_database_dsn
-      - account_redis_password
-      - source: account_service_ticket_signing_key
-        target: account_service_ticket_signing_key.json
-      - account_oauth_signing_key
-      - account_encryption_key
-      - account_admin_password
-      - source: platform_control_ca
-        target: platform_control_ca.pem
-      - source: account_control_client_cert
-        target: account_control_client_cert.pem
-      - source: account_control_client_key
-        target: account_control_client_key.pem
-      - source: account_grpc_cert
-        target: account_grpc_cert.pem
-      - source: account_grpc_key
-        target: account_grpc_key.pem
+      - "${PAI_INSTANCE:-paigram-account-center}-database-dsn"
+      - "${PAI_INSTANCE:-paigram-account-center}-redis-password"
+      - "${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"
+      - "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"
+      - "${PAI_INSTANCE:-paigram-account-center}-encryption-key"
+      - "${PAI_INSTANCE:-paigram-account-center}-admin-password"
+      - "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"
+      - "${PAI_INSTANCE:-paigram-account-center}-control-client-cert"
+      - "${PAI_INSTANCE:-paigram-account-center}-control-client-key"
+      - "${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
+      - "${PAI_INSTANCE:-paigram-account-center}-grpc-key"
     ports:
       - "${PAI_ACCOUNT_GRPC_BIND:-127.0.0.1}:${PAI_ACCOUNT_GRPC_PORT:-15051}:50051"
     healthcheck:
@@ -112,16 +118,16 @@ volumes:
   redis-data: {name: "${PAI_INSTANCE:-paigram-account-center}-redis-data"}
 
 secrets:
-  account_postgres_password: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-postgres-password"}
-  account_redis_config: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-redis-config"}
-  account_redis_password: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-redis-password"}
-  account_database_dsn: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-database-dsn"}
-  account_service_ticket_signing_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"}
-  account_oauth_signing_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"}
-  account_encryption_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-encryption-key"}
-  account_admin_password: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-admin-password"}
-  platform_control_ca: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"}
-  account_control_client_cert: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-control-client-cert"}
-  account_control_client_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-control-client-key"}
-  account_grpc_cert: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-grpc-cert"}
-  account_grpc_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-grpc-key"}
+  "${PAI_INSTANCE:-paigram-account-center}-postgres-password": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-redis-config": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-redis-password": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-database-dsn": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-encryption-key": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-admin-password": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-control-client-cert": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-control-client-key": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-grpc-cert": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-grpc-key": {external: true}

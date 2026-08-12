@@ -100,6 +100,64 @@ func TestUpstreamBaseURLResolvesFromPrefixedEnvironment(t *testing.T) {
 	require.Equal(t, "https://mihomo.example.test", bootstrap.GetUpstream().GetBaseUrl())
 }
 
+func TestSecretFilePathsResolveFromPrefixedEnvironment(t *testing.T) {
+	values := map[string]string{
+		"PAI_DATA_DATABASE_DSN_FILE":                      "/run/secrets/platform-database-dsn",
+		"PAI_DATA_REDIS_PASSWORD_FILE":                    "/run/secrets/platform-redis-password",
+		"PAI_SECURITY_CREDENTIAL_ENCRYPTION_KEYRING_FILE": "/run/secrets/platform-encryption-keyring",
+		"PAI_SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE": "/run/secrets/account-ticket-keyring",
+		"PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE":         "/run/secrets/platform-control-cert",
+		"PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE":         "/run/secrets/platform-control-key",
+		"PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE":           "/run/secrets/account-client-ca",
+		"PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE":         "/run/secrets/platform-runtime-cert",
+		"PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE":         "/run/secrets/platform-runtime-key",
+		"PAI_UPSTREAM_BEARER_TOKEN_FILE":                  "/run/secrets/upstream-token",
+	}
+	for name, value := range values {
+		t.Setenv(name, value)
+	}
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	configuration := `
+server:
+  control:
+    tls:
+      certificate_file: "${SERVER_CONTROL_TLS_CERTIFICATE_FILE}"
+      private_key_file: "${SERVER_CONTROL_TLS_PRIVATE_KEY_FILE}"
+      client_ca_file: "${SERVER_CONTROL_TLS_CLIENT_CA_FILE}"
+  runtime:
+    tls:
+      certificate_file: "${SERVER_RUNTIME_TLS_CERTIFICATE_FILE}"
+      private_key_file: "${SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE}"
+data:
+  database:
+    dsn_file: "${DATA_DATABASE_DSN_FILE}"
+  redis:
+    password_file: "${DATA_REDIS_PASSWORD_FILE}"
+security:
+  credential_encryption_keyring_file: "${SECURITY_CREDENTIAL_ENCRYPTION_KEYRING_FILE}"
+  service_ticket_public_keyring_file: "${SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE}"
+upstream:
+  bearer_token_file: "${UPSTREAM_BEARER_TOKEN_FILE}"
+`
+	require.NoError(t, os.WriteFile(path, []byte(configuration), 0o600))
+
+	loaded := kratosconfig.New(kratosconfig.WithSource(file.NewSource(path), env.NewSource("PAI_")))
+	t.Cleanup(func() { require.NoError(t, loaded.Close()) })
+	require.NoError(t, loaded.Load())
+	var bootstrap conf.Bootstrap
+	require.NoError(t, loaded.Scan(&bootstrap))
+	require.Equal(t, values["PAI_DATA_DATABASE_DSN_FILE"], bootstrap.GetData().GetDatabase().GetDsnFile())
+	require.Equal(t, values["PAI_DATA_REDIS_PASSWORD_FILE"], bootstrap.GetData().GetRedis().GetPasswordFile())
+	require.Equal(t, values["PAI_SECURITY_CREDENTIAL_ENCRYPTION_KEYRING_FILE"], bootstrap.GetSecurity().GetCredentialEncryptionKeyringFile())
+	require.Equal(t, values["PAI_SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE"], bootstrap.GetSecurity().GetServiceTicketPublicKeyringFile())
+	require.Equal(t, values["PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE"], bootstrap.GetServer().GetControl().GetTls().GetCertificateFile())
+	require.Equal(t, values["PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE"], bootstrap.GetServer().GetControl().GetTls().GetPrivateKeyFile())
+	require.Equal(t, values["PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE"], bootstrap.GetServer().GetControl().GetTls().GetClientCaFile())
+	require.Equal(t, values["PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE"], bootstrap.GetServer().GetRuntime().GetTls().GetCertificateFile())
+	require.Equal(t, values["PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE"], bootstrap.GetServer().GetRuntime().GetTls().GetPrivateKeyFile())
+	require.Equal(t, values["PAI_UPSTREAM_BEARER_TOKEN_FILE"], bootstrap.GetUpstream().GetBearerTokenFile())
+}
+
 func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {
 	t.Helper()
 	controlTLS := tlstest.New(t, "control.internal")

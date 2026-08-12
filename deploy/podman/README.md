@@ -4,9 +4,11 @@ This project deploys Account Center, its PostgreSQL and Redis stores, and the us
 
 Run `init-env.ps1` to create only non-secret settings. It requires immutable Account and frontend image references in `registry/repository@sha256:<64 hex characters>` form. Build those images from the checked-in Containerfiles in CI with `VCS_REF` set to the full source commit, `CONTRACT_BASELINE` set to the full commit returned by the contract breaking-baseline query, and `SDK_VERSION` set to the Python project version. The build rejects missing or malformed metadata and stores it in `org.opencontainers.image.revision`, `org.paigram.contract-baseline`, and `org.paigram.sdk-version`. Push each image once, record its registry-reported manifest digest, and pass that canonical reference to the initializer. Production Compose never builds from a mutable working tree and the deployment entry point rejects tag-only images. Base images are also pinned by digest; update their readable tag and digest together during a reviewed dependency update. This follows [Docker's digest-pinning guidance](https://docs.docker.com/build/building/best-practices/#pin-base-image-versions).
 
-Provision every external secret named by `compose.yaml` with `podman secret create`; do not place database credentials, Redis credentials, signing/encryption keys, TLS private keys, or the bootstrap administrator password in `.env`, Compose environment entries, shell arguments, or logs.
+Install `podman-compose` as the secret-aware Compose provider before deployment; the entry point invokes it directly because `podman compose` is only a wrapper and prefers Docker Compose when both providers exist. Docker Compose over Podman's compatibility API cannot consume Podman external secrets. A reproducible installation is `uv tool install podman-compose==1.6.0`. The provider behavior follows Podman's [Compose wrapper documentation](https://docs.podman.io/en/v5.4.0/markdown/podman-compose.1.html).
 
-The Account Center control client trusts `platform_control_ca.pem` and presents its dedicated mTLS client certificate to `platform-mihomo:9000`. The certificate must be valid for client authentication. The Platform control certificate must contain `platform-control.internal`, which is the exact configured SNI name.
+Provision every external secret named by `compose.yaml` with `podman secret create`; do not place database credentials, Redis credentials, signing/encryption keys, TLS private keys, or the bootstrap administrator password in `.env`, Compose environment entries, shell arguments, or logs. Names below use `<account-instance>`, whose default is `paigram-account-center`; replace it with the exact `PAI_INSTANCE` value for a custom instance.
+
+The Account Center control client trusts the CA mounted from `<account-instance>-platform-control-ca` and presents the certificate/key mounted from `<account-instance>-control-client-cert` and `<account-instance>-control-client-key` to `platform-mihomo:9000`. The certificate must be valid for client authentication. The Platform control certificate must contain `platform-control.internal`, which is the exact configured SNI name.
 
 ## Secret formats
 
@@ -16,7 +18,7 @@ Generate one Ed25519 key pair, JSON-escape the PEM values, and provision the pri
 {"kid":"ticket-2026-08","private_key_pem":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"}
 ```
 
-The matching Platform secret `paigram-account-center-service-ticket-public-keyring` has this shape. Keep both old and new entries during rotation:
+The Account secret `<account-instance>-service-ticket-signing-key` contains the private document above. The matching Platform secret `paigram-account-center-service-ticket-public-keyring` has this shape. Keep both old and new entries during rotation:
 
 ```json
 {"keys":[{"kid":"ticket-2026-08","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"}]}
@@ -24,20 +26,20 @@ The matching Platform secret `paigram-account-center-service-ticket-public-keyri
 
 Generate the key pair with `openssl genpkey -algorithm ED25519` and derive the public key with `openssl pkey -pubout`. Build JSON with a JSON serializer so PEM newlines are escaped correctly. The OAuth signing key must contain at least 32 random bytes. The independent Account encryption secret must be either exactly 32 raw ASCII bytes or the padded standard-Base64 encoding of exactly 32 random bytes. Do not reuse either value as the ticket key or database password.
 
-For Redis, generate one random password. Store its raw value in `account_redis_password`, and create `account_redis_config` from a file containing `requirepass <the same password>`. A mismatch makes both the health check and Account Center fail authentication. Supply Podman secrets from files or standard input, not literal command arguments.
+For Redis, generate one random password. Store its raw value in `<account-instance>-redis-password`, and create `<account-instance>-redis-config` from a file containing `requirepass <the same password>`. A mismatch makes both the health check and Account Center fail authentication. Supply Podman secrets from files or standard input, not literal command arguments.
 
 The remaining Account secrets use these formats and pairings:
 
 | Secret | Required content |
 | --- | --- |
-| `account_postgres_password` | Raw PostgreSQL password. |
-| `account_database_dsn` | One PostgreSQL DSN for user/database `paigram` at `postgres:5432`; its URL-escaped password must represent the same raw value as `account_postgres_password`. |
-| `account_oauth_signing_key` | Raw random OAuth HMAC key of at least 32 bytes. |
-| `account_encryption_key` | Exactly 32 raw ASCII bytes, or padded standard Base64 for exactly 32 random bytes. |
-| `account_admin_password` | Raw bootstrap administrator password. |
-| `platform_control_ca` | PEM CA bundle that validates the Platform control server certificate. |
-| `account_control_client_cert` / `account_control_client_key` | Matching PEM certificate and PKCS#8 private key; the certificate must have client-auth usage and chain to the CA trusted by Platform. |
-| `account_grpc_cert` / `account_grpc_key` | Matching PEM server certificate and PKCS#8 private key; the certificate must have server-auth usage and a SAN equal to the SDK-facing Account gRPC server name. |
+| `<account-instance>-postgres-password` | Raw PostgreSQL password. |
+| `<account-instance>-database-dsn` | One PostgreSQL DSN for user/database `paigram` at `postgres:5432`; its URL-escaped password must represent the same raw value as `<account-instance>-postgres-password`. |
+| `<account-instance>-oauth-signing-key` | Raw random OAuth HMAC key of at least 32 bytes. |
+| `<account-instance>-encryption-key` | Exactly 32 raw ASCII bytes, or padded standard Base64 for exactly 32 random bytes. |
+| `<account-instance>-admin-password` | Raw bootstrap administrator password. |
+| `<account-instance>-platform-control-ca` | PEM CA bundle that validates the Platform control server certificate. |
+| `<account-instance>-control-client-cert` / `<account-instance>-control-client-key` | Matching PEM certificate and PKCS#8 private key; the certificate must have client-auth usage and chain to the CA trusted by Platform. |
+| `<account-instance>-grpc-cert` / `<account-instance>-grpc-key` | Matching PEM server certificate and PKCS#8 private key; the certificate must have server-auth usage and a SAN equal to the SDK-facing Account gRPC server name. |
 
 Encode reserved DSN password characters using PostgreSQL URI percent-encoding. Do not copy a percent-encoded DSN password into the raw PostgreSQL password secret.
 
@@ -57,6 +59,8 @@ The private `account-center` network intentionally uses `10.77.20.0/24`: the fro
 
 Nginx emits the same CSP, MIME-sniffing, clickjacking, and referrer protections for static user/admin assets and proxied responses. Public TLS ingress remains responsible for preserving these headers and enforcing HSTS at the public HTTPS boundary.
 
-Podman injects secrets only when it creates a container. After every `podman secret create --replace`, recreate each consumer with `podman compose up -d --force-recreate`; restarting an existing container does not load the replacement.
+Podman injects secrets only when it creates a container. After every `podman secret create --replace`, recreate each consumer with `podman-compose up -d --force-recreate`; restarting an existing container does not load the replacement.
 
 Rotate service-ticket keys by adding the new public key and recreating Platform first, replacing the Account signing secret and recreating Account Center, waiting the ticket TTL plus clock skew, and only then retiring the old public key and recreating Platform again. For TLS CA rotation, first publish an old+new trust bundle and recreate every verifier; next replace leaf certificates and recreate servers and clients; finally remove the old CA and recreate verifiers. New handshakes reload mounted files without a plaintext fallback, but external-secret replacement still requires container recreation.
+
+Run the checked-in [external-secret rotation rehearsal](../rotation/README.md) before approving a key or certificate rotation procedure for an environment.

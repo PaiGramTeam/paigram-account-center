@@ -4,30 +4,30 @@ server:
     addr: "0.0.0.0:9000"
     timeout_seconds: 5
     tls:
-      certificate_file: "/run/secrets/platform_control_cert.pem"
-      private_key_file: "/run/secrets/platform_control_key.pem"
-      client_ca_file: "/run/secrets/account_control_client_ca.pem"
+      certificate_file: "${SERVER_CONTROL_TLS_CERTIFICATE_FILE}"
+      private_key_file: "${SERVER_CONTROL_TLS_PRIVATE_KEY_FILE}"
+      client_ca_file: "${SERVER_CONTROL_TLS_CLIENT_CA_FILE}"
   runtime:
     network: tcp
     addr: "0.0.0.0:9001"
     timeout_seconds: 5
     tls:
-      certificate_file: "/run/secrets/platform_runtime_cert.pem"
-      private_key_file: "/run/secrets/platform_runtime_key.pem"
+      certificate_file: "${SERVER_RUNTIME_TLS_CERTIFICATE_FILE}"
+      private_key_file: "${SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE}"
 data:
   database:
-    dsn_file: "/run/secrets/platform_database_dsn"
+    dsn_file: "${DATA_DATABASE_DSN_FILE}"
   redis:
     addr: "redis:6379"
-    password_file: "/run/secrets/platform_redis_password"
+    password_file: "${DATA_REDIS_PASSWORD_FILE}"
     db: 0
     prefix: "platform-mihomo:"
 security:
-  credential_encryption_keyring_file: "/run/secrets/platform_encryption_keyring.json"
+  credential_encryption_keyring_file: "${SECURITY_CREDENTIAL_ENCRYPTION_KEYRING_FILE}"
   service_ticket_issuer: paigram-account-center
-  service_ticket_public_keyring_file: "/run/secrets/account_service_ticket_public_keyring.json"
+  service_ticket_public_keyring_file: "${SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE}"
 upstream:
   base_url: "${UPSTREAM_BASE_URL}"
   timeout_seconds: 10
-  bearer_token_file: "/run/secrets/mihomo_upstream_bearer_token"
+  bearer_token_file: "${UPSTREAM_BEARER_TOKEN_FILE}"
   allow_insecure_http: false

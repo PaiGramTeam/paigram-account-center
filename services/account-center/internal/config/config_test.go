@@ -43,6 +43,42 @@ func TestTrustedProxiesCanBeConfiguredFromEnvironment(t *testing.T) {
 	require.Equal(t, []string{"10.77.20.10"}, loaded.App.TrustedProxies)
 }
 
+func TestSecretFilePathsCanBeConfiguredFromEnvironment(t *testing.T) {
+	paths := map[string]string{
+		"PAI_DATABASE_DSN_FILE":                    "/run/secrets/account-database-dsn",
+		"PAI_REDIS_PASSWORD_FILE":                  "/run/secrets/account-redis-password",
+		"PAI_AUTH_SERVICE_TICKET_SIGNING_KEY_FILE": "/run/secrets/account-ticket-key",
+		"PAI_AUTH_OAUTH_SIGNING_KEY_FILE":          "/run/secrets/account-oauth-key",
+		"PAI_SECURITY_ENCRYPTION_KEY_FILE":         "/run/secrets/account-encryption-key",
+		"PAI_PLATFORM_CONTROL_ROOT_CA_FILE":        "/run/secrets/platform-control-ca",
+		"PAI_PLATFORM_CONTROL_CERTIFICATE_FILE":    "/run/secrets/account-control-cert",
+		"PAI_PLATFORM_CONTROL_PRIVATE_KEY_FILE":    "/run/secrets/account-control-key",
+		"PAI_GRPC_CERTIFICATE_FILE":                "/run/secrets/account-grpc-cert",
+		"PAI_GRPC_PRIVATE_KEY_FILE":                "/run/secrets/account-grpc-key",
+	}
+	for name, value := range paths {
+		t.Setenv(name, value)
+	}
+	v := viper.New()
+	setDefaults(v)
+	v.SetEnvPrefix("PAI")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	loaded := &Config{}
+	require.NoError(t, v.Unmarshal(loaded))
+	require.Equal(t, paths["PAI_DATABASE_DSN_FILE"], loaded.Database.DSNFile)
+	require.Equal(t, paths["PAI_REDIS_PASSWORD_FILE"], loaded.Redis.PasswordFile)
+	require.Equal(t, paths["PAI_AUTH_SERVICE_TICKET_SIGNING_KEY_FILE"], loaded.Auth.ServiceTicketSigningKeyFile)
+	require.Equal(t, paths["PAI_AUTH_OAUTH_SIGNING_KEY_FILE"], loaded.Auth.OAuthSigningKeyFile)
+	require.Equal(t, paths["PAI_SECURITY_ENCRYPTION_KEY_FILE"], loaded.Security.EncryptionKeyFile)
+	require.Equal(t, paths["PAI_PLATFORM_CONTROL_ROOT_CA_FILE"], loaded.PlatformControl.RootCAFile)
+	require.Equal(t, paths["PAI_PLATFORM_CONTROL_CERTIFICATE_FILE"], loaded.PlatformControl.CertificateFile)
+	require.Equal(t, paths["PAI_PLATFORM_CONTROL_PRIVATE_KEY_FILE"], loaded.PlatformControl.PrivateKeyFile)
+	require.Equal(t, paths["PAI_GRPC_CERTIFICATE_FILE"], loaded.GRPC.CertificateFile)
+	require.Equal(t, paths["PAI_GRPC_PRIVATE_KEY_FILE"], loaded.GRPC.PrivateKeyFile)
+}
+
 func TestSetDefaultsIncludesServiceTicketSettings(t *testing.T) {
 	v := viper.New()
 	setDefaults(v)
