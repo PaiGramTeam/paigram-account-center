@@ -294,7 +294,7 @@ func TestGrantServiceRevokeGrantAlreadyRevokedDoesNotIncrementTicketVersion(t *t
 	assert.WithinDuration(t, revokedAt, revoked.LastInvalidatedAt.Time, time.Millisecond)
 }
 
-func TestGrantServiceUpsertGrantReactivationPreservesTicketVersion(t *testing.T) {
+func TestGrantServiceUpsertGrantReactivationIncrementsTicketVersion(t *testing.T) {
 	db := setupPlatformBindingTestDB(t)
 	service := NewGrantService(db)
 	binding := seedGrantServiceBinding(t, db, "cn:grant-reactivate")
@@ -319,7 +319,7 @@ func TestGrantServiceUpsertGrantReactivationPreservesTicketVersion(t *testing.T)
 	assert.False(t, created)
 	assert.Equal(t, model.ConsumerGrantStatusActive, grant.Status)
 	assert.False(t, grant.RevokedAt.Valid)
-	assert.Equal(t, uint64(4), grant.TicketVersion)
+	assert.Equal(t, uint64(5), grant.TicketVersion)
 }
 
 func TestGrantServiceRevokeGrantInvalidatorFailureLeavesRetryableRevocation(t *testing.T) {

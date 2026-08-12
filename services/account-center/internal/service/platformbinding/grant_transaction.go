@@ -10,10 +10,17 @@ import (
 
 const grantTransactionAttempts = 4
 
-func runGrantTransaction(db *gorm.DB, mutation func(*gorm.DB) error) error {
+type GrantTransactionObserver interface {
+	ObserveGrantTransactionAttempt(error)
+}
+
+func runGrantTransaction(db *gorm.DB, observer GrantTransactionObserver, mutation func(*gorm.DB) error) error {
 	var err error
 	for attempt := 0; attempt < grantTransactionAttempts; attempt++ {
 		err = db.Transaction(mutation, &sql.TxOptions{Isolation: sql.LevelSerializable})
+		if observer != nil {
+			observer.ObserveGrantTransactionAttempt(err)
+		}
 		if !isRetryableGrantError(err) {
 			return err
 		}

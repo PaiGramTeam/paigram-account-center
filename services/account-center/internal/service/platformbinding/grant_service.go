@@ -19,8 +19,9 @@ import (
 var defaultConsumerActions = platformaction.MihomoDelegationActions()
 
 type GrantService struct {
-	db          *gorm.DB
-	invalidator GrantInvalidator
+	db                  *gorm.DB
+	invalidator         GrantInvalidator
+	transactionObserver GrantTransactionObserver
 }
 
 func NewGrantService(db *gorm.DB, dependencies ...any) *GrantService {
@@ -28,6 +29,9 @@ func NewGrantService(db *gorm.DB, dependencies ...any) *GrantService {
 	for _, dependency := range dependencies {
 		if invalidator, ok := dependency.(GrantInvalidator); ok {
 			service.invalidator = invalidator
+		}
+		if observer, ok := dependency.(GrantTransactionObserver); ok {
+			service.transactionObserver = observer
 		}
 	}
 	return service
@@ -54,7 +58,8 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 
 	var grant model.ConsumerGrant
 	created := false
-	err = runGrantTransaction(s.db, func(tx *gorm.DB) error {
+	err = runGrantTransaction(s.db, s.transactionObserver, func(tx *gorm.DB) error {
+		grant = model.ConsumerGrant{}
 		created = false
 		lookup := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
 		if lookup.Error != nil {
@@ -80,9 +85,10 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 			return writeGrantAudit(tx, binding, input.BindingID, input.Consumer, auditActorUserID(input.GrantedBy), true, created)
 		}
 
+		statusChanged := grant.Status != model.ConsumerGrantStatusActive || grant.RevokedAt.Valid
 		grant.Status = model.ConsumerGrantStatusActive
 		actionsChanged := !slices.Equal(grantActionNames(grant.Actions), actions)
-		if actionsChanged {
+		if actionsChanged || statusChanged {
 			grant.TicketVersion = nextTicketVersion(grant.TicketVersion)
 		}
 		if grant.TicketVersion == 0 {
@@ -187,7 +193,8 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 	var grant model.ConsumerGrant
 	shouldInvalidate := false
 	minimumGrantVersion := uint64(0)
-	err = runGrantTransaction(s.db, func(tx *gorm.DB) error {
+	err = runGrantTransaction(s.db, s.transactionObserver, func(tx *gorm.DB) error {
+		grant = model.ConsumerGrant{}
 		shouldInvalidate = false
 		minimumGrantVersion = 0
 		if err := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
@@ -248,20 +255,8 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 		if err := s.invalidateGrant(ctx, binding, input, minimumGrantVersion); err != nil {
 			return nil, err
 		}
-		grant.LastInvalidatedAt = sql.NullTime{Time: revokedAt, Valid: true}
-		if grant.ID != 0 {
-			update := s.db.Model(&model.ConsumerGrant{}).
-				Where("id = ? AND status = ? AND ticket_version = ?", grant.ID, model.ConsumerGrantStatusRevoked, minimumGrantVersion).
-				Update("last_invalidated_at", revokedAt)
-			if update.Error != nil {
-				return nil, update.Error
-			}
-			if update.RowsAffected != 1 {
-				return nil, gorm.ErrRecordNotFound
-			}
-			if err := s.db.Where("id = ?", grant.ID).First(&grant).Error; err != nil {
-				return nil, err
-			}
+		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, revokedAt); err != nil {
+			return nil, err
 		}
 	}
 

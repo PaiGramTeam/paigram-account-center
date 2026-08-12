@@ -213,11 +213,69 @@ func TestGrantServiceSerializesMissingRevokeWithInitialUpsert(t *testing.T) {
 	require.Equal(t, uint64(2), version, "both serialized operations must be reflected")
 }
 
+func TestMissingRevokeReturnsSupersedingGrantAfterInvalidation(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ownerID := insertTestUser(t, ctx, stack.SQLDB)
+	bindingID := insertTestBinding(t, ctx, stack.SQLDB, ownerID, "mihomo", "cn:grant-revoke-superseded")
+	invalidator := &blockingGrantInvalidator{
+		called:  make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	service := serviceplatformbinding.NewGrantService(stack.DB, invalidator)
+	type revokeResult struct {
+		grantVersion uint64
+		grantStatus  string
+		err          error
+	}
+	result := make(chan revokeResult, 1)
+	go func() {
+		grant, err := service.RevokeGrant(serviceplatformbinding.RevokeGrantInput{
+			BindingID: bindingID,
+			Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
+		})
+		if err != nil {
+			result <- revokeResult{err: err}
+			return
+		}
+		result <- revokeResult{
+			grantVersion: grant.TicketVersion,
+			grantStatus:  string(grant.Status),
+		}
+	}()
+	select {
+	case <-invalidator.called:
+	case <-ctx.Done():
+		t.Fatalf("wait for grant invalidation: %v", ctx.Err())
+	}
+
+	active, created, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+		BindingID: bindingID,
+		Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
+		Actions:   []string{"mihomo.status.read"},
+	})
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Equal(t, uint64(2), active.TicketVersion)
+	close(invalidator.release)
+
+	select {
+	case revoked := <-result:
+		require.NoError(t, revoked.err)
+		require.Equal(t, uint64(2), revoked.grantVersion)
+		require.Equal(t, "active", revoked.grantStatus)
+	case <-ctx.Done():
+		t.Fatalf("wait for superseded revoke result: %v", ctx.Err())
+	}
+}
+
 func TestGrantServiceDoesNotDeadlockWithDirectActionDelete(t *testing.T) {
 	stack := newIntegrationStack(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	grantID, bindingID := insertGrantWithActions(t, ctx, stack, "cn:grant-lock-order", "mihomo.authkey.issue", "mihomo.status.read")
+	attempts := &recordingGrantTransactionObserver{}
 
 	directTx, err := stack.SQLDB.BeginTx(ctx, nil)
 	require.NoError(t, err)
@@ -227,7 +285,7 @@ func TestGrantServiceDoesNotDeadlockWithDirectActionDelete(t *testing.T) {
 
 	serviceResult := make(chan error, 1)
 	go func() {
-		_, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+		_, _, err := serviceplatformbinding.NewGrantService(stack.DB, attempts).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
 			BindingID: bindingID,
 			Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
 			Actions:   []string{"mihomo.profile.read"},
@@ -246,6 +304,7 @@ func TestGrantServiceDoesNotDeadlockWithDirectActionDelete(t *testing.T) {
 	var version uint64
 	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT ticket_version FROM consumer_grants WHERE id = $1`, grantID).Scan(&version))
 	require.Equal(t, uint64(2), version)
+	require.NotContains(t, attempts.SQLStates(), "40P01")
 }
 
 func TestDeletingBindingCascadesConsumerGrantActions(t *testing.T) {
@@ -427,5 +486,45 @@ func waitForDatabaseLockWaiter(t *testing.T, ctx context.Context, db *sql.DB) {
 			t.Fatalf("wait for database lock contention: %v", ctx.Err())
 		case <-ticker.C:
 		}
+	}
+}
+
+type blockingGrantInvalidator struct {
+	called  chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+type recordingGrantTransactionObserver struct {
+	mutex     sync.Mutex
+	sqlStates []string
+}
+
+func (o *recordingGrantTransactionObserver) ObserveGrantTransactionAttempt(err error) {
+	if err == nil {
+		return
+	}
+	var postgresError *pgconn.PgError
+	if !errors.As(err, &postgresError) {
+		return
+	}
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+	o.sqlStates = append(o.sqlStates, postgresError.Code)
+}
+
+func (o *recordingGrantTransactionObserver) SQLStates() []string {
+	o.mutex.Lock()
+	defer o.mutex.Unlock()
+	return append([]string(nil), o.sqlStates...)
+}
+
+func (b *blockingGrantInvalidator) InvalidateConsumerGrant(ctx context.Context, _ serviceplatformbinding.GrantInvalidationInput) error {
+	b.once.Do(func() { close(b.called) })
+	select {
+	case <-b.release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
