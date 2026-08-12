@@ -37,6 +37,7 @@ func TestVerifyAcceptsFullySpecifiedDelegationTicket(t *testing.T) {
 
 	claims, err := verifier.Verify(raw, testTicketAudience)
 	require.NoError(t, err)
+	require.Equal(t, contractticket.TypeDelegation, claims.TicketType)
 	require.Equal(t, "paigram", claims.Consumer)
 	require.Equal(t, []string{"mihomo.profile.read"}, claims.Scopes)
 }

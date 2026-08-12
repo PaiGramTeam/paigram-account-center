@@ -1,6 +1,7 @@
 package biz
 
 type ServiceTicketClaims struct {
+	TicketType  string
 	ActorType   string
 	ActorID     string
 	OwnerUserID uint64

@@ -166,6 +166,7 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 	}
 
 	return &biz.ServiceTicketClaims{
+		TicketType:         ticketType,
 		ActorType:          claims.ActorType,
 		ActorID:            claims.ActorID,
 		OwnerUserID:        claims.OwnerUserID,

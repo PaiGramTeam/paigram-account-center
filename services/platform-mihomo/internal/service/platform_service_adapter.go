@@ -244,6 +244,9 @@ func (s *GenericPlatformService) RefreshCredential(ctx context.Context, req *pla
 	if err != nil {
 		return nil, err
 	}
+	if err := requireControlTicket(claims); err != nil {
+		return nil, err
+	}
 	guard, err := scopedGuard(claims, usecase.ActionCredentialRefresh)
 	if err != nil {
 		return nil, mapUsecaseError(err)
@@ -276,6 +279,9 @@ func (s *GenericPlatformService) DeleteCredential(ctx context.Context, req *plat
 
 	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
+		return nil, err
+	}
+	if err := requireControlTicket(claims); err != nil {
 		return nil, err
 	}
 	guard, err := scopedGuard(claims, usecase.ActionCredentialDelete)

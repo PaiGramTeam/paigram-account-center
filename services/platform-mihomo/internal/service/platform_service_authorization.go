@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -13,6 +14,13 @@ import (
 )
 
 const serviceTicketAudience = "platform-mihomo-service"
+
+func requireControlTicket(claims *biz.ServiceTicketClaims) error {
+	if claims == nil || claims.TicketType != contractticket.TypeControl {
+		return status.Error(codes.PermissionDenied, "control service ticket is required")
+	}
+	return nil
+}
 
 func mapTicketVerificationError(err error) error {
 	if errors.Is(err, data.ErrGrantVersionRevoked) {

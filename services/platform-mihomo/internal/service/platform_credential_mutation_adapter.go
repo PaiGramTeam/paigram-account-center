@@ -66,6 +66,9 @@ func (s *GenericPlatformService) authorizeCredentialMutation(ctx context.Context
 	if err != nil {
 		return nil, usecase.ScopeGuard{}, err
 	}
+	if err := requireControlTicket(claims); err != nil {
+		return nil, usecase.ScopeGuard{}, err
+	}
 	guard, err := scopedGuard(claims, action)
 	if err != nil {
 		return nil, usecase.ScopeGuard{}, mapUsecaseError(err)
