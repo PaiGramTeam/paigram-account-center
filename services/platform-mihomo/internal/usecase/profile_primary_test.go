@@ -23,6 +23,7 @@ func TestSetPrimaryProfileByRefUsesStableProfileIdentity(t *testing.T) {
 	selected, err := uc.SetPrimaryProfileByRef(context.Background(), ScopeGuard{
 		BindingRef: "binding-101",
 		AccountKey: "account-101",
+		ProfileRef: "profile-two",
 	}, "account-101", "profile-two")
 	require.NoError(t, err)
 	require.Equal(t, "profile-two", selected.ProfileRef)

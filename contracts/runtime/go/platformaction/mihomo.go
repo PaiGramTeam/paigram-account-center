@@ -15,7 +15,7 @@ const (
 	MihomoOperationRead           = "mihomo.operation.read"
 	MihomoOperationResolve        = "mihomo.operation.resolve"
 	MihomoProfileRead             = "mihomo.profile.read"
-	MihomoProfilePrimarySet       = "mihomo.profile.primary.set"
+	MihomoProfileWrite            = "mihomo.profile.write"
 	MihomoStatusRead              = "mihomo.status.read"
 )
 
@@ -36,7 +36,7 @@ var mihomoControlActions = []string{
 	MihomoCredentialUpdate,
 	MihomoOperationRead,
 	MihomoOperationResolve,
-	MihomoProfilePrimarySet,
+	MihomoProfileWrite,
 }
 
 func MihomoDelegationActions() []string {

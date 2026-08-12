@@ -229,7 +229,7 @@ func (s *PlatformControlService) SetPrimaryProfile(ctx context.Context, req *pla
 		ctx,
 		requestOperation,
 		platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE,
-		usecase.ActionProfilePrimarySet,
+		usecase.ActionProfileWrite,
 		req.GetAccountKey(),
 		primaryProfileFingerprint(requestOperation, req),
 	)
@@ -337,7 +337,8 @@ func (s *PlatformControlService) authorizeOperation(ctx context.Context, request
 	if expectedFingerprint == "" || request.GetRequestFingerprint() != expectedFingerprint {
 		return biz.OperationRef{}, nil, status.Error(codes.InvalidArgument, "operation request fingerprint does not match payload")
 	}
-	claims, err := authorizeTicketAction(ctx, s.ticketVerifier, action, true)
+	bindingWide := expectedKind != platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE
+	claims, err := authorizeTicketActionForScope(ctx, s.ticketVerifier, action, true, bindingWide)
 	if err != nil {
 		return biz.OperationRef{}, nil, err
 	}

@@ -690,6 +690,10 @@ func (s *serviceGroupPlatformServiceStub) IssueBindingScopedOperationTicket(stri
 	return "ticket", time.Now().UTC(), nil
 }
 
+func (s *serviceGroupPlatformServiceStub) IssueProfileScopedOperationTicket(string, string, *model.PlatformAccountBinding, string, string, []string) (string, time.Time, error) {
+	return "ticket", time.Now().UTC(), nil
+}
+
 func (s *serviceGroupPlatformServiceStub) GetBindingRuntimeSummary(context.Context, string, string, *model.PlatformAccountBinding, []string) (map[string]any, error) {
 	return nil, nil
 }

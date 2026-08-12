@@ -42,8 +42,8 @@ func TestConcurrentPrimaryProfileSwitchesUseRevisionCAS(t *testing.T) {
 		primaryProfileOperationRef("concurrent-primary-two", 1, refs[1], 1),
 	}
 	contexts := []context.Context{
-		ticketContextForOperation(t, accountKey, platformaction.MihomoProfilePrimarySet, contractticket.TypeControl, operations[0].GetOperationId(), 1),
-		ticketContextForOperation(t, accountKey, platformaction.MihomoProfilePrimarySet, contractticket.TypeControl, operations[1].GetOperationId(), 1),
+		ticketContextForProfileOperation(t, accountKey, platformaction.MihomoProfileWrite, operations[0].GetOperationId(), 1, refs[0]),
+		ticketContextForProfileOperation(t, accountKey, platformaction.MihomoProfileWrite, operations[1].GetOperationId(), 1, refs[1]),
 	}
 
 	start := make(chan struct{})

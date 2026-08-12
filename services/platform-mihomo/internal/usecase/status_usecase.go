@@ -91,13 +91,19 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 	if err != nil {
 		return nil, err
 	}
-	accountID, region, discoveredProfiles, validationErr := uc.hoyoClient.ValidateAndDiscover(ctx, cookieBundleJSON, credential.Region)
+	refresher, ok := uc.hoyoClient.(platformmihomo.CredentialRefresher)
+	if !ok {
+		return nil, &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorUnavailable}
+	}
+	refreshResult, validationErr := refresher.RefreshCredential(ctx, cookieBundleJSON, credential.Region)
 	now := time.Now().UTC()
 	credential.LastValidatedAt = &now
 	if validationErr != nil {
+		if !isCredentialAttentionError(validationErr) {
+			return nil, validationErr
+		}
 		credential.Status = classifyCredentialStatus(validationErr)
 		credential.ProfileSnapshotComplete = false
-		credential.ProfileRevision = credential.Generation
 		if err := uc.credentials.Save(ctx, credential); err != nil {
 			return nil, err
 		}
@@ -109,17 +115,21 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 			ProfileObservedRevision: credential.ProfileObservedRevision,
 		}, nil
 	}
-	if credential.AccountID != "" && credential.AccountID != accountID {
+	if credential.AccountID != "" && credential.AccountID != refreshResult.AccountID {
 		return nil, errors.New("discovered account does not match credential")
+	}
+	rotatedBlob, err := internalcrypto.EncryptString(uc.encryptionKey, refreshResult.CredentialBundleJSON)
+	if err != nil {
+		return nil, err
 	}
 
 	previousPrimary := primaryProfileIdentity(existingProfiles)
 	if err := uc.profiles.DeleteByAccountKey(ctx, accountKey); err != nil {
 		return nil, err
 	}
-	refreshedProfiles := make([]*ProfileSummary, 0, len(discoveredProfiles))
-	primaryIndex := refreshedPrimaryIndex(discoveredProfiles, previousPrimary)
-	for index, discovered := range discoveredProfiles {
+	refreshedProfiles := make([]*ProfileSummary, 0, len(refreshResult.Profiles))
+	primaryIndex := refreshedPrimaryIndex(refreshResult.Profiles, previousPrimary)
+	for index, discovered := range refreshResult.Profiles {
 		profile := &biz.Profile{
 			BindingRef:   credential.BindingRef,
 			AccountKey:   accountKey,
@@ -138,13 +148,16 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 		refreshedProfiles = append(refreshedProfiles, toProfileSummary(profile))
 	}
 
-	credential.AccountID = accountID
-	credential.Region = region
+	credential.AccountID = refreshResult.AccountID
+	credential.Region = refreshResult.Region
+	credential.CredentialBlob = rotatedBlob
 	credential.Status = "active"
 	credential.LastRefreshedAt = &now
+	expiresAt := refreshResult.ExpiresAt.UTC()
+	credential.ExpiresAt = &expiresAt
 	credential.ProfileSnapshotComplete = true
-	credential.ProfileRevision = credential.Generation
-	credential.ProfileObservedRevision = credential.Generation
+	credential.ProfileRevision = nextProfileRevision(credential.ProfileRevision, credential.ProfileObservedRevision)
+	credential.ProfileObservedRevision = credential.ProfileRevision
 	if err := uc.credentials.Save(ctx, credential); err != nil {
 		return nil, err
 	}
@@ -157,6 +170,19 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 		ProfileRevision:         credential.ProfileRevision,
 		ProfileObservedRevision: credential.ProfileObservedRevision,
 	}, nil
+}
+
+func nextProfileRevision(revision, observedRevision uint64) uint64 {
+	if observedRevision > revision {
+		return observedRevision + 1
+	}
+	return revision + 1
+}
+
+func isCredentialAttentionError(err error) bool {
+	return platformmihomo.IsErrorKind(err, platformmihomo.ErrorInvalidCredential) ||
+		platformmihomo.IsErrorKind(err, platformmihomo.ErrorExpiredCredential) ||
+		platformmihomo.IsErrorKind(err, platformmihomo.ErrorChallengeRequired)
 }
 
 func primaryProfileIdentity(profiles []*biz.Profile) *biz.ProfileIdentity {

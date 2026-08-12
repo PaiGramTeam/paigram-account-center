@@ -180,17 +180,24 @@ func (s *PlatformService) GetPlatformSchemaView(platformKey string) (*PlatformSc
 }
 
 func (s *PlatformService) IssueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (string, time.Time, error) {
-	return s.issueBindingScopedTicket(actorType, actorID, binding, "", scopes)
+	return s.issueBindingScopedTicket(actorType, actorID, binding, "", "", scopes)
 }
 
 func (s *PlatformService) IssueBindingScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, operationID string, scopes []string) (string, time.Time, error) {
 	if operationID == "" {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
-	return s.issueBindingScopedTicket(actorType, actorID, binding, operationID, scopes)
+	return s.issueBindingScopedTicket(actorType, actorID, binding, "", operationID, scopes)
 }
 
-func (s *PlatformService) issueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, operationID string, scopes []string) (string, time.Time, error) {
+func (s *PlatformService) IssueProfileScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, profileRef, operationID string, scopes []string) (string, time.Time, error) {
+	if profileRef == "" || operationID == "" {
+		return "", time.Time{}, ErrInvalidTicketConfig
+	}
+	return s.issueBindingScopedTicket(actorType, actorID, binding, profileRef, operationID, scopes)
+}
+
+func (s *PlatformService) issueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, profileRef, operationID string, scopes []string) (string, time.Time, error) {
 	if s.ticketSigner == nil {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
@@ -215,6 +222,7 @@ func (s *PlatformService) issueBindingScopedTicket(actorType, actorID string, bi
 	claims.OwnerEpoch = owner.OwnerEpoch
 	claims.CredentialGeneration = binding.Generation
 	claims.OperationID = operationID
+	claims.ProfileRef = profileRef
 	claims.AllowedActions = scopes
 	return s.ticketSigner.Issue(ticketTypeForActor(actorType), ticketSubject(actorType, actorID, owner.UserRef), platformRow.ServiceAudience, claims)
 }

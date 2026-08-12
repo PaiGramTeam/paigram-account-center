@@ -65,4 +65,10 @@ func TestConfirmPrimaryProfileWithScopeRejectsProfileScopedTicket(t *testing.T) 
 	require.ErrorIs(t, err, ErrProfileScopeDenied)
 }
 
+func TestScopeGuardRequiresExactProfileClaimForProfileMutation(t *testing.T) {
+	require.ErrorIs(t, (ScopeGuard{BindingRef: "binding-1"}).RequireExactProfile("profile-1"), ErrProfileScopeDenied)
+	require.ErrorIs(t, (ScopeGuard{BindingRef: "binding-1", ProfileRef: "profile-2"}).RequireExactProfile("profile-1"), ErrProfileScopeDenied)
+	require.NoError(t, (ScopeGuard{BindingRef: "binding-1", ProfileRef: "profile-1"}).RequireExactProfile("profile-1"))
+}
+
 var _ biz.ProfileRepository = (*memoryProfileRepo)(nil)

@@ -581,6 +581,8 @@ CREATE TABLE platform_operation_intents (
     pre_generation BIGINT NOT NULL,
     target_generation BIGINT NOT NULL,
     request_fingerprint VARCHAR(64) NOT NULL,
+    profile_ref VARCHAR(64) NOT NULL DEFAULT '',
+    profile_revision BIGINT NOT NULL DEFAULT 0,
     delivery_mode VARCHAR(32) NOT NULL,
     state VARCHAR(32) NOT NULL,
     reason_code VARCHAR(64),
@@ -597,15 +599,23 @@ CREATE TABLE platform_operation_intents (
         CASE WHEN kind = 'OPERATION_KIND_BIND_CREDENTIAL' AND state IN ('pending_delivery', 'uncertain', 'projection_pending', 'input_required', 'invariant_violation') THEN 1 ELSE NULL END
     ) STORED,
     CONSTRAINT chk_platform_operation_intents_generation CHECK (
-        pre_generation >= 0 AND target_generation = pre_generation + 1
+        pre_generation >= 0 AND (
+            (kind = 'OPERATION_KIND_SET_PRIMARY_PROFILE' AND target_generation = pre_generation)
+            OR (kind <> 'OPERATION_KIND_SET_PRIMARY_PROFILE' AND target_generation = pre_generation + 1)
+        )
     ),
     CONSTRAINT chk_platform_operation_intents_kind CHECK (
         kind IN (
             'OPERATION_KIND_BIND_CREDENTIAL',
             'OPERATION_KIND_REPLACE_CREDENTIAL',
             'OPERATION_KIND_REFRESH_CREDENTIAL',
-            'OPERATION_KIND_DELETE_CREDENTIAL'
+            'OPERATION_KIND_DELETE_CREDENTIAL',
+            'OPERATION_KIND_SET_PRIMARY_PROFILE'
         )
+    ),
+    CONSTRAINT chk_platform_operation_intents_profile CHECK (
+        (kind = 'OPERATION_KIND_SET_PRIMARY_PROFILE' AND profile_ref <> '' AND profile_revision > 0)
+        OR (kind <> 'OPERATION_KIND_SET_PRIMARY_PROFILE' AND profile_ref = '' AND profile_revision = 0)
     ),
     CONSTRAINT chk_platform_operation_intents_state CHECK (
         state IN ('pending_delivery', 'uncertain', 'projection_pending', 'input_required', 'invariant_violation', 'succeeded', 'failed', 'superseded')

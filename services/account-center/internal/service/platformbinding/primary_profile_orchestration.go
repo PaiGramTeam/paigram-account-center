@@ -3,7 +3,9 @@ package platformbinding
 import (
 	"context"
 	"errors"
+	"time"
 
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"google.golang.org/grpc/codes"
@@ -42,24 +44,43 @@ func (s *OrchestrationService) SetPrimaryProfileForOwner(ctx context.Context, ow
 	if err != nil {
 		return nil, err
 	}
-	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket("user", actorID, binding, operationID, []string{platformaction.MihomoProfilePrimarySet})
+	kind := platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE
+	reference := CredentialOperationReference{
+		OperationID: operationID, Kind: kind.String(), BindingRef: binding.BindingRef,
+		PreGeneration: binding.Generation, TargetGeneration: binding.Generation,
+		RequestFingerprint: operationid.PrimaryProfileFingerprint(kind.String(), binding.BindingRef, profile.ProfileRef, binding.Generation, binding.ProfileRevision),
+	}
+	if s.operationIntents != nil {
+		_, err = s.operationIntents.Admit(ctx, CredentialOperationIntentInput{
+			OperationID: reference.OperationID, BindingID: binding.ID, BindingRef: reference.BindingRef, Kind: reference.Kind,
+			PreGeneration: reference.PreGeneration, TargetGeneration: reference.TargetGeneration, RequestFingerprint: reference.RequestFingerprint,
+			ProfileRef: profile.ProfileRef, ProfileRevision: binding.ProfileRevision, ActorType: "user", ActorID: actorID,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	ticket, _, err := s.platformService.IssueProfileScopedOperationTicket("user", actorID, binding, profile.ProfileRef, operationID, []string{platformaction.MihomoProfileWrite})
 	if err != nil {
+		if s.operationIntents != nil {
+			_ = s.operationIntents.Reschedule(ctx, operationID, "ticket_issue_failed", time.Now().UTC().Add(credentialOperationRetryDelay))
+			return nil, &CredentialOperationPendingError{OperationID: operationID, BindingID: binding.ID, State: model.PlatformOperationIntentStatePendingDelivery}
+		}
 		return nil, err
 	}
 	summary, err := s.gateway.SetPrimaryProfile(ctx, platformRow.Endpoint, ticket, operationID, binding, profile.ProfileRef)
 	if err != nil {
+		deliveryErr := s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
+		var pending *CredentialOperationPendingError
+		if errors.As(deliveryErr, &pending) {
+			return nil, pending
+		}
 		mapped := normalizePrimaryProfileOperationError(err)
 		s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", reasonCode(mapped), uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profileID})
 		return nil, mapped
 	}
-	if summary == nil || !summary.ProfileSnapshotComplete || summary.ProfileObservedRevision < summary.ProfileRevision {
-		return nil, ErrPlatformSummaryProxyUnavailable
-	}
-	updated, err := s.bindingReader.PersistRuntimeSummary(binding.ID, *summary)
+	updated, err := s.applyAuthoritativeSummary(ctx, operationID, kind.String(), binding, binding.Generation, summary)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.syncProfiles(binding, updated, summary); err != nil {
 		return nil, err
 	}
 	s.recordBindingAudit(ctx, binding, "primary_profile_change", "success", "", uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profileID})

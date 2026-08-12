@@ -24,7 +24,7 @@ const (
 	ActionCredentialUpdate   = platformaction.MihomoCredentialUpdate
 	ActionCredentialRefresh  = platformaction.MihomoCredentialRefresh
 	ActionCredentialDelete   = platformaction.MihomoCredentialDelete
-	ActionProfilePrimarySet  = platformaction.MihomoProfilePrimarySet
+	ActionProfileWrite       = platformaction.MihomoProfileWrite
 )
 
 type ScopeGuard struct {
@@ -60,6 +60,13 @@ func (g ScopeGuard) RequireProfile(bindingRef, profileRef string) error {
 		return ErrBindingScopeDenied
 	}
 	if g.ProfileRef != "" && g.ProfileRef != profileRef {
+		return ErrProfileScopeDenied
+	}
+	return nil
+}
+
+func (g ScopeGuard) RequireExactProfile(profileRef string) error {
+	if g.ProfileRef == "" || profileRef == "" || g.ProfileRef != profileRef {
 		return ErrProfileScopeDenied
 	}
 	return nil

@@ -119,6 +119,10 @@ func toScopeGuardMust(claims *biz.ServiceTicketClaims) usecase.ScopeGuard {
 }
 
 func authorizeTicketAction(ctx context.Context, verifier *data.TicketVerifier, action string, control bool) (*biz.ServiceTicketClaims, error) {
+	return authorizeTicketActionForScope(ctx, verifier, action, control, true)
+}
+
+func authorizeTicketActionForScope(ctx context.Context, verifier *data.TicketVerifier, action string, control, bindingWide bool) (*biz.ServiceTicketClaims, error) {
 	claims, err := serviceTicketClaims(ctx, verifier)
 	if err != nil {
 		return nil, err
@@ -134,7 +138,7 @@ func authorizeTicketAction(ctx context.Context, verifier *data.TicketVerifier, a
 	if err != nil {
 		return nil, mapUsecaseError(err)
 	}
-	if err := guard.RequireBindingWide(); control && err != nil {
+	if err := guard.RequireBindingWide(); control && bindingWide && err != nil {
 		return nil, mapUsecaseError(err)
 	}
 	return claims, nil

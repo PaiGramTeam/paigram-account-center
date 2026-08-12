@@ -53,6 +53,31 @@ func TestHTTPClientMapsRateLimitWithoutReturningResponseBody(t *testing.T) {
 	require.Equal(t, 7*time.Second, upstreamErr.RetryAfter)
 }
 
+func TestHTTPClientRefreshesCredentialAndExpiry(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/credentials:refresh", r.URL.Path)
+		var request discoverRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		require.JSONEq(t, `{"cookie_token":"old"}`, request.CredentialBundleJSON)
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(refreshResponse{
+			CredentialBundleJSON: `{"cookie_token":"rotated"}`,
+			AccountID:            "10001", Region: "cn_gf01", ExpiresAt: expiresAt,
+			Profiles: []DiscoveredProfile{{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", Level: 60}},
+		}))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+	require.NoError(t, err)
+
+	result, err := client.RefreshCredential(context.Background(), `{"cookie_token":"old"}`, "")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"cookie_token":"rotated"}`, result.CredentialBundleJSON)
+	require.Equal(t, expiresAt, result.ExpiresAt)
+	require.Len(t, result.Profiles, 1)
+}
+
 func TestHTTPClientRequiresHTTPSByDefault(t *testing.T) {
 	_, err := NewHTTPClient(HTTPClientConfig{BaseURL: "http://upstream.example", Timeout: time.Second})
 	require.EqualError(t, err, "mihomo upstream base_url must use https")

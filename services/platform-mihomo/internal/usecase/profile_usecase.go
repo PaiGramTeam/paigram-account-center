@@ -84,7 +84,7 @@ func (uc *ProfileUsecase) SetPrimaryProfileByRef(ctx context.Context, guard Scop
 	if err := guard.RequireAccountKey(accountKey); err != nil {
 		return nil, err
 	}
-	if err := guard.RequireBindingWide(); err != nil {
+	if err := guard.RequireExactProfile(profileRef); err != nil {
 		return nil, err
 	}
 	profile, err := uc.GetProfileByRef(ctx, guard, accountKey, profileRef)

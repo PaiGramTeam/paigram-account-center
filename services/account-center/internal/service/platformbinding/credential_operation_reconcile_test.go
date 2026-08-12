@@ -15,14 +15,15 @@ import (
 
 type fakeCredentialOperationResolver struct {
 	*fakeCredentialGateway
-	resolution    *CredentialOperationResolution
-	bindingState  *CredentialBindingState
-	resolveErr    error
-	stateErr      error
-	resolvedRef   CredentialOperationReference
-	refreshCalled bool
-	deleteCalled  bool
-	deliveryErr   error
+	resolution     *CredentialOperationResolution
+	bindingState   *CredentialBindingState
+	resolveErr     error
+	stateErr       error
+	resolvedRef    CredentialOperationReference
+	refreshCalled  bool
+	deleteCalled   bool
+	deliveryErr    error
+	refreshSummary *RuntimeSummary
 }
 
 func (f *fakeCredentialOperationResolver) ResolveCredentialOperation(_ context.Context, _, _ string, reference CredentialOperationReference) (*CredentialOperationResolution, error) {
@@ -34,9 +35,9 @@ func (f *fakeCredentialOperationResolver) GetCredentialBindingState(context.Cont
 	return f.bindingState, f.stateErr
 }
 
-func (f *fakeCredentialOperationResolver) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
+func (f *fakeCredentialOperationResolver) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) (*RuntimeSummary, error) {
 	f.refreshCalled = true
-	return f.deliveryErr
+	return f.refreshSummary, f.deliveryErr
 }
 
 func (f *fakeCredentialOperationResolver) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
@@ -106,6 +107,7 @@ func TestReconcileSucceededOperationRepairsProjectionAndCompletesIntent(t *testi
 		fakeCredentialGateway: &fakeCredentialGateway{},
 		resolution: &CredentialOperationResolution{State: CredentialRemoteOperationSucceeded, Summary: &RuntimeSummary{
 			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
 		}},
 	}
 	service, store, reader := newCredentialReconcileService(t, resolver)
@@ -179,13 +181,19 @@ func newNonSensitiveReconcileService(t *testing.T, resolver *fakeCredentialOpera
 }
 
 func TestReconcileDeliversPendingNonSensitiveRefresh(t *testing.T) {
-	resolver := &fakeCredentialOperationResolver{fakeCredentialGateway: &fakeCredentialGateway{}}
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway: &fakeCredentialGateway{},
+		refreshSummary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 5, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 2, ProfileObservedRevision: 2,
+		},
+	}
 	service, store, reader := newNonSensitiveReconcileService(t, resolver, false)
 
 	err := service.ReconcileCredentialOperation(context.Background(), "op_refresh")
 	require.NoError(t, err)
 	assert.True(t, resolver.refreshCalled)
-	assert.Equal(t, model.PlatformAccountBindingStatusRefreshRequired, reader.binding.Status)
+	assert.Equal(t, model.PlatformAccountBindingStatusActive, reader.binding.Status)
 	intent, getErr := store.Get(context.Background(), "op_refresh")
 	require.NoError(t, getErr)
 	assert.Equal(t, model.PlatformOperationIntentStateSucceeded, intent.State)

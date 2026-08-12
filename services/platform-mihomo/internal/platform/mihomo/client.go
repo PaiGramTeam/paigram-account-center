@@ -44,6 +44,18 @@ type DiscoveredProfile struct {
 	Level    int32
 }
 
+type RefreshResult struct {
+	CredentialBundleJSON string
+	AccountID            string
+	Region               string
+	Profiles             []DiscoveredProfile
+	ExpiresAt            time.Time
+}
+
+type CredentialRefresher interface {
+	RefreshCredential(ctx context.Context, cookieBundleJSON string, regionHint string) (RefreshResult, error)
+}
+
 type Client interface {
 	ValidateAndDiscover(ctx context.Context, cookieBundleJSON string, regionHint string) (accountID string, region string, profiles []DiscoveredProfile, err error)
 	IssueAuthKey(ctx context.Context, cookieBundleJSON string, playerID string) (authKey string, expiresInSeconds int64, err error)

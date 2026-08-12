@@ -10,7 +10,6 @@ import (
 	"time"
 
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
-	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -159,8 +158,13 @@ func (f *fakeOrchestrationPlatformService) IssueBindingScopedOperationTicket(act
 	return f.IssueBindingScopedTicket(actorType, actorID, binding, scopes)
 }
 
+func (f *fakeOrchestrationPlatformService) IssueProfileScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, _ string, _ string, scopes []string) (string, time.Time, error) {
+	return f.IssueBindingScopedTicket(actorType, actorID, binding, scopes)
+}
+
 type fakeRefreshGateway struct {
 	err      error
+	summary  *RuntimeSummary
 	called   bool
 	endpoint string
 	ticket   string
@@ -175,12 +179,12 @@ func (f *fakeRefreshGateway) ReplaceCredential(context.Context, string, string, 
 	panic("unexpected call")
 }
 
-func (f *fakeRefreshGateway) RefreshCredential(ctx context.Context, endpoint, ticket, _ string, binding *model.PlatformAccountBinding) error {
+func (f *fakeRefreshGateway) RefreshCredential(ctx context.Context, endpoint, ticket, _ string, binding *model.PlatformAccountBinding) (*RuntimeSummary, error) {
 	f.called = true
 	f.endpoint = endpoint
 	f.ticket = ticket
 	f.binding = binding
-	return f.err
+	return f.summary, f.err
 }
 
 func (f *fakeRefreshGateway) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
@@ -202,22 +206,18 @@ type fakeRuntimeSummaryPlatformService struct {
 }
 
 type fakeCredentialGateway struct {
-	summary           map[string]any
-	err               error
-	called            bool
-	lastMutation      string
-	deleteCalled      bool
-	deleteCallCount   int
-	deleteErr         error
-	deleteEndpoint    string
-	deleteTicket      string
-	deleteBindingID   uint64
-	deleteAccountKey  sql.NullString
-	deleteGeneration  uint64
-	primarySummary    *RuntimeSummary
-	primaryErr        error
-	primaryCalled     bool
-	primaryProfileRef string
+	summary          map[string]any
+	err              error
+	called           bool
+	lastMutation     string
+	deleteCalled     bool
+	deleteCallCount  int
+	deleteErr        error
+	deleteEndpoint   string
+	deleteTicket     string
+	deleteBindingID  uint64
+	deleteAccountKey sql.NullString
+	deleteGeneration uint64
 }
 
 type fakeProfileSyncer struct {
@@ -309,7 +309,7 @@ func (f *fakeCredentialGateway) ReplaceCredential(context.Context, string, strin
 	return f.summary, nil
 }
 
-func (f *fakeCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
+func (f *fakeCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) (*RuntimeSummary, error) {
 	panic("unexpected call")
 }
 
@@ -326,13 +326,8 @@ func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ti
 	return f.deleteErr
 }
 
-func (f *fakeCredentialGateway) SetPrimaryProfile(_ context.Context, _, _ string, _ string, _ *model.PlatformAccountBinding, profileRef string) (*RuntimeSummary, error) {
-	f.primaryCalled = true
-	f.primaryProfileRef = profileRef
-	if f.primaryErr != nil {
-		return nil, f.primaryErr
-	}
-	return f.primarySummary, nil
+func (f *fakeCredentialGateway) SetPrimaryProfile(_ context.Context, _, _ string, _ string, _ *model.PlatformAccountBinding, _ string) (*RuntimeSummary, error) {
+	panic("unexpected call")
 }
 
 func (f *fakeRuntimeSummaryPlatformService) GetBindingRuntimeSummary(_ context.Context, actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (map[string]any, error) {
@@ -352,6 +347,7 @@ func TestRuntimeSummaryDelegatesToPlatformService(t *testing.T) {
 		ID:                 101,
 		OwnerUserID:        7,
 		Platform:           "mihomo",
+		Generation:         4,
 		ExternalAccountKey: sql.NullString{String: "cn:10001", Valid: true},
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
@@ -487,6 +483,7 @@ func TestRefreshBindingAsAdminRecordsAdminActorUserID(t *testing.T) {
 		ID:                 101,
 		OwnerUserID:        7,
 		Platform:           "mihomo",
+		Generation:         4,
 		ExternalAccountKey: sql.NullString{String: "cn:10001", Valid: true},
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
@@ -494,7 +491,10 @@ func TestRefreshBindingAsAdminRecordsAdminActorUserID(t *testing.T) {
 		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
-	gateway := &fakeRefreshGateway{}
+	gateway := &fakeRefreshGateway{summary: &RuntimeSummary{
+		PlatformAccountID: "cn:10001", Generation: 5, Status: "active",
+		ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
+	}}
 	auditWriter := &fakeOrchestrationAuditWriter{}
 	svc := NewOrchestrationService(reader, platformSvc, gateway, auditWriter)
 
@@ -822,63 +822,6 @@ func TestPutCredentialForOwnerMarksDraftCredentialInvalidOnValidationFailure(t *
 	assert.Nil(t, summary)
 	assert.Equal(t, model.PlatformAccountBindingStatusCredentialInvalid, reader.binding.Status)
 	assert.Equal(t, "credential_validation_failed", reader.updatedReason)
-}
-
-func TestSetPrimaryProfileForOwnerUpdatesProjectionOnlyAfterExecutionPlaneSuccess(t *testing.T) {
-	binding := &model.PlatformAccountBinding{
-		ID:                 101,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		BindingRef:         "binding-101",
-		Generation:         4,
-		ProfileRevision:    7,
-		ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true},
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformSvc := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
-	profileSyncer := &fakeProfileSyncer{profile: &model.PlatformAccountProfile{ID: 404, BindingID: 101, ProfileRef: "profile-stable"}}
-	gateway := &fakeCredentialGateway{primarySummary: &RuntimeSummary{
-		PlatformAccountID: "binding_101_10001", Generation: 4, Status: "active",
-		ProfileSnapshotComplete: true, ProfileRevision: 8, ProfileObservedRevision: 8,
-		Profiles: []map[string]any{{"profile_ref": "profile-stable", "game_biz": "hk4e_cn", "region": "cn_gf01", "player_id": "1008611", "nickname": "Traveler", "is_default": true}},
-	}}
-	svc := NewOrchestrationService(reader, platformSvc, gateway, profileSyncer)
-
-	updated, err := svc.SetPrimaryProfileForOwner(context.Background(), 7, 101, 404, "session:99")
-	require.NoError(t, err)
-	require.NotNil(t, updated)
-	assert.True(t, gateway.primaryCalled)
-	assert.Equal(t, "profile-stable", gateway.primaryProfileRef)
-	assert.Equal(t, []string{platformaction.MihomoProfilePrimarySet}, platformSvc.lastScope)
-	assert.True(t, profileSyncer.called)
-	assert.Equal(t, uint64(8), profileSyncer.input.Revision)
-	assert.False(t, profileSyncer.setPrimaryCalled)
-	assert.Equal(t, uint64(101), profileSyncer.lastLookupBinding)
-	assert.Equal(t, uint64(404), profileSyncer.lastLookupProfile)
-}
-
-func TestSetPrimaryProfileForOwnerDoesNotUpdateProjectionWhenExecutionPlaneFails(t *testing.T) {
-	binding := &model.PlatformAccountBinding{
-		ID:                 101,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		BindingRef:         "binding-101",
-		ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true},
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformSvc := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
-	profileSyncer := &fakeProfileSyncer{
-		profile: &model.PlatformAccountProfile{ID: 404, BindingID: 101, ProfileRef: "profile-stable", PlayerUID: "1008611"},
-	}
-	svc := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{primaryErr: grpcstatus.Error(codes.Unavailable, "platform unavailable")}, profileSyncer)
-
-	updated, err := svc.SetPrimaryProfileForOwner(context.Background(), 7, 101, 404, "session:99")
-	require.ErrorIs(t, err, ErrCredentialGatewayUnavailable)
-	assert.Nil(t, updated)
-	assert.False(t, profileSyncer.setPrimaryCalled)
-	assert.False(t, profileSyncer.called)
 }
 
 func TestCreateBindingForOwnerCreatesDraftBindsAndSyncsProfiles(t *testing.T) {

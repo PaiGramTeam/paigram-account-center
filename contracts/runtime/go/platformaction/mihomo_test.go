@@ -23,7 +23,7 @@ func TestMihomoActionCatalogSeparatesDelegationAndControlActions(t *testing.T) {
 		MihomoCredentialUpdate,
 		MihomoOperationRead,
 		MihomoOperationResolve,
-		MihomoProfilePrimarySet,
+		MihomoProfileWrite,
 	}, MihomoControlActions())
 
 	for _, action := range MihomoDelegationActions() {

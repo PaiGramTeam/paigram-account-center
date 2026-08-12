@@ -22,9 +22,37 @@ func TestPlatformOperationIntentSchemaHasNoCredentialPayloadColumns(t *testing.T
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "payload_json")
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "credential_hash")
 	requireColumnExists(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "delivery_mode")
+	requireColumnExists(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "profile_ref")
+	requireColumnExists(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "profile_revision")
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "platform_operation_outbox", "payload_json")
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "uk_platform_operation_intents_active_binding")
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "platform_operation_intents", "uk_platform_operation_intents_active_owner_platform_bind")
+}
+
+func TestPlatformPrimaryProfileIntentRequiresDurableProfileTuple(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ownerID := insertTestUser(t, ctx, stack.SQLDB)
+	bindingID := insertTestBinding(t, ctx, stack.SQLDB, ownerID, "mihomo", "account-"+uuid.NewString())
+
+	insertIntent := func(operationID, profileRef string, profileRevision uint64) error {
+		_, err := stack.SQLDB.ExecContext(ctx, `
+			INSERT INTO platform_operation_intents (
+				operation_id, binding_id, binding_ref, owner_user_id, platform, kind,
+				pre_generation, target_generation, request_fingerprint, profile_ref, profile_revision,
+				delivery_mode, state, actor_type, actor_id
+			) VALUES ($1, $2, 'bind_test', $3, 'mihomo', 'OPERATION_KIND_SET_PRIMARY_PROFILE',
+				4, 4, $4, $5, $6, 'outbox', 'succeeded', 'user', 'session:test')
+		`, operationID, bindingID, ownerID, uuid.NewString(), profileRef, profileRevision)
+		return err
+	}
+
+	require.NoError(t, insertIntent("op_primary_valid", "profile-stable", 7))
+	err := insertIntent("op_primary_missing_ref", "", 7)
+	requirePostgresViolation(t, err, "23514", "chk_platform_operation_intents_profile")
+	err = insertIntent("op_primary_missing_revision", "profile-stable", 0)
+	requirePostgresViolation(t, err, "23514", "chk_platform_operation_intents_profile")
 }
 
 func TestPlatformOperationIntentKeepsOneActiveReservationPerBinding(t *testing.T) {

@@ -125,9 +125,9 @@ func (f *fakeNonSensitiveCredentialGateway) ReplaceCredential(context.Context, s
 	panic("unexpected replace")
 }
 
-func (f *fakeNonSensitiveCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
+func (f *fakeNonSensitiveCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) (*RuntimeSummary, error) {
 	f.refreshCalled = true
-	return f.refreshErr
+	return nil, f.refreshErr
 }
 
 func (f *fakeNonSensitiveCredentialGateway) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {

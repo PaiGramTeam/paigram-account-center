@@ -146,20 +146,24 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 	}
 
 	now := time.Now().UTC()
+	profileRevision := input.Generation
+	if existingCredential != nil {
+		profileRevision = nextProfileRevision(existingCredential.ProfileRevision, existingCredential.ProfileObservedRevision)
+	}
 	credential := &biz.Credential{
-		BindingRef:        input.BindingRef,
-		AccountKey:        prepared.accountKey,
-		Generation:        input.Generation,
-		Platform:          "mihomo",
-		AccountID:         prepared.accountID,
-		Region:            prepared.region,
-		CredentialBlob:    prepared.encryptedBlob,
-		CredentialVersion: "v1",
-		Status:            "active",
-		LastValidatedAt:   &now,
+		BindingRef:              input.BindingRef,
+		AccountKey:              prepared.accountKey,
+		Generation:              input.Generation,
+		Platform:                "mihomo",
+		AccountID:               prepared.accountID,
+		Region:                  prepared.region,
+		CredentialBlob:          prepared.encryptedBlob,
+		CredentialVersion:       "v1",
+		Status:                  "active",
+		LastValidatedAt:         &now,
 		ProfileSnapshotComplete: true,
-		ProfileRevision:         input.Generation,
-		ProfileObservedRevision: input.Generation,
+		ProfileRevision:         profileRevision,
+		ProfileObservedRevision: profileRevision,
 	}
 	if err := uc.persistCredential(ctx, credential, createOnly); err != nil {
 		return nil, err

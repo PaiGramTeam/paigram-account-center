@@ -2,6 +2,7 @@ package mihomostub
 
 import (
 	"context"
+	"time"
 
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 )
@@ -21,6 +22,20 @@ func (c Client) ValidateAndDiscover(context.Context, string, string) (string, st
 		Nickname: "Traveler",
 		Level:    60,
 	}}, nil
+}
+
+func (c Client) RefreshCredential(_ context.Context, cookieBundleJSON string, _ string) (platformmihomo.RefreshResult, error) {
+	profiles := c.Profiles
+	if len(profiles) == 0 {
+		_, _, profiles, _ = c.ValidateAndDiscover(context.Background(), cookieBundleJSON, "")
+	}
+	return platformmihomo.RefreshResult{
+		CredentialBundleJSON: cookieBundleJSON,
+		AccountID:            "10001",
+		Region:               "cn_gf01",
+		Profiles:             profiles,
+		ExpiresAt:            time.Now().UTC().Add(time.Hour),
+	}, nil
 }
 
 func (Client) IssueAuthKey(context.Context, string, string) (string, int64, error) {

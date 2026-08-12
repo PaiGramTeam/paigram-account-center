@@ -120,18 +120,38 @@ func (s *OrchestrationService) deliverNonSensitiveCredentialOperation(ctx contex
 		scope = platformaction.MihomoCredentialRefresh
 	case "OPERATION_KIND_DELETE_CREDENTIAL":
 		scope = platformaction.MihomoCredentialDelete
+	case "OPERATION_KIND_SET_PRIMARY_PROFILE":
+		scope = platformaction.MihomoProfileWrite
 	default:
 		return ErrInvalidBindingMutation
 	}
-	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(intent.ActorType, intent.ActorID, binding, intent.OperationID, []string{scope})
+	var ticket string
+	var err error
+	if intent.Kind == "OPERATION_KIND_SET_PRIMARY_PROFILE" {
+		ticket, _, err = s.platformService.IssueProfileScopedOperationTicket(intent.ActorType, intent.ActorID, binding, intent.ProfileRef, intent.OperationID, []string{scope})
+	} else {
+		ticket, _, err = s.platformService.IssueBindingScopedOperationTicket(intent.ActorType, intent.ActorID, binding, intent.OperationID, []string{scope})
+	}
 	if err != nil {
 		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "ticket_issue_failed", err)
 	}
 	switch intent.Kind {
 	case "OPERATION_KIND_REFRESH_CREDENTIAL":
-		err = s.gateway.RefreshCredential(ctx, endpoint, ticket, intent.OperationID, binding)
+		var summary *RuntimeSummary
+		summary, err = s.gateway.RefreshCredential(ctx, endpoint, ticket, intent.OperationID, binding)
+		if err == nil {
+			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, summary)
+			return err
+		}
 	case "OPERATION_KIND_DELETE_CREDENTIAL":
 		err = s.gateway.DeleteCredential(ctx, endpoint, ticket, intent.OperationID, binding)
+	case "OPERATION_KIND_SET_PRIMARY_PROFILE":
+		var summary *RuntimeSummary
+		summary, err = s.gateway.SetPrimaryProfile(ctx, endpoint, ticket, intent.OperationID, binding, intent.ProfileRef)
+		if err == nil {
+			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, summary)
+			return err
+		}
 	}
 	if err != nil {
 		return s.handleNonSensitiveCredentialDeliveryError(ctx, binding, credentialOperationReferenceFromIntent(intent), err)
@@ -144,20 +164,6 @@ func (s *OrchestrationService) finalizeNonSensitiveCredentialOperation(ctx conte
 		return err
 	}
 	switch intent.Kind {
-	case "OPERATION_KIND_REFRESH_CREDENTIAL":
-		if advancer, ok := s.bindingReader.(interface {
-			AdvanceBindingGeneration(uint64, uint64) error
-		}); ok {
-			if err := advancer.AdvanceBindingGeneration(binding.ID, intent.PreGeneration); err != nil {
-				current, getErr := s.bindingReader.GetBindingByID(binding.ID)
-				if getErr != nil || current.Generation != intent.TargetGeneration {
-					return err
-				}
-			}
-		}
-		if _, err := s.bindingReader.UpdateBindingStatus(binding.ID, model.PlatformAccountBindingStatusRefreshRequired); err != nil {
-			return err
-		}
 	case "OPERATION_KIND_DELETE_CREDENTIAL":
 		if _, err := s.bindingReader.DeleteBinding(binding.ID); err != nil {
 			return err
@@ -196,7 +202,10 @@ func (s *OrchestrationService) retryNonSensitiveCredentialOperationAfterProof(ct
 	}
 	reference := credentialOperationReferenceFromIntent(intent)
 	reference.OperationID = newOperationID
-	_, err = s.operationIntents.RetryNonSensitive(ctx, intent.OperationID, credentialOperationIntentInput(intent.BindingID, intent.ActorType, intent.ActorID, reference))
+	retryInput := credentialOperationIntentInput(intent.BindingID, intent.ActorType, intent.ActorID, reference)
+	retryInput.ProfileRef = intent.ProfileRef
+	retryInput.ProfileRevision = intent.ProfileRevision
+	_, err = s.operationIntents.RetryNonSensitive(ctx, intent.OperationID, retryInput)
 	return err
 }
 
@@ -208,11 +217,11 @@ func credentialStateAllowsNonSensitiveRetry(intent *model.PlatformOperationInten
 }
 
 func isNonSensitiveCredentialOperation(kind string) bool {
-	return kind == "OPERATION_KIND_REFRESH_CREDENTIAL" || kind == "OPERATION_KIND_DELETE_CREDENTIAL"
+	return kind == "OPERATION_KIND_REFRESH_CREDENTIAL" || kind == "OPERATION_KIND_DELETE_CREDENTIAL" || kind == "OPERATION_KIND_SET_PRIMARY_PROFILE"
 }
 
 func (s *OrchestrationService) applyResolvedCredentialOperation(ctx context.Context, intent *model.PlatformOperationIntent, binding *model.PlatformAccountBinding, summary *RuntimeSummary, endpoint string) error {
-	if summary == nil || summary.Generation != intent.TargetGeneration {
+	if !validOperationSummary(intent.Kind, intent.TargetGeneration, summary) {
 		_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "terminal_generation_mismatch")
 		return ErrBindingGenerationConflict
 	}
@@ -290,6 +299,8 @@ func (s *OrchestrationService) persistTerminalOperationFailure(intent *model.Pla
 	case "OPERATION_KIND_DELETE_CREDENTIAL":
 		_, err := s.bindingReader.UpdateBindingFailure(binding.ID, model.PlatformAccountBindingStatusDeleteFailed, reason, "platform credential delete failed")
 		return err
+	case "OPERATION_KIND_SET_PRIMARY_PROFILE":
+		return nil
 	default:
 		return ErrInvalidBindingMutation
 	}

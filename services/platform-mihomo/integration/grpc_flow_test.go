@@ -82,7 +82,7 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.Equal(t, profileRef, primary.GetProfile().GetProfileRef())
 	primaryOperation := primaryProfileOperationRef("primary-op", 1, secondProfileRef, 1)
 	selected, err := control.SetPrimaryProfile(
-		ticketContextForOperation(t, accountKey, platformaction.MihomoProfilePrimarySet, contractticket.TypeControl, primaryOperation.GetOperationId(), primaryOperation.GetPreGeneration()),
+		ticketContextForProfileOperation(t, accountKey, platformaction.MihomoProfileWrite, primaryOperation.GetOperationId(), primaryOperation.GetPreGeneration(), secondProfileRef),
 		&platformv2.SetPrimaryProfileRequest{Operation: primaryOperation, AccountKey: accountKey, ProfileRef: secondProfileRef, ExpectedProfileRevision: 1},
 	)
 	require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.Equal(t, secondProfileRef, primary.GetProfile().GetProfileRef())
 	missingPrimaryOperation := primaryProfileOperationRef("missing-primary-op", 1, "profile-missing", 2)
 	_, err = control.SetPrimaryProfile(
-		ticketContextForOperation(t, accountKey, platformaction.MihomoProfilePrimarySet, contractticket.TypeControl, missingPrimaryOperation.GetOperationId(), missingPrimaryOperation.GetPreGeneration()),
+		ticketContextForProfileOperation(t, accountKey, platformaction.MihomoProfileWrite, missingPrimaryOperation.GetOperationId(), missingPrimaryOperation.GetPreGeneration(), "profile-missing"),
 		&platformv2.SetPrimaryProfileRequest{Operation: missingPrimaryOperation, AccountKey: accountKey, ProfileRef: "profile-missing", ExpectedProfileRevision: 2},
 	)
 	require.Equal(t, codes.NotFound, status.Code(err))
@@ -200,6 +200,7 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.True(t, replaced.GetResult().GetProfileSnapshot().GetComplete())
+	require.Equal(t, uint64(3), replaced.GetResult().GetProfileSnapshot().GetRevision())
 
 	refreshOperation := operationRef("refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
 	refreshed, err := control.RefreshCredential(
@@ -215,8 +216,8 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.True(t, refreshedState.GetState().GetProfileSnapshot().GetComplete())
-	require.Equal(t, refreshOperation.GetTargetGeneration(), refreshedState.GetState().GetProfileSnapshot().GetRevision())
-	require.Equal(t, refreshOperation.GetTargetGeneration(), refreshedState.GetState().GetProfileSnapshot().GetObservedRevision())
+	require.Equal(t, uint64(4), refreshedState.GetState().GetProfileSnapshot().GetRevision())
+	require.Equal(t, uint64(4), refreshedState.GetState().GetProfileSnapshot().GetObservedRevision())
 
 	staleRefresh := operationRef("stale-refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
 	_, err = control.RefreshCredential(
@@ -377,6 +378,14 @@ func ticketContextForType(t *testing.T, accountKey string, action string, ticket
 }
 
 func ticketContextForOperation(t *testing.T, accountKey string, action string, ticketType string, operationID string, credentialGeneration uint64) context.Context {
+	return ticketContextForOperationAndProfile(t, accountKey, action, ticketType, operationID, credentialGeneration, "")
+}
+
+func ticketContextForProfileOperation(t *testing.T, accountKey, action, operationID string, credentialGeneration uint64, profileRef string) context.Context {
+	return ticketContextForOperationAndProfile(t, accountKey, action, contractticket.TypeControl, operationID, credentialGeneration, profileRef)
+}
+
+func ticketContextForOperationAndProfile(t *testing.T, accountKey string, action string, ticketType string, operationID string, credentialGeneration uint64, profileRef string) context.Context {
 	t.Helper()
 	now := time.Now().UTC()
 	claims := jwt.MapClaims{
@@ -417,6 +426,9 @@ func ticketContextForOperation(t *testing.T, accountKey string, action string, t
 	}
 	if accountKey != "" {
 		claims["account_key"] = accountKey
+	}
+	if profileRef != "" {
+		claims["profile_ref"] = profileRef
 	}
 	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, claims)
 	token.Header["kid"] = integrationTicketKeyID

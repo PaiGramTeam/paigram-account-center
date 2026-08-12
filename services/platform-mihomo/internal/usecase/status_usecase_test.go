@@ -100,7 +100,7 @@ func TestRefreshCredentialDoesNotMarkRefreshedOnValidationFailure(t *testing.T) 
 	require.Nil(t, credentialRepo.byAccountKey["hoyo_10001"].LastRefreshedAt)
 }
 
-func TestRefreshCredentialRevalidatesWithoutReplacingCredentialBlob(t *testing.T) {
+func TestRefreshCredentialPersistsRefreshedCredentialMaterial(t *testing.T) {
 	credentialRepo := newMemoryCredentialRepo()
 	encryptedBlob, err := internalcrypto.EncryptString(testEncryptionKey, `{"account_id":"10001","cookie_token":"abc"}`)
 	require.NoError(t, err)
@@ -121,7 +121,9 @@ func TestRefreshCredentialRevalidatesWithoutReplacingCredentialBlob(t *testing.T
 	require.Equal(t, CredentialStatusActive, resp.Status)
 
 	stored := credentialRepo.byAccountKey["hoyo_10001"]
-	require.Equal(t, encryptedBlob, stored.CredentialBlob)
+	decrypted, err := internalcrypto.DecryptString(testEncryptionKey, stored.CredentialBlob)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"account_id":"10001","cookie_token":"abc"}`, decrypted)
 	require.NotNil(t, stored.LastValidatedAt)
 	require.NotNil(t, stored.LastRefreshedAt)
 	require.Equal(t, stored.LastRefreshedAt, resp.RefreshedAt)
@@ -162,8 +164,8 @@ func TestRefreshCredentialReturnsAuthoritativeSnapshotAndRepairsMissingPrimary(t
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
 	require.True(t, resp.ProfileSnapshotComplete)
-	require.Equal(t, uint64(4), resp.ProfileRevision)
-	require.Equal(t, uint64(4), resp.ProfileObservedRevision)
+	require.Equal(t, uint64(1), resp.ProfileRevision)
+	require.Equal(t, uint64(1), resp.ProfileObservedRevision)
 	require.Len(t, resp.Profiles, 2)
 	require.True(t, resp.Profiles[0].IsDefault)
 	require.False(t, resp.Profiles[1].IsDefault)
@@ -188,11 +190,43 @@ func TestRefreshCredentialReturnsCompleteEmptySnapshot(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, resp.ProfileSnapshotComplete)
 	require.Empty(t, resp.Profiles)
-	require.Equal(t, uint64(5), resp.ProfileRevision)
-	require.Equal(t, uint64(5), resp.ProfileObservedRevision)
+	require.Equal(t, uint64(1), resp.ProfileRevision)
+	require.Equal(t, uint64(1), resp.ProfileObservedRevision)
 	primary, err := NewProfileUsecase(profileRepo).GetPrimaryProfile(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
 	require.Nil(t, primary)
+}
+
+func TestRefreshCredentialRotatesCredentialAndAdvancesProfileRevision(t *testing.T) {
+	credentialRepo := newMemoryCredentialRepo()
+	profileRepo := newMemoryProfileRepo()
+	encryptedBlob, err := internalcrypto.EncryptString(testEncryptionKey, `{"cookie_token":"old"}`)
+	require.NoError(t, err)
+	expiresAt := time.Now().UTC().Add(2 * time.Hour).Truncate(time.Second)
+	require.NoError(t, credentialRepo.Save(context.Background(), &biz.Credential{
+		BindingRef: "binding-101", AccountKey: "hoyo_10001", Generation: 2,
+		Platform: "mihomo", AccountID: "10001", Region: "cn_gf01", CredentialBlob: encryptedBlob, CredentialVersion: "v1", Status: "active",
+		ProfileSnapshotComplete: true, ProfileRevision: 4, ProfileObservedRevision: 4,
+	}))
+	client := refreshingStatusClient{result: platformmihomo.RefreshResult{
+		CredentialBundleJSON: `{"cookie_token":"rotated"}`,
+		AccountID:            "10001",
+		Region:               "cn_gf01",
+		Profiles:             []platformmihomo.DiscoveredProfile{{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", Level: 60}},
+		ExpiresAt:            expiresAt,
+	}}
+	uc := NewStatusUsecase(credentialRepo, profileRepo, client, testEncryptionKey)
+
+	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), resp.ProfileRevision)
+	require.Equal(t, uint64(5), resp.ProfileObservedRevision)
+	stored := credentialRepo.byAccountKey["hoyo_10001"]
+	decrypted, err := internalcrypto.DecryptString(testEncryptionKey, stored.CredentialBlob)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"cookie_token":"rotated"}`, decrypted)
+	require.NotNil(t, stored.ExpiresAt)
+	require.Equal(t, expiresAt, stored.ExpiresAt.UTC())
 }
 
 func TestValidateCredentialMapsChallengeRequiredStatus(t *testing.T) {
@@ -226,8 +260,30 @@ type discoveryStatusClient struct {
 	profiles []platformmihomo.DiscoveredProfile
 }
 
+type refreshingStatusClient struct {
+	result platformmihomo.RefreshResult
+}
+
+func (c refreshingStatusClient) RefreshCredential(_ context.Context, _ string, _ string) (platformmihomo.RefreshResult, error) {
+	return c.result, nil
+}
+
+func (c refreshingStatusClient) ValidateAndDiscover(_ context.Context, _ string, _ string) (string, string, []platformmihomo.DiscoveredProfile, error) {
+	return c.result.AccountID, c.result.Region, c.result.Profiles, nil
+}
+
+func (refreshingStatusClient) IssueAuthKey(_ context.Context, _ string, _ string) (string, int64, error) {
+	return "", 0, errors.New("not implemented")
+}
+
 func (c discoveryStatusClient) ValidateAndDiscover(_ context.Context, _ string, _ string) (string, string, []platformmihomo.DiscoveredProfile, error) {
 	return "10001", "cn_gf01", c.profiles, nil
+}
+
+func (c discoveryStatusClient) RefreshCredential(_ context.Context, cookieBundleJSON string, _ string) (platformmihomo.RefreshResult, error) {
+	return platformmihomo.RefreshResult{
+		CredentialBundleJSON: cookieBundleJSON, AccountID: "10001", Region: "cn_gf01", Profiles: c.profiles, ExpiresAt: time.Now().UTC().Add(time.Hour),
+	}, nil
 }
 
 func (discoveryStatusClient) IssueAuthKey(_ context.Context, _ string, _ string) (string, int64, error) {
@@ -244,12 +300,26 @@ func (successfulStatusClient) ValidateAndDiscover(_ context.Context, _ string, _
 	}}, nil
 }
 
+func (successfulStatusClient) RefreshCredential(_ context.Context, cookieBundleJSON string, _ string) (platformmihomo.RefreshResult, error) {
+	return platformmihomo.RefreshResult{
+		CredentialBundleJSON: cookieBundleJSON,
+		AccountID:            "10001",
+		Region:               "cn_gf01",
+		Profiles:             []platformmihomo.DiscoveredProfile{{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", Level: 60}},
+		ExpiresAt:            time.Now().UTC().Add(time.Hour),
+	}, nil
+}
+
 func (successfulStatusClient) IssueAuthKey(_ context.Context, _ string, _ string) (string, int64, error) {
 	return "", 0, errors.New("not implemented")
 }
 
 func (c failingStatusClient) ValidateAndDiscover(_ context.Context, _ string, _ string) (string, string, []platformmihomo.DiscoveredProfile, error) {
 	return "", "", nil, c.err
+}
+
+func (c failingStatusClient) RefreshCredential(_ context.Context, _ string, _ string) (platformmihomo.RefreshResult, error) {
+	return platformmihomo.RefreshResult{}, c.err
 }
 
 func (c failingStatusClient) IssueAuthKey(_ context.Context, _ string, _ string) (string, int64, error) {

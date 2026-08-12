@@ -30,6 +30,8 @@ type CredentialOperationIntentInput struct {
 	PreGeneration      uint64
 	TargetGeneration   uint64
 	RequestFingerprint string
+	ProfileRef         string
+	ProfileRevision    uint64
 	ActorType          string
 	ActorID            string
 }
@@ -60,7 +62,7 @@ func NewOperationIntentService(db *gorm.DB) *OperationIntentService {
 }
 
 func (s *OperationIntentService) Admit(ctx context.Context, input CredentialOperationIntentInput) (*model.PlatformOperationIntent, error) {
-	if s == nil || s.db == nil || input.OperationID == "" || input.BindingID == 0 || input.BindingRef == "" || input.Kind == "" || input.RequestFingerprint == "" || input.ActorType == "" || input.ActorID == "" || input.TargetGeneration != input.PreGeneration+1 {
+	if s == nil || s.db == nil || input.OperationID == "" || input.BindingID == 0 || input.BindingRef == "" || input.Kind == "" || input.RequestFingerprint == "" || input.ActorType == "" || input.ActorID == "" || !validIntentGeneration(input) || !validIntentProfile(input) {
 		return nil, ErrInvalidBindingMutation
 	}
 
@@ -104,7 +106,8 @@ func (s *OperationIntentService) Admit(ctx context.Context, input CredentialOper
 			OperationID: input.OperationID, BindingID: input.BindingID, BindingRef: input.BindingRef,
 			OwnerUserID: parent.OwnerUserID, Platform: parent.Platform,
 			Kind: input.Kind, PreGeneration: input.PreGeneration, TargetGeneration: input.TargetGeneration,
-			RequestFingerprint: input.RequestFingerprint, DeliveryMode: deliveryModeForOperation(input.Kind), State: model.PlatformOperationIntentStatePendingDelivery,
+			RequestFingerprint: input.RequestFingerprint, ProfileRef: input.ProfileRef, ProfileRevision: input.ProfileRevision,
+			DeliveryMode: deliveryModeForOperation(input.Kind), State: model.PlatformOperationIntentStatePendingDelivery,
 			ActorType: input.ActorType, ActorID: input.ActorID,
 		}
 		if err := tx.Create(&admitted).Error; err != nil {
@@ -200,7 +203,7 @@ func (s *OperationIntentService) CreateBindingAndAdmit(ctx context.Context, bind
 }
 
 func (s *OperationIntentService) RetryNonSensitive(ctx context.Context, previousOperationID string, input CredentialOperationIntentInput) (*model.PlatformOperationIntent, error) {
-	if input.Kind != "OPERATION_KIND_REFRESH_CREDENTIAL" && input.Kind != "OPERATION_KIND_DELETE_CREDENTIAL" {
+	if input.Kind != "OPERATION_KIND_REFRESH_CREDENTIAL" && input.Kind != "OPERATION_KIND_DELETE_CREDENTIAL" && input.Kind != "OPERATION_KIND_SET_PRIMARY_PROFILE" {
 		return nil, ErrInvalidBindingMutation
 	}
 	var retry model.PlatformOperationIntent
@@ -209,7 +212,7 @@ func (s *OperationIntentService) RetryNonSensitive(ctx context.Context, previous
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("operation_id = ?", previousOperationID).Take(&previous).Error; err != nil {
 			return err
 		}
-		if !previous.State.ReservesBinding() || previous.BindingID != input.BindingID || previous.BindingRef != input.BindingRef || previous.Kind != input.Kind || previous.PreGeneration != input.PreGeneration || previous.TargetGeneration != input.TargetGeneration || previous.RequestFingerprint != input.RequestFingerprint {
+		if !previous.State.ReservesBinding() || previous.BindingID != input.BindingID || previous.BindingRef != input.BindingRef || previous.Kind != input.Kind || previous.PreGeneration != input.PreGeneration || previous.TargetGeneration != input.TargetGeneration || previous.RequestFingerprint != input.RequestFingerprint || previous.ProfileRef != input.ProfileRef || previous.ProfileRevision != input.ProfileRevision {
 			return ErrInvalidBindingMutation
 		}
 		now := time.Now().UTC()
@@ -225,7 +228,8 @@ func (s *OperationIntentService) RetryNonSensitive(ctx context.Context, previous
 			OperationID: input.OperationID, BindingID: input.BindingID, BindingRef: input.BindingRef,
 			OwnerUserID: previous.OwnerUserID, Platform: previous.Platform,
 			Kind: input.Kind, PreGeneration: input.PreGeneration, TargetGeneration: input.TargetGeneration,
-			RequestFingerprint: input.RequestFingerprint, DeliveryMode: model.PlatformOperationDeliveryModeOutbox, State: model.PlatformOperationIntentStatePendingDelivery,
+			RequestFingerprint: input.RequestFingerprint, ProfileRef: input.ProfileRef, ProfileRevision: input.ProfileRevision,
+			DeliveryMode: model.PlatformOperationDeliveryModeOutbox, State: model.PlatformOperationIntentStatePendingDelivery,
 			ActorType: input.ActorType, ActorID: input.ActorID,
 		}
 		if err := tx.Create(&retry).Error; err != nil {
@@ -397,6 +401,20 @@ func deliveryModeForOperation(kind string) model.PlatformOperationDeliveryMode {
 		return model.PlatformOperationDeliveryModeSyncSecret
 	}
 	return model.PlatformOperationDeliveryModeOutbox
+}
+
+func validIntentGeneration(input CredentialOperationIntentInput) bool {
+	if input.Kind == "OPERATION_KIND_SET_PRIMARY_PROFILE" {
+		return input.TargetGeneration == input.PreGeneration
+	}
+	return input.TargetGeneration == input.PreGeneration+1
+}
+
+func validIntentProfile(input CredentialOperationIntentInput) bool {
+	if input.Kind == "OPERATION_KIND_SET_PRIMARY_PROFILE" {
+		return input.ProfileRef != "" && input.ProfileRevision > 0
+	}
+	return input.ProfileRef == "" && input.ProfileRevision == 0
 }
 
 func writeOperationAdmissionAudit(tx *gorm.DB, intent *model.PlatformOperationIntent) error {

@@ -49,6 +49,8 @@ type PlatformOperationIntent struct {
 	PreGeneration      uint64                        `gorm:"not null"`
 	TargetGeneration   uint64                        `gorm:"not null"`
 	RequestFingerprint string                        `gorm:"size:64;not null"`
+	ProfileRef         string                        `gorm:"size:64"`
+	ProfileRevision    uint64                        `gorm:"not null;default:0"`
 	DeliveryMode       PlatformOperationDeliveryMode `gorm:"size:32;not null"`
 	State              PlatformOperationIntentState  `gorm:"size:32;not null;index:idx_platform_operation_intents_state"`
 	ReasonCode         string                        `gorm:"size:64"`

@@ -75,10 +75,10 @@ func (g *GRPCGenericCredentialGateway) ReplaceCredential(ctx context.Context, en
 	return genericOperationResultMapForOperation(resp.GetResult(), operation)
 }
 
-func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error {
+func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) (*RuntimeSummary, error) {
 	conn, err := g.dial(ctx, endpoint)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -90,9 +90,13 @@ func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, en
 		AccountKey: bindingExternalAccountKey(binding),
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return requireSucceededOperationResult(resp.GetResult(), operation)
+	summary, err := genericOperationResultMapForOperation(resp.GetResult(), operation)
+	if err != nil {
+		return nil, err
+	}
+	return decodeRuntimeSummary(summary)
 }
 
 func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error {

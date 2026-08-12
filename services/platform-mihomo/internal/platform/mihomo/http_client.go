@@ -42,6 +42,14 @@ type discoverResponse struct {
 	Profiles  []DiscoveredProfile `json:"profiles"`
 }
 
+type refreshResponse struct {
+	CredentialBundleJSON string              `json:"credential_bundle_json"`
+	AccountID            string              `json:"account_id"`
+	Region               string              `json:"region"`
+	Profiles             []DiscoveredProfile `json:"profiles"`
+	ExpiresAt            time.Time           `json:"expires_at"`
+}
+
 type authKeyRequest struct {
 	CredentialBundleJSON string `json:"credential_bundle_json"`
 	PlayerID             string `json:"player_id"`
@@ -90,6 +98,26 @@ func (c *HTTPClient) ValidateAndDiscover(ctx context.Context, cookieBundleJSON s
 		return "", "", nil, &UpstreamError{Kind: ErrorInvalidResponse}
 	}
 	return response.AccountID, response.Region, response.Profiles, nil
+}
+
+func (c *HTTPClient) RefreshCredential(ctx context.Context, cookieBundleJSON string, regionHint string) (RefreshResult, error) {
+	var response refreshResponse
+	if err := c.postJSON(ctx, "/v1/credentials:refresh", discoverRequest{
+		CredentialBundleJSON: cookieBundleJSON,
+		RegionHint:           regionHint,
+	}, &response); err != nil {
+		return RefreshResult{}, err
+	}
+	if strings.TrimSpace(response.CredentialBundleJSON) == "" || strings.TrimSpace(response.AccountID) == "" || strings.TrimSpace(response.Region) == "" || !response.ExpiresAt.After(time.Now().UTC()) {
+		return RefreshResult{}, &UpstreamError{Kind: ErrorInvalidResponse}
+	}
+	return RefreshResult{
+		CredentialBundleJSON: response.CredentialBundleJSON,
+		AccountID:            response.AccountID,
+		Region:               response.Region,
+		Profiles:             response.Profiles,
+		ExpiresAt:            response.ExpiresAt.UTC(),
+	}, nil
 }
 
 func (c *HTTPClient) IssueAuthKey(ctx context.Context, cookieBundleJSON string, playerID string) (string, int64, error) {
@@ -180,3 +208,4 @@ func parseRetryAfter(raw string) time.Duration {
 }
 
 var _ Client = (*HTTPClient)(nil)
+var _ CredentialRefresher = (*HTTPClient)(nil)

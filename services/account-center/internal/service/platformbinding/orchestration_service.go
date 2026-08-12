@@ -42,12 +42,13 @@ type orchestrationPlatformService interface {
 	GetEnabledPlatform(platformKey string) (*model.PlatformService, error)
 	IssueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (string, time.Time, error)
 	IssueBindingScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, operationID string, scopes []string) (string, time.Time, error)
+	IssueProfileScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, profileRef, operationID string, scopes []string) (string, time.Time, error)
 }
 
 type credentialGateway interface {
 	BindCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
 	ReplaceCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
-	RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error
+	RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) (*RuntimeSummary, error)
 	DeleteCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error
 	SetPrimaryProfile(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, profileRef string) (*RuntimeSummary, error)
 }
@@ -302,28 +303,11 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 		return nil, err
 	}
 
-	if err := s.gateway.RefreshCredential(ctx, platformRow.Endpoint, ticket, operationID, binding); err != nil {
+	summary, err := s.gateway.RefreshCredential(ctx, platformRow.Endpoint, ticket, operationID, binding)
+	if err != nil {
 		return nil, s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
 	}
-	if err := s.markCredentialProjectionPending(ctx, operationID); err != nil {
-		return nil, err
-	}
-	if advancer, ok := s.bindingReader.(interface {
-		AdvanceBindingGeneration(bindingID, expectedGeneration uint64) error
-	}); ok {
-		if err := advancer.AdvanceBindingGeneration(binding.ID, binding.Generation); err != nil {
-			return nil, err
-		}
-	}
-
-	updated, err := s.bindingReader.UpdateBindingStatus(binding.ID, model.PlatformAccountBindingStatusRefreshRequired)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.completeCredentialOperation(ctx, operationID); err != nil {
-		return nil, err
-	}
-	return updated, nil
+	return s.applyAuthoritativeSummary(ctx, operationID, reference.Kind, binding, reference.TargetGeneration, summary)
 }
 
 func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model.PlatformAccountBinding, actorType, actorID string) error {
@@ -671,8 +655,8 @@ func (unavailableCredentialGateway) ReplaceCredential(context.Context, string, s
 	return nil, ErrCredentialGatewayUnavailable
 }
 
-func (unavailableCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
-	return ErrCredentialGatewayUnavailable
+func (unavailableCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) (*RuntimeSummary, error) {
+	return nil, ErrCredentialGatewayUnavailable
 }
 
 func (unavailableCredentialGateway) SetPrimaryProfile(context.Context, string, string, string, *model.PlatformAccountBinding, string) (*RuntimeSummary, error) {
