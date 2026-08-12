@@ -48,8 +48,10 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	if err := os.Remove(cfg.StateFile); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove stale fixture state: %w", err)
+	for _, path := range []string{cfg.StateFile, cfg.StateFile + ".tmp"} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove stale fixture state: %w", err)
+		}
 	}
 	temporaryDirectory, err := os.MkdirTemp("", "paigram-e2e-real-")
 	if err != nil {
@@ -270,6 +272,10 @@ func writeState(path string, state State) error {
 		return err
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
+		removeErr := os.Remove(temporaryPath)
+		if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return errors.Join(fmt.Errorf("publish fixture state: %w", err), fmt.Errorf("remove temporary fixture state: %w", removeErr))
+		}
 		return fmt.Errorf("publish fixture state: %w", err)
 	}
 	return nil

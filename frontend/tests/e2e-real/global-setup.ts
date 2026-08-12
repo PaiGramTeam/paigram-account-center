@@ -10,7 +10,11 @@ const startupTimeoutMilliseconds = 10 * 60 * 1000
 
 export default async function globalSetup(_config: FullConfig): Promise<() => Promise<void>> {
   await mkdir(path.dirname(stateFile), { recursive: true })
-  await Promise.all([rm(stateFile, { force: true }), rm(systemLogFile, { force: true })])
+  await Promise.all([
+    rm(stateFile, { force: true }),
+    rm(`${stateFile}.tmp`, { force: true }),
+    rm(systemLogFile, { force: true }),
+  ])
 
   const provider = resolveProvider()
   const containerCLI = process.env.PAI_E2E_CONTAINER_CLI?.trim() || provider
@@ -126,8 +130,8 @@ async function buildFrontendImage(containerCLI: string, image: string): Promise<
 async function waitForSystem(systemProcess: ChildProcessWithoutNullStreams): Promise<RealSystemState> {
   const deadline = Date.now() + startupTimeoutMilliseconds
   while (Date.now() < deadline) {
-    if (systemProcess.exitCode !== null) {
-      throw new Error(`Real-system fixture exited with code ${systemProcess.exitCode}; see ${systemLogFile}`)
+    if (processStopped(systemProcess)) {
+      throw processExitError(systemProcess, `Real-system fixture stopped before readiness; see ${systemLogFile}`)
     }
     try {
       const state = JSON.parse(await readFile(stateFile, 'utf8')) as RealSystemState
@@ -142,19 +146,45 @@ async function waitForSystem(systemProcess: ChildProcessWithoutNullStreams): Pro
 }
 
 async function stopSystem(systemProcess: ChildProcessWithoutNullStreams): Promise<void> {
-  if (systemProcess.exitCode !== null) {
-    if (systemProcess.exitCode !== 0) throw new Error(`Real-system fixture exited with code ${systemProcess.exitCode}`)
+  if (processStopped(systemProcess)) {
+    if (systemProcess.exitCode !== 0) throw processExitError(systemProcess, 'Real-system fixture stopped')
     return
   }
   systemProcess.stdin.end('shutdown\n')
-  const exited = new Promise<void>((resolve) => systemProcess.once('exit', () => resolve()))
-  await Promise.race([exited, delay(60_000)])
-  if (systemProcess.exitCode === null) {
+  if (!(await waitForProcessStop(systemProcess, 60_000))) {
     systemProcess.kill()
-    await Promise.race([exited, delay(10_000)])
+    await waitForProcessStop(systemProcess, 10_000)
     throw new Error('Real-system fixture did not stop gracefully')
   }
-  if (systemProcess.exitCode !== 0) throw new Error(`Real-system fixture exited with code ${systemProcess.exitCode}`)
+  if (systemProcess.exitCode !== 0) throw processExitError(systemProcess, 'Real-system fixture stopped')
+}
+
+function processStopped(systemProcess: ChildProcessWithoutNullStreams): boolean {
+  return systemProcess.exitCode !== null || systemProcess.signalCode !== null
+}
+
+function processExitError(systemProcess: ChildProcessWithoutNullStreams, message: string): Error {
+  if (systemProcess.signalCode !== null) return new Error(`${message} with signal ${systemProcess.signalCode}`)
+  return new Error(`${message} with code ${systemProcess.exitCode}`)
+}
+
+async function waitForProcessStop(
+  systemProcess: ChildProcessWithoutNullStreams,
+  timeoutMilliseconds: number
+): Promise<boolean> {
+  if (processStopped(systemProcess)) return true
+  let onExit: (() => void) | undefined
+  const exited = new Promise<boolean>((resolve) => {
+    onExit = () => resolve(true)
+    systemProcess.once('exit', onExit)
+    if (processStopped(systemProcess)) {
+      systemProcess.off('exit', onExit)
+      resolve(true)
+    }
+  })
+  const stopped = await Promise.race([exited, delay(timeoutMilliseconds).then(() => false)])
+  if (!stopped && onExit) systemProcess.off('exit', onExit)
+  return stopped
 }
 
 function removeImage(containerCLI: string, image: string): void {
