@@ -12,14 +12,38 @@ if ([string]::IsNullOrWhiteSpace($baselineCommit)) {
     exit 0
 }
 
-$against = "$repositoryRoot#format=git,commit=$baselineCommit,subdir=contracts"
-Push-Location $PSScriptRoot
+$temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+$checkRoot = Join-Path $temporaryRoot "paigram-contract-breaking-$([guid]::NewGuid().ToString('N'))"
+$checkPrefix = Join-Path $temporaryRoot "paigram-contract-breaking-"
+if (-not $checkRoot.StartsWith($checkPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Breaking-check directory escaped the validated temporary prefix"
+}
+
+New-Item -ItemType Directory -Path $checkRoot | Out-Null
+$locationPushed = $false
 try {
-    buf breaking . --against $against --config buf.breaking.yaml
+    $archive = Join-Path $checkRoot "contracts.zip"
+    git -C $repositoryRoot archive --format=zip --output=$archive $baselineCommit contracts
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not export the v2 contract baseline"
+    }
+    Expand-Archive -LiteralPath $archive -DestinationPath $checkRoot
+    $against = Join-Path $checkRoot "contracts"
+
+    Push-Location $PSScriptRoot
+	$locationPushed = $true
+    buf breaking . --against $against --config buf.breaking.yaml --against-config (Join-Path $against "buf.yaml")
     if ($LASTEXITCODE -ne 0) {
         throw "Contracts contain a wire-breaking change from the v2 baseline (exit code $LASTEXITCODE)"
     }
 }
 finally {
-    Pop-Location
+	if ($locationPushed) {
+        Pop-Location
+    }
+    $resolvedCheckRoot = [IO.Path]::GetFullPath($checkRoot)
+    if (-not $resolvedCheckRoot.StartsWith($checkPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove an unvalidated breaking-check directory"
+    }
+    Remove-Item -LiteralPath $resolvedCheckRoot -Recurse -Force
 }
