@@ -34,6 +34,7 @@ type fakeRuntimeSummaryBindingReader struct {
 	ownerBinding     *model.PlatformAccountBinding
 	err              error
 	deleteErr        error
+	updateErr        error
 	ownerID          uint64
 	id               uint64
 	deletedID        uint64
@@ -65,6 +66,9 @@ func (f *fakeRuntimeSummaryBindingReader) GetBindingForOwner(ownerUserID, bindin
 }
 
 func (f *fakeRuntimeSummaryBindingReader) UpdateBindingStatus(bindingID uint64, status model.PlatformAccountBindingStatus) (*model.PlatformAccountBinding, error) {
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
 	f.updated = true
 	f.updatedStatus = status
 	if f.binding != nil {
@@ -74,6 +78,9 @@ func (f *fakeRuntimeSummaryBindingReader) UpdateBindingStatus(bindingID uint64, 
 }
 
 func (f *fakeRuntimeSummaryBindingReader) UpdateBindingFailure(bindingID uint64, status model.PlatformAccountBindingStatus, reasonCode, reasonMessage string) (*model.PlatformAccountBinding, error) {
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
 	f.id = bindingID
 	f.updated = true
 	f.updatedStatus = status
@@ -731,8 +738,8 @@ func TestPutCredentialForOwnerCompensatesOnResolvedBindingConflict(t *testing.T)
 	assert.Equal(t, uint64(1), gateway.deleteGeneration)
 	assert.Equal(t, "127.0.0.1:9000", gateway.deleteEndpoint)
 	assert.Equal(t, []string{"mihomo.credential.delete"}, platformSvc.lastScope)
-	assert.Equal(t, model.PlatformAccountBindingStatusCredentialInvalid, reader.binding.Status)
-	assert.Equal(t, "duplicate_owner", reader.updatedReason)
+	assert.Equal(t, uint64(101), reader.deletedID)
+	assert.Empty(t, reader.updatedReason)
 }
 
 func TestPutCredentialForOwnerMarksDeleteFailedWhenCompensationFails(t *testing.T) {
@@ -1071,6 +1078,54 @@ type failingPersistBindingReader struct {
 	*fakeRuntimeSummaryBindingReader
 	err             error
 	returnedBinding *model.PlatformAccountBinding
+}
+
+func TestPutCredentialProjectionFailureKeepsIntentPendingForRepair(t *testing.T) {
+	db := openOperationIntentTestDB(t)
+	store := NewOperationIntentService(db)
+	binding := &model.PlatformAccountBinding{
+		ID: 101, BindingRef: "bind_test", OwnerUserID: 7, Platform: "mihomo",
+		PlatformServiceKey: "platform-mihomo-service", Status: model.PlatformAccountBindingStatusPendingBind,
+	}
+	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
+	platformSvc := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
+	gateway := &fakeCredentialGateway{summary: map[string]any{
+		"platform_account_id": "cn:resolved-account", "generation": uint64(1), "status": "active",
+	}}
+	service := NewOrchestrationService(failingPersistBindingReader{fakeRuntimeSummaryBindingReader: reader, err: errors.New("database unavailable")}, platformSvc, gateway, store)
+
+	_, err := service.PutCredentialForOwner(context.Background(), coordinatedPutInput())
+	require.Error(t, err)
+	var intent model.PlatformOperationIntent
+	require.NoError(t, db.Take(&intent).Error)
+	assert.Equal(t, model.PlatformOperationIntentStateProjectionPending, intent.State)
+	var outbox model.PlatformOperationOutbox
+	require.NoError(t, db.Where("operation_id = ?", intent.OperationID).Take(&outbox).Error)
+	assert.Equal(t, model.PlatformOperationOutboxStatusPending, outbox.Status)
+}
+
+func TestBindTicketFailureAndDraftDeleteFailureKeepsInvariantReservation(t *testing.T) {
+	db := openOperationIntentTestDB(t)
+	store := NewOperationIntentService(db)
+	binding := &model.PlatformAccountBinding{
+		ID: 101, BindingRef: "bind_test", OwnerUserID: 7, Platform: "mihomo",
+		PlatformServiceKey: "platform-mihomo-service", Status: model.PlatformAccountBindingStatusPendingBind,
+	}
+	reader := &fakeRuntimeSummaryBindingReader{binding: binding, deleteErr: errors.New("database unavailable")}
+	platformSvc := &fakeOrchestrationPlatformService{
+		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticketErr: errors.New("ticket signing failed"),
+	}
+	service := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{}, store)
+
+	_, err := service.PutCredentialForOwner(context.Background(), coordinatedPutInput())
+	require.Error(t, err)
+	var intent model.PlatformOperationIntent
+	require.NoError(t, db.Take(&intent).Error)
+	assert.Equal(t, model.PlatformOperationIntentStateInvariantViolation, intent.State)
+	assert.True(t, intent.State.ReservesBinding())
+	var outbox model.PlatformOperationOutbox
+	require.NoError(t, db.Where("operation_id = ?", intent.OperationID).Take(&outbox).Error)
+	assert.Equal(t, model.PlatformOperationOutboxStatusPending, outbox.Status)
 }
 
 func (f failingPersistBindingReader) PersistRuntimeSummary(bindingID uint64, summary RuntimeSummary) (*model.PlatformAccountBinding, error) {

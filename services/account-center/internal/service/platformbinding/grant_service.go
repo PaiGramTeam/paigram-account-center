@@ -127,10 +127,10 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 			ctx = context.Background()
 		}
 		if err := s.invalidateGrant(ctx, binding, input.Consumer, input.GrantedBy, minimumGrantVersion); err != nil {
-			return nil, false, err
+			return nil, false, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
 		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, grantedAt); err != nil {
-			return nil, false, err
+			return nil, false, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
 	}
 
@@ -276,10 +276,10 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 	}
 	if shouldInvalidate {
 		if err := s.invalidateGrant(ctx, binding, input.Consumer, input.ActorUserID, minimumGrantVersion); err != nil {
-			return nil, err
+			return nil, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
 		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, revokedAt); err != nil {
-			return nil, err
+			return nil, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
 	}
 
@@ -321,6 +321,42 @@ func (s *GrantService) DeleteGrants(bindingID uint64) error {
 	}
 
 	return s.db.Where("binding_id = ?", bindingID).Delete(&model.ConsumerGrant{}).Error
+}
+
+func (s *GrantService) ListPendingGrantInvalidationIDs(ctx context.Context, limit int) ([]uint64, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	var grantIDs []uint64
+	err := s.db.WithContext(ctx).Model(&model.ConsumerGrant{}).
+		Where("last_invalidated_at IS NULL AND ticket_version > 0").
+		Order("updated_at ASC, id ASC").Limit(limit).Pluck("id", &grantIDs).Error
+	return grantIDs, err
+}
+
+func (s *GrantService) ReconcileGrantInvalidation(ctx context.Context, grantID uint64) error {
+	var grant model.ConsumerGrant
+	if err := s.db.WithContext(ctx).Preload("Actions").First(&grant, grantID).Error; err != nil {
+		return err
+	}
+	if grant.LastInvalidatedAt.Valid {
+		return nil
+	}
+	binding, err := s.getBinding(grant.BindingID)
+	if err != nil {
+		return err
+	}
+	minimumVersion := grant.TicketVersion
+	if minimumVersion == 0 {
+		minimumVersion = 1
+	}
+	if err := s.invalidateGrant(ctx, binding, grant.Consumer, grant.GrantedBy, minimumVersion); err != nil {
+		return newGrantPropagationPendingError(binding.ID, grant.Consumer, minimumVersion, err)
+	}
+	if err := s.completeGrantInvalidation(&grant, minimumVersion, time.Now().UTC()); err != nil {
+		return newGrantPropagationPendingError(binding.ID, grant.Consumer, minimumVersion, err)
+	}
+	return nil
 }
 
 func (s *GrantService) UpsertGrantForOwner(ownerUserID uint64, input UpsertGrantInput) (*model.ConsumerGrant, bool, error) {
@@ -420,6 +456,12 @@ func (s *GrantService) validateConsumer(consumer string) error {
 	}
 
 	return ErrConsumerNotSupported
+}
+
+func newGrantPropagationPendingError(bindingID uint64, consumer string, minimumVersion uint64, cause error) error {
+	return &GrantPropagationPendingError{
+		BindingID: bindingID, Consumer: consumer, MinimumGrantVersion: minimumVersion, Cause: cause,
+	}
 }
 
 func writeGrantAudit(tx *gorm.DB, binding *model.PlatformAccountBinding, bindingID uint64, consumer string, actorUserID *uint64, enabled bool, idempotent bool) error {

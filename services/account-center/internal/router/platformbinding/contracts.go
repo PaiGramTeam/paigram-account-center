@@ -27,7 +27,7 @@ func registerContracts(rg *httpserver.Group) {
 	rg.RegisterContract(http.MethodPost, "/me/platform-accounts", httpserver.JSONContract(
 		handlerplatformbinding.CreateBindingRequest{}, response.Envelope[handlerplatformbinding.BindingView]{}, http.StatusCreated,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusInternalServerError,
-	))
+	).WithErrorResponse(response.Envelope[handlerplatformbinding.CredentialOperationPendingView]{}, http.StatusAccepted))
 	rg.RegisterContract(http.MethodGet, "/me/platform-accounts/:bindingId", httpserver.ResponseContract(
 		response.Envelope[handlerplatformbinding.BindingView]{}, http.StatusOK, meErrors...,
 	))
@@ -80,14 +80,14 @@ func registerBindingActions(rg *httpserver.Group, prefix string, admin bool) {
 	}
 	rg.RegisterContract(http.MethodPost, prefix+"/refresh", httpserver.ResponseContract(
 		bindingResponse, http.StatusOK, commonErrors...,
-	))
+	).WithErrorResponse(response.Envelope[handlerplatformbinding.CredentialOperationPendingView]{}, http.StatusAccepted))
 	rg.RegisterContract(http.MethodPut, prefix+"/credential", httpserver.JSONContract(
 		credentialPayload{}, response.Envelope[serviceplatformbinding.RuntimeSummary]{}, http.StatusOK, commonErrors...,
-	))
+	).WithErrorResponse(response.Envelope[handlerplatformbinding.CredentialOperationPendingView]{}, http.StatusAccepted))
 	rg.RegisterContract(http.MethodPut, prefix+"/consumer-grants/:consumer", httpserver.JSONContract(
 		handlerplatformbinding.PutConsumerGrantRequest{}, response.Envelope[handlerplatformbinding.ConsumerGrantView]{}, http.StatusOK, commonErrors...,
-	))
+	).WithErrorResponse(response.Envelope[handlerplatformbinding.GrantPropagationPendingView]{}, http.StatusAccepted))
 	rg.RegisterContract(http.MethodDelete, prefix, httpserver.ResponseContract(
 		nil, http.StatusNoContent, commonErrors...,
-	))
+	).WithErrorResponse(response.Envelope[handlerplatformbinding.CredentialOperationPendingView]{}, http.StatusAccepted))
 }

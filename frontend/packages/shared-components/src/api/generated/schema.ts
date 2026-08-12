@@ -1457,6 +1457,7 @@ export interface components {
             granted_by?: unknown;
             /** Format: int64 */
             id?: number;
+            propagation_state?: string;
             revoked_at: unknown;
             status: string;
             updated_at?: unknown;
@@ -1479,6 +1480,12 @@ export interface components {
             verification_expires_at: string;
             /** Format: date-time */
             verified_at?: string;
+        };
+        CredentialOperationPendingView: {
+            /** Format: int64 */
+            binding_id: number;
+            operation_id: string;
+            state: string;
         };
         CredentialView: {
             audiences: string[] | null;
@@ -1542,6 +1549,14 @@ export interface components {
             verified_at?: string;
         };
         "EnvelopeStruct {}DataStruct": Record<string, never>;
+        GrantPropagationPendingView: {
+            /** Format: int64 */
+            binding_id: number;
+            consumer: string;
+            /** Format: int64 */
+            minimum_grant_version: number;
+            state: string;
+        };
         HumaCompatibilityError: {
             /** Format: int64 */
             code: number;
@@ -2662,6 +2677,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
+                        message: string;
+                    };
+                };
+            };
             /** @description No Content */
             204: {
                 headers: {
@@ -2974,6 +3003,20 @@ export interface operations {
                     };
                 };
             };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["GrantPropagationPendingView"];
+                        message: string;
+                    };
+                };
+            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -3163,6 +3206,20 @@ export interface operations {
                         /** Format: int64 */
                         code: number;
                         data: components["schemas"]["RuntimeSummary"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
                         message: string;
                     };
                 };
@@ -3508,6 +3565,20 @@ export interface operations {
                         /** Format: int64 */
                         code: number;
                         data: components["schemas"]["AdminBindingView"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
                         message: string;
                     };
                 };
@@ -12847,6 +12918,20 @@ export interface operations {
                     };
                 };
             };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
+                        message: string;
+                    };
+                };
+            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -13127,6 +13212,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
+                        message: string;
+                    };
+                };
+            };
             /** @description No Content */
             204: {
                 headers: {
@@ -13569,6 +13668,20 @@ export interface operations {
                     };
                 };
             };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["GrantPropagationPendingView"];
+                        message: string;
+                    };
+                };
+            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -13742,6 +13855,20 @@ export interface operations {
                         /** Format: int64 */
                         code: number;
                         data: components["schemas"]["RuntimeSummary"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
                         message: string;
                     };
                 };
@@ -14217,6 +14344,20 @@ export interface operations {
                         /** Format: int64 */
                         code: number;
                         data: components["schemas"]["BindingView"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["CredentialOperationPendingView"];
                         message: string;
                     };
                 };

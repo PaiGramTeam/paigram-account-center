@@ -234,15 +234,12 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		patchPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 			"profile_id": profiles[1].ID,
 		}, authHeaders(ownerAccessToken))
-		require.Equal(t, http.StatusOK, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
-		patchPrimaryData := decodeResponseData(t, patchPrimaryResp)
-		assert.Equal(t, float64(profiles[1].ID), patchPrimaryData["primary_profile_id"])
+		require.Equal(t, http.StatusServiceUnavailable, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
 
 		invalidPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 			"profile_id": uint64(99999999),
 		}, authHeaders(ownerAccessToken))
-		require.Equal(t, http.StatusUnprocessableEntity, invalidPrimaryResp.Code, invalidPrimaryResp.Body.String())
-		assert.Equal(t, "PRIMARY_PROFILE_INVALID", decodeErrorCode(t, invalidPrimaryResp))
+		require.Equal(t, http.StatusServiceUnavailable, invalidPrimaryResp.Code, invalidPrimaryResp.Body.String())
 
 		summaryResp := performJSONRequest(t, stack.Router, http.MethodGet, fmt.Sprintf("/api/v1/me/platform-accounts/%d/runtime-summary", binding.ID), nil, authHeaders(ownerAccessToken))
 		require.Equal(t, http.StatusOK, summaryResp.Code, summaryResp.Body.String())
@@ -550,13 +547,32 @@ func TestCreatePlatformBindingRouteHandlesDuplicateOwnerConflict(t *testing.T) {
 	assert.Equal(t, "PLATFORM_ACCOUNT_ALREADY_BOUND", decodeErrorCode(t, resp))
 
 	var binding model.PlatformAccountBinding
-	require.NoError(t, stack.DB.Where("owner_user_id = ? AND display_name = ?", ownerID, "Conflict Draft").First(&binding).Error)
-	assert.Equal(t, model.PlatformAccountBindingStatusCredentialInvalid, binding.Status)
-	assert.Equal(t, "duplicate_owner", binding.StatusReasonCode)
+	require.NoError(t, stack.DB.Unscoped().Where("owner_user_id = ? AND display_name = ?", ownerID, "Conflict Draft").First(&binding).Error)
+	assert.Equal(t, model.PlatformAccountBindingStatusDeleted, binding.Status)
+	assert.True(t, binding.DeletedAt.Valid)
 	assert.False(t, binding.ExternalAccountKey.Valid)
 	require.Len(t, stub.deleteRequests, 1)
 	assert.Equal(t, "cn:duplicate-owner", stub.deleteRequests[0].GetAccountKey())
 	_ = ownerID
+}
+
+func TestCreatePlatformBindingRouteMapsProviderOwnershipConflictAndDeletesDraft(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-provider-conflict-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
+	stub := &platformBindingRouteStub{credentialMutationErr: grpcstatus.Error(codes.AlreadyExists, "account already bound")}
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+
+	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
+		"platform": "mihomo", "display_name": "Provider Conflict Draft",
+		"credential_payload": map[string]any{"cookie_bundle": "abc"},
+	}, authHeaders(ownerAccessToken))
+	require.Equal(t, http.StatusConflict, resp.Code, resp.Body.String())
+	assert.Equal(t, "PLATFORM_ACCOUNT_ALREADY_BOUND", decodeErrorCode(t, resp))
+
+	var binding model.PlatformAccountBinding
+	require.NoError(t, stack.DB.Unscoped().Where("owner_user_id = ? AND display_name = ?", ownerID, "Provider Conflict Draft").Take(&binding).Error)
+	assert.Equal(t, model.PlatformAccountBindingStatusDeleted, binding.Status)
+	assert.True(t, binding.DeletedAt.Valid)
 }
 
 func TestCreatePlatformBindingRouteMarksDraftInvalidOnProviderValidationFailure(t *testing.T) {
@@ -576,9 +592,9 @@ func TestCreatePlatformBindingRouteMarksDraftInvalidOnProviderValidationFailure(
 	assert.Equal(t, "PLATFORM_CREDENTIAL_VALIDATION_FAILED", decodeErrorCode(t, resp))
 
 	var binding model.PlatformAccountBinding
-	require.NoError(t, stack.DB.Where("owner_user_id = ? AND display_name = ?", ownerID, "Invalid Draft").First(&binding).Error)
-	assert.Equal(t, model.PlatformAccountBindingStatusCredentialInvalid, binding.Status)
-	assert.Equal(t, "credential_validation_failed", binding.StatusReasonCode)
+	require.NoError(t, stack.DB.Unscoped().Where("owner_user_id = ? AND display_name = ?", ownerID, "Invalid Draft").First(&binding).Error)
+	assert.Equal(t, model.PlatformAccountBindingStatusDeleted, binding.Status)
+	assert.True(t, binding.DeletedAt.Valid)
 	assert.False(t, binding.ExternalAccountKey.Valid)
 	assert.Empty(t, stub.deleteRequests)
 	_ = ownerID
@@ -777,7 +793,7 @@ func TestAdminDeletePlatformBindingRouteDeletesProviderCredential(t *testing.T) 
 	assert.Equal(t, "cn:delete-admin", stub.deleteRequests[0].GetAccountKey())
 }
 
-func TestDeletePlatformBindingRouteMarksDeleteFailedWhenProviderDeleteFails(t *testing.T) {
+func TestDeletePlatformBindingRouteKeepsUncertainOperationWhenResponseIsLost(t *testing.T) {
 	stack := newIntegrationStack(t)
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-delete-failure-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 	binding := model.PlatformAccountBinding{
@@ -793,14 +809,17 @@ func TestDeletePlatformBindingRouteMarksDeleteFailedWhenProviderDeleteFails(t *t
 	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
 
 	resp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/me/platform-accounts/%d", binding.ID), nil, authHeaders(ownerAccessToken))
-	require.Equal(t, http.StatusServiceUnavailable, resp.Code, resp.Body.String())
-	assert.Equal(t, "PLATFORM_SERVICE_UNAVAILABLE", decodeErrorCode(t, resp))
+	require.Equal(t, http.StatusAccepted, resp.Code, resp.Body.String())
+	responseData := decodeResponseData(t, resp)
+	assert.Equal(t, "uncertain", responseData["state"])
 
 	var persisted model.PlatformAccountBinding
 	require.NoError(t, stack.DB.First(&persisted, binding.ID).Error)
-	assert.Equal(t, model.PlatformAccountBindingStatusDeleteFailed, persisted.Status)
-	assert.Equal(t, "credential_delete_failed", persisted.StatusReasonCode)
-	assert.Contains(t, persisted.StatusReasonMessage, "delete downstream unavailable")
+	assert.Equal(t, model.PlatformAccountBindingStatusDeleting, persisted.Status)
+	assert.Empty(t, persisted.StatusReasonCode)
+	var intent model.PlatformOperationIntent
+	require.NoError(t, stack.DB.Where("binding_id = ?", binding.ID).Take(&intent).Error)
+	assert.Equal(t, model.PlatformOperationIntentStateUncertain, intent.State)
 	require.Len(t, stub.deleteRequests, 1)
 }
 

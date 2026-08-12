@@ -3,8 +3,6 @@ package platformbinding
 import (
 	"time"
 
-	"gorm.io/gorm"
-
 	"paigram/internal/model"
 )
 
@@ -23,8 +21,10 @@ func (s *GrantService) completeGrantInvalidation(grant *model.ConsumerGrant, min
 	if err := s.db.Preload("Actions").Where("id = ?", grant.ID).First(&current).Error; err != nil {
 		return err
 	}
-	if update.RowsAffected == 0 && current.TicketVersion < minimumVersion {
-		return gorm.ErrRecordNotFound
+	if update.RowsAffected == 0 {
+		if current.TicketVersion != minimumVersion || !current.LastInvalidatedAt.Valid {
+			return ErrGrantPropagationPending
+		}
 	}
 	*grant = current
 	return nil

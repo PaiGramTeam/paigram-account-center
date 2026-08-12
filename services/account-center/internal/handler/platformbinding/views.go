@@ -44,16 +44,30 @@ type ProfileView struct {
 }
 
 type ConsumerGrantView struct {
-	ID        uint64                    `json:"id,omitempty"`
-	BindingID uint64                    `json:"binding_id"`
-	Consumer  string                    `json:"consumer"`
-	Status    model.ConsumerGrantStatus `json:"status"`
-	Actions   []string                  `json:"actions"`
-	GrantedBy any                       `json:"granted_by,omitempty"`
-	GrantedAt any                       `json:"granted_at,omitempty"`
-	RevokedAt any                       `json:"revoked_at"`
-	CreatedAt any                       `json:"created_at,omitempty"`
-	UpdatedAt any                       `json:"updated_at,omitempty"`
+	ID               uint64                    `json:"id,omitempty"`
+	BindingID        uint64                    `json:"binding_id"`
+	Consumer         string                    `json:"consumer"`
+	Status           model.ConsumerGrantStatus `json:"status"`
+	PropagationState string                    `json:"propagation_state,omitempty"`
+	Actions          []string                  `json:"actions"`
+	GrantedBy        any                       `json:"granted_by,omitempty"`
+	GrantedAt        any                       `json:"granted_at,omitempty"`
+	RevokedAt        any                       `json:"revoked_at"`
+	CreatedAt        any                       `json:"created_at,omitempty"`
+	UpdatedAt        any                       `json:"updated_at,omitempty"`
+}
+
+type CredentialOperationPendingView struct {
+	OperationID string                             `json:"operation_id"`
+	BindingID   uint64                             `json:"binding_id"`
+	State       model.PlatformOperationIntentState `json:"state"`
+}
+
+type GrantPropagationPendingView struct {
+	BindingID           uint64 `json:"binding_id"`
+	Consumer            string `json:"consumer"`
+	MinimumGrantVersion uint64 `json:"minimum_grant_version"`
+	State               string `json:"state"`
 }
 
 func buildMeBindingViews(items []model.PlatformAccountBinding) []BindingView {
@@ -115,6 +129,9 @@ func buildGrantView(item *model.ConsumerGrant) ConsumerGrantView {
 	slices.Sort(actions)
 	view := ConsumerGrantView{
 		BindingID: item.BindingID, Consumer: item.Consumer, Status: item.Status, Actions: actions, RevokedAt: nullableTime(item.RevokedAt),
+	}
+	if !item.LastInvalidatedAt.Valid && (item.Status == model.ConsumerGrantStatusRevoked || item.TicketVersion > 1) {
+		view.PropagationState = "propagation_pending"
 	}
 	if item.ID != 0 {
 		view.ID = item.ID

@@ -150,17 +150,24 @@ func (s *PlatformControlService) DeleteCredential(ctx context.Context, req *plat
 	}
 	result, err := s.operationUC.Execute(ctx, operation, func(txCtx context.Context) (*biz.OperationResult, error) {
 		if _, err := s.advanceGeneration(txCtx, operation, req.GetAccountKey()); err != nil {
+			if status.Code(err) == codes.NotFound {
+				return successfulDeleteOperationResult(req.GetAccountKey()), nil
+			}
 			return nil, err
 		}
 		if err := s.managementUC.DeleteCredentialWithScope(txCtx, toScopeGuardMust(claims), req.GetAccountKey()); err != nil {
 			return nil, mapUsecaseError(err)
 		}
-		return &biz.OperationResult{State: "succeeded", AccountKey: req.GetAccountKey(), SnapshotJSON: `{}`}, nil
+		return successfulDeleteOperationResult(req.GetAccountKey()), nil
 	})
 	if err != nil {
 		return nil, mapOperationError(err)
 	}
 	return &platformv2.DeleteCredentialResponse{Result: toOperationResult(result)}, nil
+}
+
+func successfulDeleteOperationResult(accountKey string) *biz.OperationResult {
+	return &biz.OperationResult{State: "succeeded", AccountKey: accountKey, SnapshotJSON: `{}`}
 }
 
 func (s *PlatformControlService) ApplyAuthorizationFence(ctx context.Context, req *platformv2.ApplyAuthorizationFenceRequest) (*platformv2.ApplyAuthorizationFenceResponse, error) {

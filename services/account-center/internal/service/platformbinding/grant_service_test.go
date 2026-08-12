@@ -432,6 +432,24 @@ func TestGrantServiceRevokeGrantRetriesMissingInvalidationForRevokedGrant(t *tes
 	assert.WithinDuration(t, retryAt, revoked.LastInvalidatedAt.Time, time.Millisecond)
 }
 
+func TestGrantInvalidationCompletionDoesNotConfirmNewerPendingVersion(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	service := NewGrantService(db)
+	binding := seedGrantServiceBinding(t, db, "cn:grant-newer-pending")
+	current := seedConsumerGrant(t, db, model.ConsumerGrant{
+		BindingID: binding.ID, Consumer: ConsumerPaiGramBot, Status: model.ConsumerGrantStatusRevoked,
+		TicketVersion: 3, GrantedAt: time.Now().UTC(), RevokedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+	})
+	stale := current
+	stale.TicketVersion = 2
+
+	err := service.completeGrantInvalidation(&stale, 2, time.Now().UTC())
+	require.ErrorIs(t, err, ErrGrantPropagationPending)
+	var stored model.ConsumerGrant
+	require.NoError(t, db.First(&stored, current.ID).Error)
+	assert.False(t, stored.LastInvalidatedAt.Valid)
+}
+
 func TestGrantServiceRevokeGrantCallsInvalidatorWithExpectedInput(t *testing.T) {
 	db := setupPlatformBindingTestDB(t)
 	invalidator := &capturingGrantInvalidator{}

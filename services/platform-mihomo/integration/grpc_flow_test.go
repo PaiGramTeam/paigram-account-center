@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 
 	"platform-mihomo-service/internal/data"
 	"platform-mihomo-service/internal/service"
@@ -133,18 +134,16 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	_, err = control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), changedRequest)
 	require.NoError(t, err)
 
-	forgedRequest := *changedRequest
-	forgedOperation := *bindOperation
-	forgedOperation.RequestFingerprint = "forged"
-	forgedRequest.Operation = &forgedOperation
-	_, err = control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), &forgedRequest)
+	forgedRequest := proto.Clone(changedRequest).(*platformv2.BindCredentialRequest)
+	forgedRequest.Operation.RequestFingerprint = "forged"
+	_, err = control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), forgedRequest)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 
-	conflict := *bindRequest
+	conflict := proto.Clone(bindRequest).(*platformv2.BindCredentialRequest)
 	conflict.Operation = operationRef("bind-op", platformv2.OperationKind_OPERATION_KIND_BIND_CREDENTIAL, 1, 2)
 	_, err = control.BindCredential(
 		ticketContextForOperation(t, "", "mihomo.credential.bind", contractticket.TypeControl, conflict.Operation.GetOperationId(), conflict.Operation.GetPreGeneration()),
-		&conflict,
+		conflict,
 	)
 	require.Equal(t, codes.AlreadyExists, status.Code(err))
 	storedBind, err := control.GetOperation(
@@ -232,6 +231,14 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.False(t, absent.GetState().GetExists())
+
+	alreadyAbsentOperation := operationRef("already-absent-delete-op", platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL, 4, 5)
+	alreadyAbsent, err := control.DeleteCredential(
+		ticketContextForOperation(t, accountKey, "mihomo.credential.delete", contractticket.TypeControl, alreadyAbsentOperation.GetOperationId(), alreadyAbsentOperation.GetPreGeneration()),
+		&platformv2.DeleteCredentialRequest{Operation: alreadyAbsentOperation, AccountKey: accountKey},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, alreadyAbsent.GetResult().GetState())
 
 	_, err = runtime.GetStatus(
 		ticketContext(t, accountKey, "mihomo.status.read"),

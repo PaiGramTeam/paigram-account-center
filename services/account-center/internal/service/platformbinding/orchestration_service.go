@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"gorm.io/gorm"
@@ -50,12 +51,13 @@ type credentialGateway interface {
 }
 
 type OrchestrationService struct {
-	bindingReader   orchestrationBindingReader
-	platformService orchestrationPlatformService
-	gateway         credentialGateway
-	profileSyncer   orchestrationProfileSyncer
-	grantCleaner    orchestrationGrantCleaner
-	auditWriter     orchestrationAuditWriter
+	bindingReader    orchestrationBindingReader
+	platformService  orchestrationPlatformService
+	gateway          credentialGateway
+	operationIntents credentialOperationIntentStore
+	profileSyncer    orchestrationProfileSyncer
+	grantCleaner     orchestrationGrantCleaner
+	auditWriter      orchestrationAuditWriter
 }
 
 type orchestrationAuditWriter interface {
@@ -72,6 +74,8 @@ func NewOrchestrationService(bindingReader orchestrationBindingReader, platformS
 			service.grantCleaner = typed
 		case orchestrationAuditWriter:
 			service.auditWriter = typed
+		case credentialOperationIntentStore:
+			service.operationIntents = typed
 		}
 	}
 	return service
@@ -85,27 +89,52 @@ func (s *OrchestrationService) CreateBindingForOwner(ctx context.Context, input 
 		}
 		return nil, err
 	}
+	if s.operationIntents != nil {
+		pending, pendingErr := s.operationIntents.FindPendingBindForOwner(ctx, input.OwnerUserID, input.Platform)
+		if pendingErr != nil {
+			return nil, pendingErr
+		}
+		if pending != nil {
+			return nil, &CredentialOperationPendingError{OperationID: pending.OperationID, BindingID: pending.BindingID, State: pending.State}
+		}
+	}
 
-	binding, err := s.bindingReader.CreateBinding(CreateBindingInput{
+	createInput := CreateBindingInput{
 		OwnerUserID:        input.OwnerUserID,
 		Platform:           input.Platform,
 		PlatformServiceKey: platformRow.ServiceKey,
 		DisplayName:        input.DisplayName,
-	})
+	}
+	var binding *model.PlatformAccountBinding
+	preadmittedOperationID := ""
+	if s.operationIntents != nil {
+		preadmittedOperationID, err = operationid.NewID()
+		if err == nil {
+			binding, _, err = s.operationIntents.CreateBindingAndAdmit(ctx, createInput, input.ActorType, input.ActorID, preadmittedOperationID)
+		}
+	} else {
+		binding, err = s.bindingReader.CreateBinding(createInput)
+	}
 	if err != nil {
 		s.recordBindingAudit(ctx, nil, "binding_create", "failure", reasonCode(err), &input.OwnerUserID, input.ActorType, input.ActorID, map[string]any{"platform": input.Platform})
 		return nil, err
 	}
 
-	_, updatedBinding, err := s.putCredential(ctx, binding, PutCredentialInput{
+	putInput := PutCredentialInput{
 		OwnerUserID:       input.OwnerUserID,
 		BindingID:         binding.ID,
 		ActorType:         input.ActorType,
 		ActorID:           input.ActorID,
 		CredentialPayload: input.CredentialPayload,
-	})
+	}
+	var updatedBinding *model.PlatformAccountBinding
+	if preadmittedOperationID != "" {
+		_, updatedBinding, err = s.putCredentialWithOperation(ctx, binding, putInput, preadmittedOperationID, true)
+	} else {
+		_, updatedBinding, err = s.putCredential(ctx, binding, putInput)
+	}
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "binding_create", "failure", reasonCode(err), &input.OwnerUserID, input.ActorType, input.ActorID, map[string]any{"platform": input.Platform})
+		s.recordBindingAudit(ctx, binding, "binding_create", auditResult(err), reasonCode(err), &input.OwnerUserID, input.ActorType, input.ActorID, map[string]any{"platform": input.Platform})
 		if updatedBinding != nil {
 			if updatedBinding.ID != binding.ID {
 				if _, deleteErr := s.bindingReader.DeleteBinding(binding.ID); deleteErr != nil {
@@ -140,7 +169,7 @@ func (s *OrchestrationService) PutCredentialForOwner(ctx context.Context, input 
 
 	summary, _, err := s.putCredential(ctx, binding, input)
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "credential_update", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), input.ActorType, input.ActorID, nil)
+		s.recordBindingAudit(ctx, binding, "credential_update", auditResult(err), reasonCode(err), uint64Ptr(binding.OwnerUserID), input.ActorType, input.ActorID, nil)
 		if errors.Is(err, ErrCredentialValidationFailed) {
 			s.recordBindingAudit(ctx, binding, "platform_validation_failure", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), input.ActorType, input.ActorID, nil)
 		}
@@ -158,7 +187,7 @@ func (s *OrchestrationService) PutCredentialAsAdmin(ctx context.Context, input P
 
 	summary, _, err := s.putCredential(ctx, binding, input)
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "credential_update", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), input.ActorType, input.ActorID, nil)
+		s.recordBindingAudit(ctx, binding, "credential_update", auditResult(err), reasonCode(err), uint64Ptr(binding.OwnerUserID), input.ActorType, input.ActorID, nil)
 		if errors.Is(err, ErrCredentialValidationFailed) {
 			s.recordBindingAudit(ctx, binding, "platform_validation_failure", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), input.ActorType, input.ActorID, nil)
 		}
@@ -176,7 +205,7 @@ func (s *OrchestrationService) RefreshBindingForOwner(ctx context.Context, owner
 
 	updated, err := s.refreshBinding(ctx, binding, "user", "binding-refresh")
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "binding_refresh", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), "user", "binding-refresh", nil)
+		s.recordBindingAudit(ctx, binding, "binding_refresh", auditResult(err), reasonCode(err), uint64Ptr(binding.OwnerUserID), "user", "binding-refresh", nil)
 		return nil, err
 	}
 	s.recordBindingAudit(ctx, updated, "binding_refresh", "success", "", uint64Ptr(binding.OwnerUserID), "user", "binding-refresh", nil)
@@ -192,7 +221,7 @@ func (s *OrchestrationService) RefreshBindingAsAdmin(ctx context.Context, bindin
 	actorID := "admin:" + strconv.FormatUint(adminUserID, 10)
 	updated, err := s.refreshBinding(ctx, binding, "admin", actorID)
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "binding_refresh", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), "admin", actorID, nil)
+		s.recordBindingAudit(ctx, binding, "binding_refresh", auditResult(err), reasonCode(err), uint64Ptr(binding.OwnerUserID), "admin", actorID, nil)
 		return nil, err
 	}
 	s.recordBindingAudit(ctx, updated, "binding_refresh", "success", "", uint64Ptr(binding.OwnerUserID), "admin", actorID, nil)
@@ -207,7 +236,7 @@ func (s *OrchestrationService) DeleteBindingForOwner(ctx context.Context, ownerU
 
 	err = s.deleteBinding(ctx, binding, "user", "binding-delete")
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "binding_delete", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), "user", "binding-delete", nil)
+		s.recordBindingAudit(ctx, binding, "binding_delete", auditResult(err), reasonCode(err), uint64Ptr(binding.OwnerUserID), "user", "binding-delete", nil)
 		return err
 	}
 	s.recordBindingAudit(ctx, binding, "binding_delete", "success", "", uint64Ptr(binding.OwnerUserID), "user", "binding-delete", nil)
@@ -223,7 +252,7 @@ func (s *OrchestrationService) DeleteBindingAsAdmin(ctx context.Context, binding
 	actorID := "admin:" + strconv.FormatUint(adminUserID, 10)
 	err = s.deleteBinding(ctx, binding, "admin", actorID)
 	if err != nil {
-		s.recordBindingAudit(ctx, binding, "binding_delete", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), "admin", actorID, nil)
+		s.recordBindingAudit(ctx, binding, "binding_delete", auditResult(err), reasonCode(err), uint64Ptr(binding.OwnerUserID), "admin", actorID, nil)
 		return err
 	}
 	s.recordBindingAudit(ctx, binding, "binding_delete", "success", "", uint64Ptr(binding.OwnerUserID), "admin", actorID, nil)
@@ -270,12 +299,23 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 	if err != nil {
 		return nil, err
 	}
+	reference := newCredentialOperationReferenceForKind(binding, operationID, platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL)
+	if err := s.admitNonSensitiveCredentialOperation(ctx, binding, actorType, actorID, reference); err != nil {
+		return nil, err
+	}
 	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(actorType, actorID, binding, operationID, []string{platformaction.MihomoCredentialRefresh})
 	if err != nil {
+		if s.operationIntents != nil {
+			_ = s.operationIntents.Reschedule(ctx, operationID, "ticket_issue_failed", time.Now().UTC().Add(credentialOperationRetryDelay))
+			return nil, &CredentialOperationPendingError{OperationID: operationID, BindingID: binding.ID, State: model.PlatformOperationIntentStatePendingDelivery}
+		}
 		return nil, err
 	}
 
 	if err := s.gateway.RefreshCredential(ctx, platformRow.Endpoint, ticket, operationID, binding); err != nil {
+		return nil, s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
+	}
+	if err := s.markCredentialProjectionPending(ctx, operationID); err != nil {
 		return nil, err
 	}
 	if advancer, ok := s.bindingReader.(interface {
@@ -286,7 +326,14 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 		}
 	}
 
-	return s.bindingReader.UpdateBindingStatus(binding.ID, model.PlatformAccountBindingStatusRefreshRequired)
+	updated, err := s.bindingReader.UpdateBindingStatus(binding.ID, model.PlatformAccountBindingStatusRefreshRequired)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.completeCredentialOperation(ctx, operationID); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model.PlatformAccountBinding, actorType, actorID string) error {
@@ -328,20 +375,34 @@ func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model
 	if err != nil {
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
+	reference := newCredentialOperationReferenceForKind(binding, operationID, platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL)
+	if err := s.admitNonSensitiveCredentialOperation(ctx, binding, actorType, actorID, reference); err != nil {
+		return err
+	}
 	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(actorType, actorID, binding, operationID, []string{platformaction.MihomoCredentialDelete})
 	if err != nil {
+		if s.operationIntents != nil {
+			_ = s.operationIntents.Reschedule(ctx, operationID, "ticket_issue_failed", time.Now().UTC().Add(credentialOperationRetryDelay))
+			return &CredentialOperationPendingError{OperationID: operationID, BindingID: binding.ID, State: model.PlatformOperationIntentStatePendingDelivery}
+		}
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
 
 	if err := s.gateway.DeleteCredential(ctx, platformRow.Endpoint, ticket, operationID, binding); err != nil {
+		if s.operationIntents != nil {
+			return s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
+		}
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
+	}
+	if err := s.markCredentialProjectionPending(ctx, operationID); err != nil {
+		return err
 	}
 
 	_, err = s.bindingReader.DeleteBinding(binding.ID)
 	if err != nil {
 		return s.markDeleteFailed(binding.ID, err, "control_plane_cleanup_failed")
 	}
-	return nil
+	return s.completeCredentialOperation(ctx, operationID)
 }
 
 func (s *OrchestrationService) markDeleteFailed(bindingID uint64, err error, reasonCode string) error {
@@ -353,6 +414,10 @@ func (s *OrchestrationService) markDeleteFailed(bindingID uint64, err error, rea
 }
 
 func (s *OrchestrationService) putCredential(ctx context.Context, binding *model.PlatformAccountBinding, input PutCredentialInput) (*RuntimeSummary, *model.PlatformAccountBinding, error) {
+	return s.putCredentialWithOperation(ctx, binding, input, "", false)
+}
+
+func (s *OrchestrationService) putCredentialWithOperation(ctx context.Context, binding *model.PlatformAccountBinding, input PutCredentialInput, operationID string, alreadyAdmitted bool) (*RuntimeSummary, *model.PlatformAccountBinding, error) {
 	if s.gateway == nil {
 		return nil, nil, ErrCredentialGatewayUnavailable
 	}
@@ -371,12 +436,27 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 		scopes = []string{platformaction.MihomoCredentialUpdate}
 	}
 
-	operationID, err := operationid.NewID()
-	if err != nil {
-		return nil, nil, err
+	if operationID == "" {
+		operationID, err = operationid.NewID()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	reference := newCredentialOperationReference(binding, operationID, hasResolvedAccount)
+	if !alreadyAdmitted {
+		if err := s.admitCredentialOperation(ctx, binding, input, reference); err != nil {
+			return nil, nil, err
+		}
 	}
 	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(input.ActorType, input.ActorID, binding, operationID, scopes)
 	if err != nil {
+		if reference.Kind == "OPERATION_KIND_BIND_CREDENTIAL" {
+			if _, deleteErr := s.bindingReader.DeleteBinding(binding.ID); deleteErr != nil {
+				s.markCredentialInvariantViolation(ctx, operationID, "ticket_failure_projection_delete_failed")
+				return nil, nil, errors.Join(err, deleteErr)
+			}
+		}
+		s.failCredentialOperation(ctx, operationID, "ticket_issue_failed")
 		return nil, nil, err
 	}
 
@@ -387,11 +467,15 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 		summary, err = s.gateway.BindCredential(ctx, platformRow.Endpoint, ticket, operationID, binding, input.CredentialPayload)
 	}
 	if err != nil {
-		return nil, nil, s.handlePutCredentialError(binding, err)
+		return nil, nil, s.handleCredentialDeliveryError(ctx, binding, reference, err)
+	}
+	if err := s.markCredentialProjectionPending(ctx, reference.OperationID); err != nil {
+		return nil, nil, err
 	}
 
 	runtimeSummary, err := decodeRuntimeSummary(summary)
 	if err != nil {
+		s.markCredentialInvariantViolation(ctx, reference.OperationID, "invalid_operation_summary")
 		return nil, nil, err
 	}
 	updatedBinding, err := s.bindingReader.PersistRuntimeSummary(binding.ID, *runtimeSummary)
@@ -399,14 +483,26 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 		if errors.Is(err, ErrBindingAlreadyOwned) {
 			cleanupErr := s.compensateDeleteCredential(ctx, binding, runtimeSummary.PlatformAccountID, runtimeSummary.Generation, input.ActorType, input.ActorID, platformRow.Endpoint)
 			if cleanupErr != nil {
+				s.markCredentialInvariantViolation(ctx, reference.OperationID, "compensation_delete_failed")
 				_, _ = s.bindingReader.UpdateBindingFailure(binding.ID, model.PlatformAccountBindingStatusDeleteFailed, "compensation_delete_failed", cleanupErr.Error())
 				return nil, nil, fmt.Errorf("%w: cleanup failed: %v", ErrBindingAlreadyOwned, cleanupErr)
 			}
-			_, _ = s.bindingReader.UpdateBindingFailure(binding.ID, model.PlatformAccountBindingStatusCredentialInvalid, "duplicate_owner", "platform binding already owned by another user")
+			if _, deleteErr := s.bindingReader.DeleteBinding(binding.ID); deleteErr != nil {
+				s.markCredentialInvariantViolation(ctx, reference.OperationID, "duplicate_owner_projection_delete_failed")
+				return nil, nil, errors.Join(err, deleteErr)
+			}
+		}
+		if errors.Is(err, ErrBindingAlreadyOwned) {
+			s.failCredentialOperation(ctx, reference.OperationID, reasonCode(err))
+		} else if s.operationIntents != nil {
+			_ = s.operationIntents.Reschedule(ctx, reference.OperationID, "projection_persist_failed", time.Now().UTC().Add(credentialOperationRetryDelay))
 		}
 		return nil, nil, err
 	}
 	if err := s.syncProfiles(binding, updatedBinding, runtimeSummary); err != nil {
+		return runtimeSummary, updatedBinding, err
+	}
+	if err := s.completeCredentialOperation(ctx, reference.OperationID); err != nil {
 		return runtimeSummary, updatedBinding, err
 	}
 
@@ -649,6 +745,10 @@ func reasonCode(err error) string {
 	switch {
 	case errors.Is(err, ErrCredentialValidationFailed):
 		return "credential_validation_failed"
+	case errors.Is(err, ErrCredentialOperationPending):
+		return "operation_pending"
+	case errors.Is(err, ErrGrantPropagationPending):
+		return "authorization_propagation_pending"
 	case errors.Is(err, ErrCredentialGatewayUnavailable):
 		return "credential_gateway_unavailable"
 	case errors.Is(err, ErrPlatformServiceUnavailable):
@@ -658,6 +758,13 @@ func reasonCode(err error) string {
 	default:
 		return "operation_failed"
 	}
+}
+
+func auditResult(err error) string {
+	if errors.Is(err, ErrCredentialOperationPending) {
+		return "pending"
+	}
+	return "failure"
 }
 
 func uint64Ptr(value uint64) *uint64 {

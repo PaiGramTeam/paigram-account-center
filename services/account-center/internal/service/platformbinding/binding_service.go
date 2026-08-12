@@ -93,6 +93,17 @@ func (s *BindingService) GetBindingByID(bindingID uint64) (*model.PlatformAccoun
 	return &binding, nil
 }
 
+func (s *BindingService) GetBindingByIDUnscoped(bindingID uint64) (*model.PlatformAccountBinding, error) {
+	var binding model.PlatformAccountBinding
+	if err := s.db.Unscoped().First(&binding, bindingID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrBindingNotFound
+		}
+		return nil, err
+	}
+	return &binding, nil
+}
+
 func (s *BindingService) GetBindingForOwner(ownerUserID, bindingID uint64) (*model.PlatformAccountBinding, error) {
 	var binding model.PlatformAccountBinding
 	if err := s.db.Where("owner_user_id = ?", ownerUserID).First(&binding, bindingID).Error; err != nil {

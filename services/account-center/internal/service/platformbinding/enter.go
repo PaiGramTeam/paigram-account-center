@@ -23,6 +23,7 @@ func NewServiceGroup(db *gorm.DB, platformService interface {
 	grantDependencies := append([]any{platformService}, dependencies...)
 	grantService := NewGrantService(db, grantDependencies...)
 	auditService := serviceaudit.NewAuditService(db)
+	operationIntentService := NewOperationIntentService(db)
 	gateway := credentialGateway(NewGRPCGenericCredentialGateway(nil))
 	for _, dependency := range dependencies {
 		if candidate, ok := dependency.(credentialGateway); ok {
@@ -33,7 +34,7 @@ func NewServiceGroup(db *gorm.DB, platformService interface {
 		BindingService:           *bindingService,
 		GrantService:             *grantService,
 		ProfileProjectionService: *profileProjectionService,
-		OrchestrationService:     *NewOrchestrationService(bindingService, platformService, gateway, profileProjectionService, grantService, auditService),
+		OrchestrationService:     *NewOrchestrationService(bindingService, platformService, gateway, profileProjectionService, grantService, auditService, operationIntentService),
 		RuntimeSummaryService:    *NewRuntimeSummaryService(platformService, bindingService, profileProjectionService),
 	}
 }

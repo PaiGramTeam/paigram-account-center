@@ -265,6 +265,8 @@ func setupPlatformBindingReconcileScannerDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`
 		CREATE TABLE platform_account_bindings (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			binding_ref TEXT NOT NULL,
+			generation INTEGER NOT NULL DEFAULT 0,
 			owner_user_id INTEGER NOT NULL,
 			platform TEXT NOT NULL,
 			external_account_key TEXT,
@@ -276,6 +278,8 @@ func setupPlatformBindingReconcileScannerDB(t *testing.T) *gorm.DB {
 			primary_profile_id INTEGER,
 			last_validated_at DATETIME NULL,
 			last_synced_at DATETIME NULL,
+			profile_revision INTEGER NOT NULL DEFAULT 0,
+			profile_observed_revision INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME NULL,
 			updated_at DATETIME NULL,
 			deleted_at DATETIME NULL
@@ -286,6 +290,7 @@ func setupPlatformBindingReconcileScannerDB(t *testing.T) *gorm.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			binding_id INTEGER NOT NULL,
 			platform_profile_key TEXT NOT NULL,
+			profile_ref TEXT NOT NULL,
 			game_biz TEXT NOT NULL,
 			region TEXT NOT NULL,
 			player_uid TEXT NOT NULL,

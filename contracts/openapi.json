@@ -451,6 +451,9 @@
             "minimum": 0,
             "type": "integer"
           },
+          "propagation_state": {
+            "type": "string"
+          },
           "revoked_at": {},
           "status": {
             "type": "string"
@@ -524,6 +527,28 @@
           "is_primary",
           "created_at",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "CredentialOperationPendingView": {
+        "additionalProperties": false,
+        "properties": {
+          "binding_id": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "binding_id",
+          "state"
         ],
         "type": "object"
       },
@@ -753,6 +778,34 @@
       },
       "EnvelopeStruct {}DataStruct": {
         "additionalProperties": false,
+        "type": "object"
+      },
+      "GrantPropagationPendingView": {
+        "additionalProperties": false,
+        "properties": {
+          "binding_id": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "consumer": {
+            "type": "string"
+          },
+          "minimum_grant_version": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding_id",
+          "consumer",
+          "minimum_grant_version",
+          "state"
+        ],
         "type": "object"
       },
       "HumaCompatibilityError": {
@@ -3781,6 +3834,34 @@
           }
         ],
         "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
           "204": {
             "description": "No Content"
           },
@@ -5004,6 +5085,34 @@
             },
             "description": "OK"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/GrantPropagationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
           "400": {
             "content": {
               "application/json": {
@@ -5499,6 +5608,34 @@
               }
             },
             "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "400": {
             "content": {
@@ -6406,6 +6543,34 @@
               }
             },
             "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "400": {
             "content": {
@@ -30402,6 +30567,34 @@
             },
             "description": "Created"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
           "400": {
             "content": {
               "application/json": {
@@ -30769,6 +30962,34 @@
           }
         ],
         "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
           "204": {
             "description": "No Content"
           },
@@ -32258,6 +32479,34 @@
             },
             "description": "OK"
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/GrantPropagationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
           "400": {
             "content": {
               "application/json": {
@@ -32705,6 +32954,34 @@
               }
             },
             "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "400": {
             "content": {
@@ -33935,6 +34212,34 @@
               }
             },
             "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CredentialOperationPendingView"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "400": {
             "content": {

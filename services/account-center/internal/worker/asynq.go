@@ -42,6 +42,10 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 	bindingReconcileHandler := tasks.NewPlatformBindingReconcileHandler(db, asynqClient)
 	bindingProjectionRepairHandler := tasks.NewPlatformBindingProjectionRepairHandler(db, &platformService.PlatformService)
 	bindingDeleteRepairHandler := tasks.NewPlatformBindingDeleteRepairHandler(db, &platformService.PlatformService)
+	credentialOperationDispatchHandler := tasks.NewCredentialOperationDispatchHandler(db, asynqClient)
+	credentialOperationReconcileHandler := tasks.NewCredentialOperationReconcileHandler(db, &platformService.PlatformService)
+	grantInvalidationDispatchHandler := tasks.NewGrantInvalidationDispatchHandler(db, asynqClient)
+	grantInvalidationReconcileHandler := tasks.NewGrantInvalidationReconcileHandler(db, &platformService.PlatformService)
 
 	// Create mux (task router)
 	mux := asynq.NewServeMux()
@@ -51,6 +55,10 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 	mux.HandleFunc(tasks.TypePlatformBindingReconcile, bindingReconcileHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypePlatformBindingProjectionRepair, bindingProjectionRepairHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypePlatformBindingDeleteRepair, bindingDeleteRepairHandler.ProcessTask)
+	mux.HandleFunc(tasks.TypeCredentialOperationDispatch, credentialOperationDispatchHandler.ProcessTask)
+	mux.HandleFunc(tasks.TypeCredentialOperationReconcile, credentialOperationReconcileHandler.ProcessTask)
+	mux.HandleFunc(tasks.TypeGrantInvalidationDispatch, grantInvalidationDispatchHandler.ProcessTask)
+	mux.HandleFunc(tasks.TypeGrantInvalidationReconcile, grantInvalidationReconcileHandler.ProcessTask)
 
 	// Configure server
 	srv := asynq.NewServer(
@@ -142,6 +150,26 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 		return nil, nil, err
 	}
 	log.Printf("[Asynq] Registered periodic task: platform_binding_reconcile (entry_id=%s)", entryID4)
+
+	credentialOperationDispatchTask, err := tasks.NewCredentialOperationDispatchTask()
+	if err != nil {
+		return nil, nil, err
+	}
+	entryID5, err := scheduler.Register("* * * * *", credentialOperationDispatchTask)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Printf("[Asynq] Registered periodic task: credential_operation_dispatch (entry_id=%s)", entryID5)
+
+	grantInvalidationDispatchTask, err := tasks.NewGrantInvalidationDispatchTask()
+	if err != nil {
+		return nil, nil, err
+	}
+	entryID6, err := scheduler.Register("* * * * *", grantInvalidationDispatchTask)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Printf("[Asynq] Registered periodic task: grant_invalidation_dispatch (entry_id=%s)", entryID6)
 
 	log.Println("[Asynq] Worker server starting...")
 	if err := srv.Start(mux); err != nil {

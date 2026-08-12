@@ -583,7 +583,26 @@ func readPutConsumerGrantRequest(c *gin.Context) (*PutConsumerGrantRequest, bool
 }
 
 func writeBindingError(c *gin.Context, err error, fallback string) {
+	var pending *serviceplatformbinding.CredentialOperationPendingError
+	var grantPending *serviceplatformbinding.GrantPropagationPendingError
 	switch {
+	case errors.As(err, &pending):
+		c.JSON(http.StatusAccepted, response.Response{
+			Code:    http.StatusAccepted,
+			Message: "platform credential operation accepted for reconciliation",
+			Data: CredentialOperationPendingView{
+				OperationID: pending.OperationID, BindingID: pending.BindingID, State: pending.State,
+			},
+		})
+	case errors.As(err, &grantPending):
+		c.JSON(http.StatusAccepted, response.Response{
+			Code:    http.StatusAccepted,
+			Message: "consumer authorization propagation is pending",
+			Data: GrantPropagationPendingView{
+				BindingID: grantPending.BindingID, Consumer: grantPending.Consumer,
+				MinimumGrantVersion: grantPending.MinimumGrantVersion, State: "propagation_pending",
+			},
+		})
 	case errors.Is(err, serviceplatformbinding.ErrBindingNotFound):
 		response.NotFoundWithCode(c, pkgerrors.ErrorCodePlatformBindingNotFound, "platform binding not found", nil)
 	case errors.Is(err, serviceplatformbinding.ErrBindingAlreadyOwned):

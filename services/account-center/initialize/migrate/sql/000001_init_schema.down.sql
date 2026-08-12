@@ -23,6 +23,8 @@ DROP FUNCTION IF EXISTS enforce_consumer_grant_actions_from_action();
 DROP FUNCTION IF EXISTS enforce_consumer_grant_actions_from_grant();
 DROP FUNCTION IF EXISTS validate_consumer_grant_actions(BIGINT);
 DROP TABLE IF EXISTS platform_account_profiles CASCADE;
+DROP TABLE IF EXISTS platform_operation_outbox CASCADE;
+DROP TABLE IF EXISTS platform_operation_intents CASCADE;
 DROP TABLE IF EXISTS platform_account_bindings CASCADE;
 DROP TABLE IF EXISTS platform_services CASCADE;
 DROP TABLE IF EXISTS service_credentials CASCADE;

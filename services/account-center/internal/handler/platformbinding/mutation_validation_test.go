@@ -319,6 +319,44 @@ func TestWriteBindingErrorReturnsCodedCredentialValidationFailure(t *testing.T) 
 	assert.Equal(t, "platform credential validation failed", errorData["message"])
 }
 
+func TestWriteBindingErrorReturnsAcceptedForPendingCredentialOperation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	writeBindingError(c, &serviceplatformbinding.CredentialOperationPendingError{
+		OperationID: "op_pending", BindingID: 101, State: model.PlatformOperationIntentStateUncertain,
+	}, "fallback")
+
+	require.Equal(t, http.StatusAccepted, w.Code)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &payload))
+	data, ok := payload["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "op_pending", data["operation_id"])
+	assert.Equal(t, float64(101), data["binding_id"])
+	assert.Equal(t, "uncertain", data["state"])
+}
+
+func TestWriteBindingErrorReturnsAcceptedForPendingGrantPropagation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	writeBindingError(c, &serviceplatformbinding.GrantPropagationPendingError{
+		BindingID: 101, Consumer: "paigram-bot", MinimumGrantVersion: 7,
+	}, "fallback")
+
+	require.Equal(t, http.StatusAccepted, w.Code)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &payload))
+	data, ok := payload["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "propagation_pending", data["state"])
+	assert.Equal(t, "paigram-bot", data["consumer"])
+	assert.Equal(t, float64(7), data["minimum_grant_version"])
+}
+
 func TestWriteBindingErrorReturnsBadRequestForInvalidMutation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

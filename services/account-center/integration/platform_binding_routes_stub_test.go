@@ -11,6 +11,7 @@ import (
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -20,6 +21,7 @@ type platformBindingRouteStub struct {
 	credentialMutationSummary *routeCredentialSummary
 	credentialMutationErr     error
 	deleteErr                 error
+	authorizationFenceErr     error
 	lastBind                  *platformv2.BindCredentialRequest
 	lastReplace               *platformv2.ReplaceCredentialRequest
 	deleteRequests            []*platformv2.DeleteCredentialRequest
@@ -128,6 +130,9 @@ func (s *platformBindingRouteStub) DeleteCredential(_ context.Context, req *plat
 }
 
 func (s *platformBindingRouteStub) ApplyAuthorizationFence(_ context.Context, req *platformv2.ApplyAuthorizationFenceRequest) (*platformv2.ApplyAuthorizationFenceResponse, error) {
+	if s.authorizationFenceErr != nil {
+		return nil, s.authorizationFenceErr
+	}
 	return &platformv2.ApplyAuthorizationFenceResponse{Result: operationResultForRequest(&platformv2.OperationResult{
 		State: platformv2.OperationState_OPERATION_STATE_SUCCEEDED,
 	}, req.GetOperation())}, nil
@@ -137,14 +142,14 @@ func operationResultForRequest(result *platformv2.OperationResult, operation *pl
 	if result == nil {
 		return nil
 	}
-	copy := *result
+	copy := proto.Clone(result).(*platformv2.OperationResult)
 	if copy.Operation == nil {
 		copy.Operation = operation
 	}
 	if copy.State == platformv2.OperationState_OPERATION_STATE_UNSPECIFIED {
 		copy.State = platformv2.OperationState_OPERATION_STATE_SUCCEEDED
 	}
-	return &copy
+	return copy
 }
 
 func startPlatformBindingRouteServer(t *testing.T, stub *platformBindingRouteStub) string {

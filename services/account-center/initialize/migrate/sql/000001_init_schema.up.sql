@@ -559,6 +559,7 @@ CREATE TABLE platform_account_bindings (
     CONSTRAINT chk_platform_account_bindings_ref_nonempty CHECK (binding_ref <> ''),
     CONSTRAINT chk_platform_account_bindings_generation_nonnegative CHECK (generation >= 0),
     CONSTRAINT chk_platform_account_bindings_profile_observation CHECK (profile_observed_revision <= profile_revision),
+    CONSTRAINT uk_platform_account_bindings_identity UNIQUE (id, owner_user_id, platform),
     CONSTRAINT fk_platform_account_bindings_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE UNIQUE INDEX uk_platform_account_bindings_ref ON platform_account_bindings (binding_ref);
@@ -569,6 +570,73 @@ CREATE INDEX idx_platform_account_bindings_status ON platform_account_bindings (
 CREATE INDEX idx_platform_account_bindings_primary_profile_id ON platform_account_bindings (primary_profile_id);
 CREATE UNIQUE INDEX idx_platform_account_bindings_primary_profile_assignment ON platform_account_bindings (id, primary_profile_id);
 CREATE INDEX idx_platform_account_bindings_deleted_at ON platform_account_bindings (deleted_at);
+
+CREATE TABLE platform_operation_intents (
+    operation_id VARCHAR(64) PRIMARY KEY,
+    binding_id BIGINT NOT NULL,
+    binding_ref VARCHAR(64) NOT NULL,
+    owner_user_id BIGINT NOT NULL,
+    platform VARCHAR(64) NOT NULL,
+    kind VARCHAR(64) NOT NULL,
+    pre_generation BIGINT NOT NULL,
+    target_generation BIGINT NOT NULL,
+    request_fingerprint VARCHAR(64) NOT NULL,
+    delivery_mode VARCHAR(32) NOT NULL,
+    state VARCHAR(32) NOT NULL,
+    reason_code VARCHAR(64),
+    actor_type VARCHAR(32) NOT NULL,
+    actor_id VARCHAR(191) NOT NULL,
+    input_expires_at TIMESTAMPTZ,
+    resolved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    active_reservation_marker SMALLINT GENERATED ALWAYS AS (
+        CASE WHEN state IN ('pending_delivery', 'uncertain', 'projection_pending', 'input_required', 'invariant_violation') THEN 1 ELSE NULL END
+    ) STORED,
+    bind_reservation_marker SMALLINT GENERATED ALWAYS AS (
+        CASE WHEN kind = 'OPERATION_KIND_BIND_CREDENTIAL' AND state IN ('pending_delivery', 'uncertain', 'projection_pending', 'input_required', 'invariant_violation') THEN 1 ELSE NULL END
+    ) STORED,
+    CONSTRAINT chk_platform_operation_intents_generation CHECK (
+        pre_generation >= 0 AND target_generation = pre_generation + 1
+    ),
+    CONSTRAINT chk_platform_operation_intents_kind CHECK (
+        kind IN (
+            'OPERATION_KIND_BIND_CREDENTIAL',
+            'OPERATION_KIND_REPLACE_CREDENTIAL',
+            'OPERATION_KIND_REFRESH_CREDENTIAL',
+            'OPERATION_KIND_DELETE_CREDENTIAL'
+        )
+    ),
+    CONSTRAINT chk_platform_operation_intents_state CHECK (
+        state IN ('pending_delivery', 'uncertain', 'projection_pending', 'input_required', 'invariant_violation', 'succeeded', 'failed', 'superseded')
+    ),
+    CONSTRAINT chk_platform_operation_intents_delivery_mode CHECK (delivery_mode IN ('sync_secret', 'outbox')),
+    CONSTRAINT fk_platform_operation_intents_binding FOREIGN KEY (binding_id) REFERENCES platform_account_bindings (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_platform_operation_intents_binding_identity FOREIGN KEY (binding_id, owner_user_id, platform) REFERENCES platform_account_bindings (id, owner_user_id, platform) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_platform_operation_intents_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX uk_platform_operation_intents_active_binding
+    ON platform_operation_intents (binding_id, active_reservation_marker);
+CREATE UNIQUE INDEX uk_platform_operation_intents_active_owner_platform_bind
+    ON platform_operation_intents (owner_user_id, platform, bind_reservation_marker);
+CREATE INDEX idx_platform_operation_intents_binding_id ON platform_operation_intents (binding_id);
+CREATE INDEX idx_platform_operation_intents_owner ON platform_operation_intents (owner_user_id);
+CREATE INDEX idx_platform_operation_intents_state ON platform_operation_intents (state);
+
+CREATE TABLE platform_operation_outbox (
+    id BIGSERIAL PRIMARY KEY,
+    operation_id VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    available_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_reason_code VARCHAR(64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_platform_operation_outbox_status CHECK (status IN ('pending', 'completed', 'dead_letter')),
+    CONSTRAINT uk_platform_operation_outbox_operation UNIQUE (operation_id),
+    CONSTRAINT fk_platform_operation_outbox_intent FOREIGN KEY (operation_id) REFERENCES platform_operation_intents (operation_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX idx_platform_operation_outbox_due ON platform_operation_outbox (status, available_at);
 
 CREATE TABLE platform_account_profiles (
     id BIGSERIAL PRIMARY KEY,

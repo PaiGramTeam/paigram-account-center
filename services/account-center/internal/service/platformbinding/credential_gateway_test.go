@@ -10,9 +10,12 @@ import (
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 
 	"paigram/internal/model"
 )
@@ -62,6 +65,37 @@ func TestGRPCGenericCredentialGatewayDeleteCredentialUsesResolvedAccountKey(t *t
 	require.NoError(t, err)
 	require.Equal(t, "account-101", stub.lastDelete.GetAccountKey())
 	requireOperation(t, stub.lastDelete.GetOperation(), platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL, "binding-101", 4, 5)
+	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
+}
+
+func TestGRPCGenericCredentialGatewayResolvesOperationWithoutCredentialPayload(t *testing.T) {
+	stub := &genericCredentialGatewayStub{resolveResponse: &platformv2.ResolveOperationResponse{Result: successfulCredentialOperationResult()}}
+	gateway := newTestCredentialGateway(t, stub)
+	reference := CredentialOperationReference{
+		OperationID: "op-resolve", Kind: "OPERATION_KIND_BIND_CREDENTIAL", BindingRef: "binding-101",
+		PreGeneration: 0, TargetGeneration: 1, RequestFingerprint: "fingerprint",
+	}
+
+	result, err := gateway.ResolveCredentialOperation(context.Background(), "bufnet", "ticket-123", reference)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, CredentialRemoteOperationSucceeded, result.State)
+	require.Equal(t, "account-101", result.Summary.PlatformAccountID)
+	require.Equal(t, reference.OperationID, stub.lastResolve.GetOperation().GetOperationId())
+	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
+}
+
+func TestGRPCGenericCredentialGatewayReadsAbsentBindingState(t *testing.T) {
+	stub := &genericCredentialGatewayStub{bindingStateResponse: &platformv2.GetBindingStateResponse{State: &platformv2.BindingState{
+		Exists: false, BindingRef: "binding-101",
+	}}}
+	gateway := newTestCredentialGateway(t, stub)
+
+	state, err := gateway.GetCredentialBindingState(context.Background(), "bufnet", "ticket-123", "binding-101")
+	require.NoError(t, err)
+	require.NotNil(t, state)
+	require.False(t, state.Exists)
+	require.Equal(t, "binding-101", stub.lastBindingState.GetBindingRef())
 	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
 }
 
@@ -133,18 +167,39 @@ func newTestCredentialGateway(t *testing.T, stub *genericCredentialGatewayStub) 
 
 type genericCredentialGatewayStub struct {
 	platformv2.UnimplementedPlatformControlServiceServer
-	bindResponse      *platformv2.BindCredentialResponse
-	replaceResponse   *platformv2.ReplaceCredentialResponse
-	deleteResponse    *platformv2.DeleteCredentialResponse
-	lastBind          *platformv2.BindCredentialRequest
-	lastReplace       *platformv2.ReplaceCredentialRequest
-	lastDelete        *platformv2.DeleteCredentialRequest
-	lastAuthorization []string
+	bindResponse                *platformv2.BindCredentialResponse
+	bindErr                     error
+	replaceResponse             *platformv2.ReplaceCredentialResponse
+	deleteResponse              *platformv2.DeleteCredentialResponse
+	resolveResponse             *platformv2.ResolveOperationResponse
+	bindingStateResponse        *platformv2.GetBindingStateResponse
+	lastBind                    *platformv2.BindCredentialRequest
+	lastReplace                 *platformv2.ReplaceCredentialRequest
+	lastDelete                  *platformv2.DeleteCredentialRequest
+	lastResolve                 *platformv2.ResolveOperationRequest
+	lastBindingState            *platformv2.GetBindingStateRequest
+	lastAuthorization           []string
+	loseBindResponseAfterCommit bool
+	committedOperations         map[string]*platformv2.OperationResult
 }
 
 func (s *genericCredentialGatewayStub) BindCredential(ctx context.Context, req *platformv2.BindCredentialRequest) (*platformv2.BindCredentialResponse, error) {
 	s.captureAuthorization(ctx)
 	s.lastBind = req
+	if s.loseBindResponseAfterCommit {
+		if s.committedOperations == nil {
+			s.committedOperations = make(map[string]*platformv2.OperationResult)
+		}
+		result := successfulCredentialOperationResult()
+		if s.bindResponse != nil && s.bindResponse.GetResult() != nil {
+			result = s.bindResponse.GetResult()
+		}
+		s.committedOperations[req.GetOperation().GetOperationId()] = resultForRequestedOperation(result, req.GetOperation())
+		return nil, status.Error(codes.Unavailable, "response lost after commit")
+	}
+	if s.bindErr != nil {
+		return nil, s.bindErr
+	}
 	return &platformv2.BindCredentialResponse{Result: resultForRequestedOperation(s.bindResponse.GetResult(), req.GetOperation())}, nil
 }
 
@@ -160,13 +215,28 @@ func (s *genericCredentialGatewayStub) DeleteCredential(ctx context.Context, req
 	return &platformv2.DeleteCredentialResponse{Result: resultForRequestedOperation(s.deleteResponse.GetResult(), req.GetOperation())}, nil
 }
 
+func (s *genericCredentialGatewayStub) ResolveOperation(ctx context.Context, req *platformv2.ResolveOperationRequest) (*platformv2.ResolveOperationResponse, error) {
+	s.captureAuthorization(ctx)
+	s.lastResolve = req
+	if committed := s.committedOperations[req.GetOperation().GetOperationId()]; committed != nil {
+		return &platformv2.ResolveOperationResponse{Result: resultForRequestedOperation(committed, req.GetOperation())}, nil
+	}
+	return &platformv2.ResolveOperationResponse{Result: resultForRequestedOperation(s.resolveResponse.GetResult(), req.GetOperation())}, nil
+}
+
+func (s *genericCredentialGatewayStub) GetBindingState(ctx context.Context, req *platformv2.GetBindingStateRequest) (*platformv2.GetBindingStateResponse, error) {
+	s.captureAuthorization(ctx)
+	s.lastBindingState = req
+	return s.bindingStateResponse, nil
+}
+
 func resultForRequestedOperation(result *platformv2.OperationResult, operation *platformv2.OperationRef) *platformv2.OperationResult {
 	if result == nil {
 		return nil
 	}
-	copy := *result
+	copy := proto.Clone(result).(*platformv2.OperationResult)
 	copy.Operation = operation
-	return &copy
+	return copy
 }
 
 func (s *genericCredentialGatewayStub) captureAuthorization(ctx context.Context) {
