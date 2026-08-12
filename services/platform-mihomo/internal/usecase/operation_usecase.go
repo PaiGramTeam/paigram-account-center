@@ -40,9 +40,6 @@ func (uc *OperationUsecase) Execute(
 	}
 	var output *biz.OperationResult
 	err = uc.repository.WithinTransaction(ctx, func(txCtx context.Context) error {
-		if err := uc.repository.LockPending(txCtx, operation.OperationID, existing.ExecutionToken); err != nil {
-			return err
-		}
 		result, err := mutation(txCtx)
 		if err != nil {
 			return err

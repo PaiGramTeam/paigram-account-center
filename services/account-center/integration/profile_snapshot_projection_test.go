@@ -58,7 +58,6 @@ func TestProfileProjectionSwitchesForeignKeyBeforeDeletingStalePrimary(t *testin
 func TestConcurrentRuntimeSnapshotsRemainMonotonic(t *testing.T) {
 	stack := newIntegrationStack(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 	ownerID := insertTestUser(t, ctx, stack.SQLDB)
 	bindingID := insertTestBinding(t, ctx, stack.SQLDB, ownerID, "mihomo", "account-concurrent-snapshot")
 	_, err := stack.SQLDB.ExecContext(ctx, `
@@ -70,12 +69,12 @@ func TestConcurrentRuntimeSnapshotsRemainMonotonic(t *testing.T) {
 
 	blocker, err := stack.SQLDB.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = blocker.Rollback() })
 	_, err = blocker.ExecContext(ctx, `SELECT id FROM platform_account_bindings WHERE id = $1 FOR UPDATE`, bindingID)
 	require.NoError(t, err)
 
-	bindingService := serviceplatformbinding.NewBindingService(stack.DB)
-	projectionService := serviceplatformbinding.NewProfileProjectionService(stack.DB)
+	database := stack.DB.WithContext(ctx)
+	bindingService := serviceplatformbinding.NewBindingService(database)
+	projectionService := serviceplatformbinding.NewProfileProjectionService(database)
 	type snapshotCase struct {
 		generation uint64
 		status     string
@@ -115,9 +114,27 @@ func TestConcurrentRuntimeSnapshotsRemainMonotonic(t *testing.T) {
 		}()
 	}
 	close(start)
+	workersDone := make(chan struct{})
+	go func() {
+		wait.Wait()
+		close(workersDone)
+	}()
+	defer func() {
+		_ = blocker.Rollback()
+		cancel()
+		select {
+		case <-workersDone:
+		case <-time.After(5 * time.Second):
+			t.Errorf("snapshot workers did not stop after cleanup")
+		}
+	}()
 	waitForPostgresLockWaiters(t, ctx, stack.SQLDB, "platform_account_bindings", 2)
 	require.NoError(t, blocker.Commit())
-	wait.Wait()
+	select {
+	case <-workersDone:
+	case <-ctx.Done():
+		t.Fatal("snapshot workers did not complete before timeout")
+	}
 	require.NoError(t, errorsByGeneration[4])
 	require.NoError(t, errorsByGeneration[5])
 
