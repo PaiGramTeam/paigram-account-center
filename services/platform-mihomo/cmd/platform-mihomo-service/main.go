@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"log"
@@ -19,6 +20,7 @@ import (
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
 	internaldatabase "platform-mihomo-service/internal/database"
+	"platform-mihomo-service/internal/healthcheck"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/server"
 )
@@ -51,25 +53,48 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	sqlDatabase, err := database.DB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := sqlDatabase.Close(); err != nil {
+			log.Printf("close database: %v", err)
+		}
+	}()
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     bc.GetData().GetRedis().GetAddr(),
 		Password: bc.GetData().GetRedis().GetPassword(),
 		DB:       int(bc.GetData().GetRedis().GetDb()),
 	})
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Printf("close redis: %v", err)
+		}
+	}()
 
 	components, err := buildProductionComponents(&bc, database, redisClient)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	grpcServers, err := server.NewGRPCServers(&bc, components.controlService, components.runtimeService)
+	readiness := healthcheck.NewReadiness(database, redisClient)
+	grpcServers, err := server.NewGRPCServersWithReadiness(&bc, components.controlService, components.runtimeService, readiness)
 	if err != nil {
 		log.Fatal(err)
 	}
 	app := kratos.New(
 		kratos.Name("platform-mihomo-service"),
 		kratos.Server(grpcServers.Control, grpcServers.Runtime, components.artifactCleanupServer, components.credentialReencryptionServer),
+		kratos.AfterStart(func(context.Context) error {
+			grpcServers.Health.Start()
+			return nil
+		}),
+		kratos.BeforeStop(func(context.Context) error {
+			grpcServers.Health.Shutdown()
+			return nil
+		}),
 	)
 
 	if err := app.Run(); err != nil {
@@ -112,6 +137,9 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	databaseConf := bc.GetData().GetDatabase()
 	if databaseConf.GetDsn() == "" {
 		return errors.New("data.database.dsn is required")
+	}
+	if bc.GetData().GetRedis().GetAddr() == "" {
+		return errors.New("data.redis.addr is required")
 	}
 	upstream := bc.GetUpstream()
 	if upstream.GetBaseUrl() == "" {

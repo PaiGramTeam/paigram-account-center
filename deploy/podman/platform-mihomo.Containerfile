@@ -12,7 +12,8 @@ COPY contracts/gen/go/ contracts/gen/go/
 COPY contracts/runtime/go/ contracts/runtime/go/
 COPY services/platform-mihomo/ services/platform-mihomo/
 RUN cd services/platform-mihomo \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/platform-mihomo ./cmd/platform-mihomo-service
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/platform-mihomo ./cmd/platform-mihomo-service \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/platform-mihomo-healthcheck ./cmd/platform-mihomo-healthcheck
 
 FROM docker.io/library/alpine:3.23
 
@@ -20,6 +21,7 @@ RUN addgroup -S -g 10002 platform \
     && adduser -S -D -H -u 10002 -G platform platform
 
 COPY --from=build /out/platform-mihomo /usr/local/bin/platform-mihomo
+COPY --from=build /out/platform-mihomo-healthcheck /usr/local/bin/platform-mihomo-healthcheck
 COPY --chown=platform:platform services/platform-mihomo/initialize/migrate/sql/ /opt/platform-mihomo/initialize/migrate/sql/
 COPY --chown=platform:platform deploy/podman/platform-mihomo.config.yaml /opt/platform-mihomo/config/config.yaml
 

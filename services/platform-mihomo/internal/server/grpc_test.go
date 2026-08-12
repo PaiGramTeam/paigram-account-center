@@ -5,6 +5,7 @@ import (
 
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"platform-mihomo-service/internal/service"
@@ -17,9 +18,10 @@ func TestNewGRPCServersRequiresBothV2Services(t *testing.T) {
 
 func TestRegisterHealthServerSkipsDuplicateRegistration(t *testing.T) {
 	srv := kratosgrpc.NewServer()
+	healthServer := health.NewServer()
 
-	registerHealthServer(srv)
-	registerHealthServer(srv)
+	registerHealthServer(srv, healthServer)
+	registerHealthServer(srv, healthServer)
 
 	if _, ok := srv.GetServiceInfo()[healthpb.Health_ServiceDesc.ServiceName]; !ok {
 		t.Fatalf("service %q not registered", healthpb.Health_ServiceDesc.ServiceName)

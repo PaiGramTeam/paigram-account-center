@@ -250,7 +250,12 @@ func shouldIgnoreRequestURL(rawURL string) bool {
 	}
 
 	path := strings.TrimSpace(parsedURL.Path)
-	return path == "/healthz"
+	switch path {
+	case "/healthz", "/livez", "/readyz":
+		return true
+	default:
+		return false
+	}
 }
 
 func flushTimeout(cfg config.SentryConfig) time.Duration {

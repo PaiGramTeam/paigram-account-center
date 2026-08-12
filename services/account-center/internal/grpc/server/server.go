@@ -7,11 +7,13 @@ import (
 	"time"
 
 	accountv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/servicehealth"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	grpccredentials "google.golang.org/grpc/credentials"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 	"gorm.io/gorm"
 
@@ -19,6 +21,7 @@ import (
 	"paigram/internal/grpc/interceptor"
 	pb "paigram/internal/grpc/pb/v1"
 	grpcservice "paigram/internal/grpc/service"
+	"paigram/internal/healthcheck"
 	"paigram/internal/observability"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/botroute"
@@ -34,6 +37,7 @@ type GRPCServer struct {
 	cfg             *config.Config
 	server          *grpc.Server
 	authInterceptor *interceptor.AuthInterceptor
+	health          *grpcHealthCoordinator
 }
 
 // NewGRPCServer creates a new gRPC server
@@ -53,6 +57,13 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 }
 
 func NewGRPCServerWithTicketSigner(port int, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, ticketSigner serviceticket.Signer) (*GRPCServer, error) {
+	return NewGRPCServerWithTicketSignerAndReadiness(
+		port, db, redisClient, cfg, ticketSigner,
+		healthcheck.NewReadiness(db, redisClient, cfg != nil && cfg.Redis.Enabled),
+	)
+}
+
+func NewGRPCServerWithTicketSignerAndReadiness(port int, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, ticketSigner serviceticket.Signer, readiness servicehealth.Checker) (*GRPCServer, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("grpc config is required")
 	}
@@ -91,6 +102,8 @@ func NewGRPCServerWithTicketSigner(port int, db *gorm.DB, redisClient *redis.Cli
 	}
 
 	server := grpc.NewServer(opts...)
+	healthCoordinator := newGRPCHealthCoordinator(readiness, defaultHealthRefreshInterval)
+	healthpb.RegisterHealthServer(server, healthCoordinator.Server())
 
 	botAccessGroup, err := botaccess.NewServiceGroupWithSigner(db, ticketSigner)
 	if err != nil {
@@ -111,6 +124,7 @@ func NewGRPCServerWithTicketSigner(port int, db *gorm.DB, redisClient *redis.Cli
 		cfg:             cfg,
 		server:          server,
 		authInterceptor: authInterceptor,
+		health:          healthCoordinator,
 	}, nil
 }
 
@@ -122,6 +136,8 @@ func (s *GRPCServer) Start() error {
 	}
 
 	log.Printf("gRPC server listening on port %d", s.port)
+	s.health.Start()
+	defer s.health.Shutdown()
 
 	// This is a blocking call
 	if err := s.server.Serve(lis); err != nil {
@@ -132,7 +148,13 @@ func (s *GRPCServer) Start() error {
 }
 
 // Stop gracefully stops the gRPC server
+func (s *GRPCServer) BeginShutdown() {
+	s.health.Shutdown()
+}
+
+// Stop gracefully stops the gRPC server.
 func (s *GRPCServer) Stop() {
 	log.Println("Stopping gRPC server...")
+	s.BeginShutdown()
 	s.server.GracefulStop()
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/servicehealth"
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
 	"gorm.io/gorm"
@@ -14,6 +15,7 @@ import (
 	"paigram/internal/email"
 	"paigram/internal/handler"
 	authhandler "paigram/internal/handler/auth"
+	"paigram/internal/healthcheck"
 	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 	"paigram/internal/observability"
@@ -38,6 +40,10 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 }
 
 func NewWithTicketSigner(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service, ticketSigner serviceticket.Signer) (*gin.Engine, error) {
+	return NewWithTicketSignerAndReadiness(cfg, cache, db, rateLimitStore, emailService, ticketSigner, healthcheck.NewReadiness(db, nil, false))
+}
+
+func NewWithTicketSignerAndReadiness(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service, ticketSigner serviceticket.Signer, readiness servicehealth.Checker) (*gin.Engine, error) {
 	controlDialer, err := platformtransport.NewControlDialer(platformtransport.ControlConfig{
 		RootCAFile: cfg.PlatformControl.RootCAFile, CertificateFile: cfg.PlatformControl.CertificateFile,
 		PrivateKeyFile: cfg.PlatformControl.PrivateKeyFile, ServerName: cfg.PlatformControl.ServerName,
@@ -46,10 +52,14 @@ func NewWithTicketSigner(cfg *config.Config, cache sessioncache.Store, db *gorm.
 	if err != nil {
 		return nil, err
 	}
-	return NewWithRuntimeDependencies(cfg, cache, db, rateLimitStore, emailService, ticketSigner, controlDialer)
+	return NewWithRuntimeDependenciesAndReadiness(cfg, cache, db, rateLimitStore, emailService, ticketSigner, controlDialer, readiness)
 }
 
 func NewWithRuntimeDependencies(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) (*gin.Engine, error) {
+	return NewWithRuntimeDependenciesAndReadiness(cfg, cache, db, rateLimitStore, emailService, ticketSigner, controlDialer, healthcheck.NewReadiness(db, nil, false))
+}
+
+func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc, readiness servicehealth.Checker) (*gin.Engine, error) {
 	appCfg := cfg.App
 	authCfg := cfg.Auth
 	rateLimitCfg := cfg.RateLimit
@@ -123,22 +133,7 @@ func NewWithRuntimeDependencies(cfg *config.Config, cache sessioncache.Store, db
 		return nil, fmt.Errorf("attach Huma runtime: %w", err)
 	}
 
-	// swagger:route GET /healthz health healthCheck
-	//
-	// Health check endpoint.
-	//
-	// Returns the health status of the service.
-	//
-	// Produces:
-	//   - application/json
-	//
-	// Responses:
-	//   200: healthResponse
-	engine.GET("/healthz", func(c *gin.Context) {
-		response.Success(c, gin.H{
-			"status": "ok",
-		})
-	})
+	registerHealthRoutes(engine, readiness)
 
 	v1 := runtime.V1
 

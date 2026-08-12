@@ -5,6 +5,7 @@ import (
 
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/tlstest"
 	"github.com/stretchr/testify/require"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"paigram/internal/config"
 	"paigram/internal/testutil"
@@ -23,6 +24,7 @@ func TestNewGRPCServerBuildsRegisteredServer(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, grpcServer)
 	require.NotNil(t, grpcServer.server)
+	require.Contains(t, grpcServer.server.GetServiceInfo(), healthpb.Health_ServiceDesc.ServiceName)
 }
 
 func TestNewGRPCServerRejectsMissingTLSIdentity(t *testing.T) {

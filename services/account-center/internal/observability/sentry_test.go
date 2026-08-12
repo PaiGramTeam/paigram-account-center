@@ -14,6 +14,8 @@ import (
 
 func TestShouldIgnoreRequestURL(t *testing.T) {
 	require.True(t, shouldIgnoreRequestURL("https://example.com/healthz"))
+	require.True(t, shouldIgnoreRequestURL("https://example.com/livez"))
+	require.True(t, shouldIgnoreRequestURL("https://example.com/readyz"))
 	require.False(t, shouldIgnoreRequestURL("https://example.com/api/v1/users"))
 	require.False(t, shouldIgnoreRequestURL("://bad-url"))
 }

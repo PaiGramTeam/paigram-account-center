@@ -21,10 +21,22 @@ func (s *testHTTPServer) Shutdown(context.Context) error {
 
 type testGRPCServer struct {
 	called bool
+	began  bool
+	events *[]string
+}
+
+func (s *testGRPCServer) BeginShutdown() {
+	s.began = true
+	if s.events != nil {
+		*s.events = append(*s.events, "grpc-not-serving")
+	}
 }
 
 func (s *testGRPCServer) Stop() {
 	s.called = true
+	if s.events != nil {
+		*s.events = append(*s.events, "grpc-stop")
+	}
 }
 
 type testShutdowner struct {
@@ -80,6 +92,39 @@ func TestShutdownServicesAggregatesErrors(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, httpErr)
 	require.ErrorIs(t, err, emailErr)
+}
+
+func TestShutdownServicesMarksNotReadyBeforeDrainingTransports(t *testing.T) {
+	events := []string{}
+	readiness := &orderedShutdowner{name: "http-not-ready", events: &events}
+	grpcServer := &testGRPCServer{events: &events}
+	httpServer := &orderedHTTPServer{events: &events}
+
+	require.NoError(t, shutdownServices(context.Background(), shutdownTargets{
+		readiness:  readiness,
+		httpServer: httpServer,
+		grpcServer: grpcServer,
+	}))
+
+	require.Equal(t, []string{"http-not-ready", "grpc-not-serving", "http-stop", "grpc-stop"}, events)
+}
+
+type orderedShutdowner struct {
+	name   string
+	events *[]string
+}
+
+func (s *orderedShutdowner) Shutdown() {
+	*s.events = append(*s.events, s.name)
+}
+
+type orderedHTTPServer struct {
+	events *[]string
+}
+
+func (s *orderedHTTPServer) Shutdown(context.Context) error {
+	*s.events = append(*s.events, "http-stop")
+	return nil
 }
 
 // TestHTTPServerHasTimeouts verifies that the HTTP server constructed

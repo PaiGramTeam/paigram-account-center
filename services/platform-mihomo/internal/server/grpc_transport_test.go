@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"testing"
 	"time"
@@ -50,6 +51,26 @@ func TestProductionGRPCListenersEnforceIndependentTrustPolicies(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestProductionGRPCListenersExposeDynamicReadiness(t *testing.T) {
+	bootstrap, controlBundle, runtimeBundle := newSecureBootstrapFixture(t)
+	controlService, runtimeService := testV2Services()
+	readiness := &mutableReadiness{}
+	servers, err := NewGRPCServersWithReadiness(bootstrap, controlService, runtimeService, readiness)
+	require.NoError(t, err)
+	startTestGRPCServer(t, servers.Control)
+	startTestGRPCServer(t, servers.Runtime)
+
+	controlConnection := dialTestTLS(t, servers.Control, controlBundle, true)
+	runtimeConnection := dialTestTLS(t, servers.Runtime, runtimeBundle, false)
+	assertServing(t, controlConnection)
+	assertServing(t, runtimeConnection)
+
+	readiness.Set(errors.New("database unavailable"))
+	require.Error(t, servers.Health.Refresh(context.Background()))
+	assertHealthStatus(t, controlConnection, healthpb.HealthCheckResponse_NOT_SERVING)
+	assertHealthStatus(t, runtimeConnection, healthpb.HealthCheckResponse_NOT_SERVING)
+}
+
 func dialTestTLS(t *testing.T, server endpointServer, bundle tlstest.Bundle, includeClientCertificate bool) *grpc.ClientConn {
 	t.Helper()
 	files := transporttls.ClientFiles{RootCAFile: bundle.CAFile, ServerName: bundle.ServerName}
@@ -96,10 +117,14 @@ func startTestGRPCServer(t *testing.T, server *kratosgrpc.Server) {
 }
 
 func assertServing(t *testing.T, connection *grpc.ClientConn) {
+	assertHealthStatus(t, connection, healthpb.HealthCheckResponse_SERVING)
+}
+
+func assertHealthStatus(t *testing.T, connection *grpc.ClientConn, want healthpb.HealthCheckResponse_ServingStatus) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	response, err := healthpb.NewHealthClient(connection).Check(ctx, &healthpb.HealthCheckRequest{})
 	require.NoError(t, err)
-	require.Equal(t, healthpb.HealthCheckResponse_SERVING, response.GetStatus())
+	require.Equal(t, want, response.GetStatus())
 }

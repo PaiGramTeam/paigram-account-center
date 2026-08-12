@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/servicehealth"
 	sentry "github.com/getsentry/sentry-go"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ import (
 	"paigram/internal/email"
 	"paigram/internal/grpc/server"
 	authhandler "paigram/internal/handler/auth"
+	"paigram/internal/healthcheck"
 	"paigram/internal/logging"
 	"paigram/internal/middleware"
 	"paigram/internal/observability"
@@ -43,6 +45,7 @@ type httpShutdowner interface {
 }
 
 type grpcStopper interface {
+	BeginShutdown()
 	Stop()
 }
 
@@ -55,6 +58,7 @@ type closer interface {
 }
 
 type shutdownTargets struct {
+	readiness      shutdowner
 	httpServer     httpShutdowner
 	grpcServer     grpcStopper
 	asynqServer    shutdowner
@@ -64,6 +68,13 @@ type shutdownTargets struct {
 
 func shutdownServices(ctx context.Context, targets shutdownTargets) error {
 	var errs []error
+
+	if targets.readiness != nil {
+		targets.readiness.Shutdown()
+	}
+	if targets.grpcServer != nil {
+		targets.grpcServer.BeginShutdown()
+	}
 
 	if targets.httpServer != nil {
 		if err := targets.httpServer.Shutdown(ctx); err != nil {
@@ -181,6 +192,7 @@ func runServer() {
 			}
 		}
 	}
+	readiness := servicehealth.NewCoordinator(healthcheck.NewReadiness(db, redisClient, cfg.Redis.Enabled))
 
 	// Initialize email service singleton
 	var emailService *email.Service
@@ -215,6 +227,7 @@ func runServer() {
 		defer cancel()
 
 		if err := shutdownServices(shutdownCtx, shutdownTargets{
+			readiness:      readiness,
 			httpServer:     httpServer,
 			grpcServer:     grpcServer,
 			asynqServer:    asynqServer,
@@ -235,7 +248,7 @@ func runServer() {
 
 	// Start gRPC server if enabled
 	if cfg.GRPC.Enabled {
-		grpcServer, err = server.NewGRPCServerWithTicketSigner(cfg.GRPC.Port, db, redisClient, cfg, ticketSigner)
+		grpcServer, err = server.NewGRPCServerWithTicketSignerAndReadiness(cfg.GRPC.Port, db, redisClient, cfg, ticketSigner, readiness)
 		if err != nil {
 			fatalStartup(cfg.Sentry, "gRPC server initialization failed: %v", err)
 		}
@@ -281,7 +294,7 @@ func runServer() {
 	}
 
 	// Start HTTP server
-	engine, err := router.NewWithTicketSigner(cfg, sessionStore, db, rateLimitStore, emailService, ticketSigner)
+	engine, err := router.NewWithTicketSignerAndReadiness(cfg, sessionStore, db, rateLimitStore, emailService, ticketSigner, readiness)
 	if err != nil {
 		fatalStartup(cfg.Sentry, "http router initialization failed: %v", err)
 	}

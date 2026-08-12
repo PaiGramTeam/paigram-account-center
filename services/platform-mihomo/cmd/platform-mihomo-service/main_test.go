@@ -48,6 +48,13 @@ func TestValidateBootstrap(t *testing.T) {
 		require.EqualError(t, err, "data.database.dsn is required")
 	})
 
+	t.Run("rejects missing Redis address", func(t *testing.T) {
+		bc := validMainTestBootstrap(t)
+		bc.Data.Redis.Addr = ""
+
+		require.EqualError(t, validateBootstrap(bc), "data.redis.addr is required")
+	})
+
 	t.Run("rejects missing grpc address", func(t *testing.T) {
 		bc := validMainTestBootstrap(t)
 		bc.Server.Control.Addr = ""
@@ -123,6 +130,7 @@ func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {
 			Database: &conf.Data_Database{
 				Dsn: "postgres://platform_mihomo:password@127.0.0.1:5432/platform_mihomo?sslmode=disable",
 			},
+			Redis: &conf.Data_Redis{Addr: "127.0.0.1:6379"},
 		},
 		Upstream: &conf.Upstream{
 			BaseUrl:        "https://mihomo-upstream.internal",

@@ -59,11 +59,13 @@ services:
         target: platform_runtime_cert.pem
       - source: platform_runtime_key
         target: platform_runtime_key.pem
+      - source: platform_runtime_ca
+        target: platform_runtime_ca.pem
       - mihomo_upstream_bearer_token
     ports:
       - "${PAI_RUNTIME_BIND:-127.0.0.1}:${PAI_RUNTIME_PORT:-19001}:9001"
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000 && nc -z 127.0.0.1 9001"]
+      test: ["CMD", "/usr/local/bin/platform-mihomo-healthcheck", "-target", "127.0.0.1:9001", "-root-ca", "/run/secrets/platform_runtime_ca.pem", "-server-name", "${PAI_RUNTIME_SERVER_NAME:?set PAI_RUNTIME_SERVER_NAME to the runtime certificate SAN}"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -100,4 +102,5 @@ secrets:
   account_control_client_ca: {external: true, name: "paigram-account-center-control-client-ca"}
   platform_runtime_cert: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"}
   platform_runtime_key: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"}
+  platform_runtime_ca: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca"}
   mihomo_upstream_bearer_token: {external: true, name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"}

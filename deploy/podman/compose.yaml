@@ -67,7 +67,7 @@ services:
     ports:
       - "${PAI_ACCOUNT_GRPC_BIND:-127.0.0.1}:${PAI_ACCOUNT_GRPC_PORT:-15051}:50051"
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
       interval: 5s
       timeout: 3s
       retries: 30

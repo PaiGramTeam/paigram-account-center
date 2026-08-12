@@ -33,6 +33,7 @@ The remaining Platform secrets use these formats and pairings:
 | `platform_control_cert` / `platform_control_key` | Matching PEM server certificate and PKCS#8 private key; the certificate must have server-auth usage and SAN `platform-control.internal`. |
 | `account_control_client_ca` | PEM CA bundle that validates the Account Center control client certificate. |
 | `platform_runtime_cert` / `platform_runtime_key` | Matching PEM server certificate and PKCS#8 private key; the server-auth SAN must equal the runtime server name registered with Account Center. |
+| `platform_runtime_ca` | PEM CA bundle that validates `platform_runtime_cert`; the in-container readiness probe uses it with `PAI_RUNTIME_SERVER_NAME`. |
 | `mihomo_upstream_bearer_token` | Raw upstream bearer token with no `Bearer ` prefix. |
 
 Encode reserved DSN password characters using PostgreSQL URI percent-encoding. Do not copy a percent-encoded DSN password into the raw PostgreSQL password secret.

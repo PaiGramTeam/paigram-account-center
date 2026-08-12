@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -40,8 +41,12 @@ type AuthInterceptor struct {
 // NewAuthInterceptor wires the interceptor against the OAuth token service.
 func NewAuthInterceptor(tokens *credentials.TokenService) *AuthInterceptor {
 	return &AuthInterceptor{
-		tokens:        tokens,
-		publicMethods: map[string]bool{},
+		tokens: tokens,
+		publicMethods: map[string]bool{
+			healthpb.Health_Check_FullMethodName: true,
+			healthpb.Health_List_FullMethodName:  true,
+			healthpb.Health_Watch_FullMethodName: true,
+		},
 	}
 }
 
