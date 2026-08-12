@@ -9,11 +9,11 @@ import (
 	"paigram/internal/model"
 )
 
-type AccountRefService struct {
+type BindingAccessService struct {
 	db *gorm.DB
 }
 
-func (s *AccountRefService) ResolveBotUser(botID, externalUserID string) (*model.BotIdentity, error) {
+func (s *BindingAccessService) ResolveBotUser(botID, externalUserID string) (*model.BotIdentity, error) {
 	var identity model.BotIdentity
 	if err := s.db.Where("bot_id = ? AND external_user_id = ?", botID, externalUserID).First(&identity).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -25,7 +25,7 @@ func (s *AccountRefService) ResolveBotUser(botID, externalUserID string) (*model
 	return &identity, nil
 }
 
-func (s *AccountRefService) ListAccessibleBindingsForConsumer(botID, consumer, externalUserID, platform string) ([]model.PlatformAccountBinding, error) {
+func (s *BindingAccessService) ListAccessibleBindingsForConsumer(botID, consumer, externalUserID, platform string) ([]model.PlatformAccountBinding, error) {
 	identity, err := s.ResolveBotUser(botID, externalUserID)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func (s *AccountRefService) ListAccessibleBindingsForConsumer(botID, consumer, e
 	return bindings, nil
 }
 
-func (s *AccountRefService) GetGrantedBindingForConsumer(botID, consumer, externalUserID string, bindingID, profileID uint64) (*model.BotIdentity, *model.PlatformAccountBinding, *model.ConsumerGrant, error) {
+func (s *BindingAccessService) GetGrantedBindingForConsumer(botID, consumer, externalUserID string, bindingID, profileID uint64) (*model.BotIdentity, *model.PlatformAccountBinding, *model.ConsumerGrant, error) {
 	identity, err := s.ResolveBotUser(botID, externalUserID)
 	if err != nil {
 		return nil, nil, nil, err
@@ -71,7 +71,7 @@ func (s *AccountRefService) GetGrantedBindingForConsumer(botID, consumer, extern
 		return nil, nil, nil, fmt.Errorf("get platform account binding: %w", err)
 	}
 	if binding.Status != model.PlatformAccountBindingStatusActive {
-		return nil, nil, nil, ErrInactiveAccountRef
+		return nil, nil, nil, ErrInactiveBinding
 	}
 
 	var grant model.ConsumerGrant
@@ -97,7 +97,7 @@ func (s *AccountRefService) GetGrantedBindingForConsumer(botID, consumer, extern
 	return identity, &binding, &grant, nil
 }
 
-func (s *AccountRefService) GetGrantedScopesForConsumer(consumer string, bindingID uint64) ([]string, error) {
+func (s *BindingAccessService) GetGrantedScopesForConsumer(consumer string, bindingID uint64) ([]string, error) {
 	if consumer == "" {
 		return nil, ErrConsumerNotSupported
 	}

@@ -33,9 +33,8 @@ import (
 	"paigram/internal/testutil"
 )
 
-// botAccessTestSigningKey returns a deterministic-per-test random 32-byte
-// HS256 key. The credentials.TokenService refuses anything shorter (Path D
-// §1.4).
+// botAccessTestSigningKey returns a random 32-byte HS256 test key, matching
+// the minimum accepted by the credential token service.
 func botAccessTestSigningKey(t *testing.T) []byte {
 	t.Helper()
 	key := make([]byte, 32)
@@ -268,12 +267,8 @@ func TestBotAccessServiceRejectsMissingAuthorization(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
-// TestBotAccessServiceRejectsTokenMissingIssueTicketScope confirms the
-// scope-based authorization (Path D §10 Q2): a credential token without
-// the bot.access.issue_ticket scope is rejected with PermissionDenied
-// before the binding lookup runs. Replaces the legacy "service-type
-// machine token vs bot-type" test that no longer applies under Path D's
-// single-credential model.
+// TestBotAccessServiceRejectsTokenMissingIssueTicketScope confirms that a
+// credential without bot.access.issue_ticket is rejected before binding lookup.
 func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
 	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_missing_machine_scope",
 		&model.User{},
@@ -320,12 +315,9 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 	_, identityUser, ref := seedBotAccessGRPCTestData(t, db)
 	conn := newBotAccessBufconnClient(t, db, signingKey)
 	defer conn.Close()
-	// Under Path D Option D the gRPC service projects bot.Id = consumer =
-	// claims.ClientID. To exercise the "caller has no grant" path (mapped
-	// to PermissionDenied) we must let the upstream lookups succeed first:
-	// seed a pamgram bot identity for the same external_user_id pointing
-	// at the same binding owner, then deliberately omit the matching
-	// consumer_grants row so GetGrantedBindingForConsumer hits
+	// The authenticated client ID identifies both the bot identity and grant
+	// consumer in this test. Seed the second identity but omit its grant so
+	// GetGrantedBindingForConsumer hits
 	// ErrConsumerGrantNotFound instead of ErrBotIdentityNotFound (which would
 	// map to NotFound).
 	require.NoError(t, db.Create(&model.Bot{
@@ -374,8 +366,7 @@ func seedBotAccessGRPCTestData(t *testing.T, db *gorm.DB) (model.Bot, model.User
 	require.NoError(t, db.Create(&owner).Error)
 	require.NoError(t, db.Create(&model.UserEmail{UserID: owner.ID, Email: "owner@example.com", IsPrimary: true}).Error)
 
-	// Thin Bot row — Path D §10 Q5: bots is a pure identity table,
-	// no API key / secret / scope / metadata columns.
+	// Bot rows contain identity metadata, not credentials or scopes.
 	bot := model.Bot{
 		ID:          "paigram-bot",
 		DisplayName: "PaiGramBot",
@@ -406,8 +397,7 @@ func seedBotAccessGRPCTestData(t *testing.T, db *gorm.DB) (model.Bot, model.User
 		Status:             model.PlatformAccountBindingStatusActive,
 	}
 	require.NoError(t, db.Create(&ref).Error)
-	// Path D Option D: the consumer IS the calling credential's client_id.
-	// Seed the grant under the same client_id as the bot identity.
+	// Seed the grant under the calling credential's client ID.
 	require.NoError(t, db.Create(&model.ConsumerGrant{
 		BindingID:  ref.ID,
 		Consumer:   bot.ID,
@@ -460,7 +450,7 @@ func newBotAccessBufconnClient(t *testing.T, db *gorm.DB, signingKey []byte, tic
 	}
 	group, err := botaccess.NewServiceGroup(db, authConfig)
 	require.NoError(t, err)
-	pb.RegisterBotAccessServiceServer(grpcServer, grpcservice.NewBotAccessService(&group.AccountRefService, &group.TicketService, db))
+	pb.RegisterBotAccessServiceServer(grpcServer, grpcservice.NewBotAccessService(&group.BindingAccessService, &group.TicketService, db))
 
 	serveErrCh := make(chan error, 1)
 	go func() {

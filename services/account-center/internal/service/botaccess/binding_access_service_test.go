@@ -27,9 +27,9 @@ func setupBotAccessServiceTestDB(t *testing.T) *gorm.DB {
 	)
 }
 
-func TestAccountRefService_ResolveBotUser(t *testing.T) {
+func TestBindingAccessService_ResolveBotUser(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
-	service := &AccountRefService{db: db}
+	service := &BindingAccessService{db: db}
 
 	user := model.User{PrimaryLoginType: model.LoginTypeOAuth, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&user).Error)
@@ -57,9 +57,9 @@ func TestAccountRefService_ResolveBotUser(t *testing.T) {
 	assert.Nil(t, missing)
 }
 
-func TestAccountRefService_ListAccessibleBindingsFiltersByConsumerGrant(t *testing.T) {
+func TestBindingAccessService_ListAccessibleBindingsFiltersByConsumerGrant(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
-	service := &AccountRefService{db: db}
+	service := &BindingAccessService{db: db}
 
 	identity := seedBotIdentity(t, db, "bot-paigram", "external-list", 11)
 	otherIdentity := seedBotIdentity(t, db, "bot-pamgram", "external-other", 12)
@@ -141,9 +141,9 @@ func TestAccountRefService_ListAccessibleBindingsFiltersByConsumerGrant(t *testi
 	assert.Empty(t, otherBotAccounts)
 }
 
-func TestAccountRefService_GetGrantedBindingForConsumer(t *testing.T) {
+func TestBindingAccessService_GetGrantedBindingForConsumer(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
-	service := &AccountRefService{db: db}
+	service := &BindingAccessService{db: db}
 
 	identity := seedBotIdentity(t, db, "bot-paigram", "external-grant", 31)
 	binding := model.PlatformAccountBinding{
@@ -166,9 +166,9 @@ func TestAccountRefService_GetGrantedBindingForConsumer(t *testing.T) {
 	assert.Equal(t, binding.ID, resolvedGrant.BindingID)
 }
 
-func TestAccountRefService_GetGrantedBindingForConsumerRejectsProfileFromOtherBinding(t *testing.T) {
+func TestBindingAccessService_GetGrantedBindingForConsumerRejectsProfileFromOtherBinding(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
-	service := &AccountRefService{db: db}
+	service := &BindingAccessService{db: db}
 
 	identity := seedBotIdentity(t, db, "bot-paigram", "external-grant-profile", 32)
 	binding := model.PlatformAccountBinding{
@@ -208,9 +208,9 @@ func TestAccountRefService_GetGrantedBindingForConsumerRejectsProfileFromOtherBi
 	assert.Nil(t, resolvedGrant)
 }
 
-func TestAccountRefService_GetGrantedScopesForConsumerReadsGrantScopes(t *testing.T) {
+func TestBindingAccessService_GetGrantedScopesForConsumerReadsGrantScopes(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
-	service := &AccountRefService{db: db}
+	service := &BindingAccessService{db: db}
 
 	identity := seedBotIdentity(t, db, "bot-paigram", "external-grant-scopes", 34)
 	binding := model.PlatformAccountBinding{
@@ -236,16 +236,14 @@ func TestAccountRefService_GetGrantedScopesForConsumerReadsGrantScopes(t *testin
 	assert.ElementsMatch(t, []string{"messages:read", "messages:write"}, scopes)
 }
 
-func TestAccountRefService_ListAccessibleBindingsReturnsEmptyForBotWithoutGrants(t *testing.T) {
+func TestBindingAccessService_ListAccessibleBindingsReturnsEmptyForBotWithoutGrants(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
-	service := &AccountRefService{db: db}
+	service := &BindingAccessService{db: db}
 
 	identity := seedBotIdentity(t, db, "bot-unsupported", "external-unsupported", 33)
 
-	// Under Path D Option D the consumer IS the calling credential's
-	// client_id; no per-bot map exists. A bot whose credential has no
-	// matching consumer grants simply gets an empty result, not an
-	// "unsupported consumer" error.
+	// Consumer identity comes from the calling credential. A credential with
+	// no matching grants receives an empty result.
 	accounts, err := service.ListAccessibleBindingsForConsumer(identity.BotID, "unsupported-client", identity.ExternalUserID, "telegram")
 	require.NoError(t, err)
 	assert.Empty(t, accounts)

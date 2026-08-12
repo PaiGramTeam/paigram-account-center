@@ -16,7 +16,7 @@ func TestMapBotAccessErrorDistinguishesBindingStateFromServiceAvailability(t *te
 		err  error
 		code codes.Code
 	}{
-		{name: "inactive binding", err: botaccess.ErrInactiveAccountRef, code: codes.FailedPrecondition},
+		{name: "inactive binding", err: botaccess.ErrInactiveBinding, code: codes.FailedPrecondition},
 		{name: "invalid ticket config", err: botaccess.ErrInvalidTicketConfig, code: codes.Unavailable},
 		{name: "missing signing key", err: botaccess.ErrSigningKeyUnavailable, code: codes.Unavailable},
 	}

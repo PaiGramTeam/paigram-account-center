@@ -26,11 +26,8 @@ const (
 	botAccessScopeIssueTicket = "bot.access.issue_ticket"
 )
 
-// Bot is the minimal identity record this gRPC layer carries through
-// authentication; under Path D Option D it is materialised solely from
-// the calling credential's client_id (see botAccessCallerFromContext).
-// Kept as a struct rather than a string to preserve the audit-record /
-// recordTicketAudit call sites that read a structured object.
+// Bot is the minimal identity record derived from the authenticated client ID.
+// It remains structured because audit records consume bot metadata.
 type Bot struct {
 	Id string
 }
@@ -39,16 +36,16 @@ type Bot struct {
 type BotAccessService struct {
 	pb.UnimplementedBotAccessServiceServer
 
-	accountRefService *botaccess.AccountRefService
-	ticketService     *botaccess.TicketService
-	db                *gorm.DB
+	bindingAccessService *botaccess.BindingAccessService
+	ticketService        *botaccess.TicketService
+	db                   *gorm.DB
 }
 
-func NewBotAccessService(accountRefService *botaccess.AccountRefService, ticketService *botaccess.TicketService, db *gorm.DB) *BotAccessService {
+func NewBotAccessService(bindingAccessService *botaccess.BindingAccessService, ticketService *botaccess.TicketService, db *gorm.DB) *BotAccessService {
 	return &BotAccessService{
-		accountRefService: accountRefService,
-		ticketService:     ticketService,
-		db:                db,
+		bindingAccessService: bindingAccessService,
+		ticketService:        ticketService,
+		db:                   db,
 	}
 }
 
@@ -61,7 +58,7 @@ func (s *BotAccessService) ResolveBotUser(ctx context.Context, req *pb.ResolveBo
 		return nil, status.Error(codes.InvalidArgument, "external_user_id is required")
 	}
 
-	identity, err := s.accountRefService.ResolveBotUser(caller.bot.Id, req.GetExternalUserId())
+	identity, err := s.bindingAccessService.ResolveBotUser(caller.bot.Id, req.GetExternalUserId())
 	if err != nil {
 		return nil, mapBotAccessError("resolve bot user", err)
 	}
@@ -83,7 +80,7 @@ func (s *BotAccessService) ListAccessibleBindings(ctx context.Context, req *pb.L
 		return nil, status.Error(codes.InvalidArgument, "external_user_id is required")
 	}
 
-	bindings, err := s.accountRefService.ListAccessibleBindingsForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetPlatform())
+	bindings, err := s.bindingAccessService.ListAccessibleBindingsForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetPlatform())
 	if err != nil {
 		return nil, mapBotAccessError("list accessible bindings", err)
 	}
@@ -105,7 +102,7 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 		return nil, status.Error(codes.InvalidArgument, "external_user_id and binding_id are required")
 	}
 
-	_, binding, grant, err := s.accountRefService.GetGrantedBindingForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetBindingId(), req.GetProfileId())
+	_, binding, grant, err := s.bindingAccessService.GetGrantedBindingForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetBindingId(), req.GetProfileId())
 	if err != nil {
 		s.recordTicketAudit(ctx, caller.bot, nil, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
 		return nil, mapBotAccessError("get granted binding", err)
@@ -115,7 +112,7 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", "platform_service_unavailable", nil)
 		return nil, mapBotAccessError("resolve platform service audience", err)
 	}
-	grantedScopes, err := s.accountRefService.GetGrantedScopesForConsumer(caller.consumer, binding.ID)
+	grantedScopes, err := s.bindingAccessService.GetGrantedScopesForConsumer(caller.consumer, binding.ID)
 	if err != nil {
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
 		return nil, mapBotAccessError("get granted scopes", err)
@@ -272,7 +269,7 @@ func mapBotAccessError(operation string, err error) error {
 		return status.Error(codes.PermissionDenied, "requested scope is not granted")
 	case errors.Is(err, botaccess.ErrPlatformServiceNotEnabled):
 		return status.Error(codes.InvalidArgument, "platform service is not enabled for platform")
-	case errors.Is(err, botaccess.ErrInactiveAccountRef):
+	case errors.Is(err, botaccess.ErrInactiveBinding):
 		return status.Error(codes.FailedPrecondition, "platform account binding is not active")
 	case errors.Is(err, botaccess.ErrInvalidTicketConfig):
 		return status.Error(codes.Unavailable, "invalid service ticket config")
@@ -330,15 +327,15 @@ func reasonCodeFromBotAccessErr(err error) string {
 	case errors.Is(err, botaccess.ErrPlatformAccountMissing):
 		return "platform_account_missing"
 	case errors.Is(err, botaccess.ErrConsumerGrantNotFound):
-		return "bot_grant_not_found"
+		return "consumer_grant_not_found"
 	case errors.Is(err, botaccess.ErrConsumerGrantRevoked):
-		return "bot_grant_revoked"
+		return "consumer_grant_revoked"
 	case errors.Is(err, botaccess.ErrConsumerNotSupported):
 		return "consumer_not_supported"
 	case errors.Is(err, botaccess.ErrScopeNotGranted):
 		return "scope_not_granted"
-	case errors.Is(err, botaccess.ErrInactiveAccountRef):
-		return "inactive_account_ref"
+	case errors.Is(err, botaccess.ErrInactiveBinding):
+		return "inactive_binding"
 	case errors.Is(err, botaccess.ErrInvalidTicketConfig):
 		return "invalid_ticket_config"
 	case errors.Is(err, botaccess.ErrSigningKeyUnavailable):

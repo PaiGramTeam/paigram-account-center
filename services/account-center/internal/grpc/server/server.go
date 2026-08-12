@@ -69,7 +69,7 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 	if err != nil {
 		return nil, fmt.Errorf("init bot access services: %w", err)
 	}
-	accountv1.RegisterBotAccessServiceServer(server, grpcservice.NewBotAccessService(&botAccessGroup.AccountRefService, &botAccessGroup.TicketService, db))
+	accountv1.RegisterBotAccessServiceServer(server, grpcservice.NewBotAccessService(&botAccessGroup.BindingAccessService, &botAccessGroup.TicketService, db))
 
 	botRouteService := botroute.NewService(db, zap.L())
 	pb.RegisterBotRouteServiceServer(server, grpcservice.NewBotRouteService(botRouteService))

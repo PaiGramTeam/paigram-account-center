@@ -30,7 +30,7 @@ func NewTicketService(authCfg config.AuthConfig) (*TicketService, error) {
 
 func (s *TicketService) Issue(botID, consumer string, binding *model.PlatformAccountBinding, scopes []string, audience string, profileID, grantVersion uint64) (string, time.Time, error) {
 	if binding == nil || binding.Status != model.PlatformAccountBindingStatusActive {
-		return "", time.Time{}, ErrInactiveAccountRef
+		return "", time.Time{}, ErrInactiveBinding
 	}
 	if consumer == "" || audience == "" {
 		return "", time.Time{}, ErrInvalidTicketConfig

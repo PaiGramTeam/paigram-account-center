@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// BotIdentity links a bot-specific external user to a unified account-center user.
+// BotIdentity maps a bot-specific external user to a unified account-center user.
 type BotIdentity struct {
 	ID               uint64         `gorm:"primaryKey"`
 	UserID           uint64         `gorm:"uniqueIndex:uk_bot_identities_user_bot,priority:1;not null;index"`

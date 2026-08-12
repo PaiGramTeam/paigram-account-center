@@ -8,8 +8,8 @@ import (
 
 // ServiceGroup aggregates bot access services.
 type ServiceGroup struct {
-	AccountRefService AccountRefService
-	TicketService     TicketService
+	BindingAccessService BindingAccessService
+	TicketService        TicketService
 }
 
 // NewServiceGroup creates the bot access service group.
@@ -20,7 +20,7 @@ func NewServiceGroup(db *gorm.DB, authCfg config.AuthConfig) (*ServiceGroup, err
 	}
 
 	return &ServiceGroup{
-		AccountRefService: AccountRefService{db: db},
-		TicketService:     *ticketService,
+		BindingAccessService: BindingAccessService{db: db},
+		TicketService:        *ticketService,
 	}, nil
 }
