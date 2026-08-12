@@ -155,9 +155,26 @@ func newRepoTestDB(t *testing.T) *gorm.DB {
 		artifact_value TEXT NOT NULL,
 		scope_key TEXT NOT NULL,
 		expires_at DATETIME NOT NULL,
+		revocation_pending BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at DATETIME NULL,
 		updated_at DATETIME NULL,
 		UNIQUE(binding_ref, artifact_type, scope_key)
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE artifact_revocation_intents (
+		intent_id TEXT PRIMARY KEY,
+		binding_ref TEXT NOT NULL,
+		account_key TEXT NOT NULL,
+		artifact_type TEXT NOT NULL,
+		artifact_value TEXT NOT NULL,
+		scope_key TEXT NOT NULL,
+		expires_at DATETIME NOT NULL,
+		state TEXT NOT NULL,
+		ready_after DATETIME NOT NULL,
+		lease_token TEXT NULL,
+		lease_expires_at DATETIME NULL,
+		created_at DATETIME NULL,
+		updated_at DATETIME NULL,
+		UNIQUE(binding_ref, artifact_type, scope_key, artifact_value)
 	)`).Error)
 	return db
 }

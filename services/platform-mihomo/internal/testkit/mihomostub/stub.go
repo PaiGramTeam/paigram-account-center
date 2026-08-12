@@ -42,4 +42,12 @@ func (Client) IssueAuthKey(context.Context, string, string) (string, int64, erro
 	return "stub-authkey", 300, nil
 }
 
+func (Client) IssueAuthKeyWithTTL(_ context.Context, _ string, _ string, ttl time.Duration) (string, int64, error) {
+	return "stub-authkey", int64(ttl / time.Second), nil
+}
+
+func (Client) RevokeAuthKey(context.Context, string) error {
+	return nil
+}
+
 var _ platformmihomo.Client = Client{}

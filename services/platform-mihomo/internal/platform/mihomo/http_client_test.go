@@ -54,6 +54,81 @@ func TestHTTPClientMapsRateLimitWithoutReturningResponseBody(t *testing.T) {
 	require.Equal(t, 7*time.Second, upstreamErr.RetryAfter)
 }
 
+func TestHTTPClientIssuesBoundedAndRevokesAuthKey(t *testing.T) {
+	var issuedTTL int64
+	var revoked string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/authkeys:issue":
+			var request authKeyRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			issuedTTL = request.TTLSeconds
+			_, _ = w.Write([]byte(`{"authkey":"issued-key","expires_in_seconds":120}`))
+		case "/v1/authkeys:revoke":
+			var request revokeAuthKeyRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+			revoked = request.AuthKey
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+	require.NoError(t, err)
+
+	authKey, expiresIn, err := client.IssueAuthKeyWithTTL(context.Background(), `{}`, "1008611", 2*time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, "issued-key", authKey)
+	require.Equal(t, int64(120), expiresIn)
+	require.Equal(t, int64(120), issuedTTL)
+	require.NoError(t, client.RevokeAuthKey(context.Background(), authKey))
+	require.Equal(t, authKey, revoked)
+}
+
+func TestHTTPClientReturnsIssuedAuthKeyForLifecycleTTLValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/v1/authkeys:issue", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"authkey":"issued-key","expires_in_seconds":301}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+	require.NoError(t, err)
+
+	authKey, expiresIn, err := client.IssueAuthKeyWithTTL(context.Background(), `{}`, "1008611", 5*time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, "issued-key", authKey)
+	require.Equal(t, int64(301), expiresIn)
+}
+
+func TestHTTPClientMapsRevokeAuthorizationFailureAsDependencyUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"service token expired"}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+	require.NoError(t, err)
+
+	err = client.RevokeAuthKey(context.Background(), "issued-key")
+	require.Error(t, err)
+	require.True(t, IsErrorKind(err, ErrorUnavailable))
+	require.False(t, IsErrorKind(err, ErrorInvalidCredential))
+}
+
+func TestHTTPClientTreatsMissingAuthKeyAsAlreadyRevoked(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+	require.NoError(t, err)
+
+	require.NoError(t, client.RevokeAuthKey(context.Background(), "already-revoked"))
+}
+
 func TestHTTPClientRefreshesCredentialAndExpiry(t *testing.T) {
 	expiresAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

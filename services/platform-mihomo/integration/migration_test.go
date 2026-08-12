@@ -24,6 +24,7 @@ func TestMigrationsCreateV2Baseline(t *testing.T) {
 		"device_records",
 		"account_profiles",
 		"runtime_artifacts",
+		"artifact_revocation_intents",
 		"consumer_grant_invalidations",
 		"authorization_fences",
 		"platform_operations",

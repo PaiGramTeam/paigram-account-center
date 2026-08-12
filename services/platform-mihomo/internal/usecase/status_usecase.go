@@ -36,6 +36,7 @@ type StatusUsecase struct {
 	profiles      biz.ProfileRepository
 	hoyoClient    platformmihomo.Client
 	encryptionKey []byte
+	artifacts     *ArtifactLifecycle
 }
 
 func NewStatusUsecase(
@@ -43,12 +44,14 @@ func NewStatusUsecase(
 	profiles biz.ProfileRepository,
 	hoyoClient platformmihomo.Client,
 	encryptionKey []byte,
+	artifacts *ArtifactLifecycle,
 ) *StatusUsecase {
 	return &StatusUsecase{
 		credentials:   credentials,
 		profiles:      profiles,
 		hoyoClient:    hoyoClient,
 		encryptionKey: encryptionKey,
+		artifacts:     artifacts,
 	}
 }
 
@@ -104,7 +107,7 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 		}
 		credential.Status = classifyCredentialStatus(validationErr)
 		credential.ProfileSnapshotComplete = false
-		if err := uc.credentials.Save(ctx, credential); err != nil {
+		if err := uc.saveAttentionAndInvalidateArtifacts(ctx, credential); err != nil {
 			return nil, err
 		}
 		return &RefreshCredentialOutput{
@@ -161,7 +164,7 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 	credential.ProfileSnapshotComplete = true
 	credential.ProfileRevision = nextProfileRevision(credential.ProfileRevision, credential.ProfileObservedRevision)
 	credential.ProfileObservedRevision = credential.ProfileRevision
-	if err := uc.credentials.Save(ctx, credential); err != nil {
+	if err := uc.saveAndInvalidateArtifacts(ctx, credential); err != nil {
 		return nil, err
 	}
 
@@ -241,8 +244,11 @@ func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credent
 	credential.LastValidatedAt = &now
 
 	if err != nil {
+		if !isCredentialAttentionError(err) {
+			return CredentialStatusUnspecified, "", err
+		}
 		credential.Status = classifyCredentialStatus(err)
-		if saveErr := uc.credentials.Save(ctx, credential); saveErr != nil {
+		if saveErr := uc.saveAttentionAndInvalidateArtifacts(ctx, credential); saveErr != nil {
 			return CredentialStatusUnspecified, "save_failed", saveErr
 		}
 		return credentialStatusFromStorage(credential.Status), classifyErrorCode(err), nil
@@ -257,6 +263,57 @@ func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credent
 	}
 
 	return CredentialStatusActive, "", nil
+}
+
+func (uc *StatusUsecase) saveAndInvalidateArtifacts(ctx context.Context, credential *biz.Credential) error {
+	write := func(txCtx context.Context) error {
+		if err := uc.credentials.Save(txCtx, credential); err != nil {
+			return err
+		}
+		err := uc.artifacts.InvalidateBinding(txCtx, credential.BindingRef)
+		if errors.Is(err, biz.ErrArtifactRevocationPending) {
+			return nil
+		}
+		return err
+	}
+	if transactioner, ok := uc.credentials.(credentialTransactioner); ok {
+		return transactioner.WithinTransaction(ctx, write)
+	}
+	return write(ctx)
+}
+
+func (uc *StatusUsecase) saveAttentionAndInvalidateArtifacts(ctx context.Context, credential *biz.Credential) error {
+	var invalidationErr error
+	write := func(txCtx context.Context) error {
+		current, err := uc.credentials.GetByBindingRefForUpdate(txCtx, credential.BindingRef)
+		if err != nil {
+			return err
+		}
+		if current == nil {
+			return ErrCredentialNotFound
+		}
+		if current.Generation != credential.Generation || current.CredentialBlob != credential.CredentialBlob {
+			return biz.ErrCredentialGenerationConflict
+		}
+		current.Status = credential.Status
+		current.LastValidatedAt = credential.LastValidatedAt
+		current.ProfileSnapshotComplete = credential.ProfileSnapshotComplete
+		if err := uc.credentials.Save(txCtx, current); err != nil {
+			return err
+		}
+		invalidationErr = uc.artifacts.InvalidateBinding(txCtx, current.BindingRef)
+		return nil
+	}
+	if transactioner, ok := uc.credentials.(credentialTransactioner); ok {
+		if err := transactioner.WithinTransaction(ctx, write); err != nil {
+			return err
+		}
+		return invalidationErr
+	}
+	if err := write(ctx); err != nil {
+		return err
+	}
+	return invalidationErr
 }
 
 func classifyCredentialStatus(err error) string {

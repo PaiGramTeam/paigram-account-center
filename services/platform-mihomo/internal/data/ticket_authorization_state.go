@@ -19,7 +19,8 @@ func NewTicketAuthorizationStateLookup(db *gorm.DB) *TicketAuthorizationStateLoo
 
 func (l *TicketAuthorizationStateLookup) LookupAuthorizationState(ctx context.Context, bindingRef, consumer string) (AuthorizationState, error) {
 	var credential model.CredentialRecord
-	if err := l.db.WithContext(ctx).Select("generation").Where("binding_ref = ?", bindingRef).Take(&credential).Error; err != nil {
+	db := dbFromContext(ctx, l.db)
+	if err := db.Select("generation").Where("binding_ref = ?", bindingRef).Take(&credential).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return AuthorizationState{}, nil
 		}
@@ -28,7 +29,7 @@ func (l *TicketAuthorizationStateLookup) LookupAuthorizationState(ctx context.Co
 
 	state := AuthorizationState{CredentialGeneration: credential.Generation}
 	var fence model.AuthorizationFence
-	err := l.db.WithContext(ctx).Where("binding_ref = ? AND consumer_principal = ?", bindingRef, consumer).Take(&fence).Error
+	err := db.Where("binding_ref = ? AND consumer_principal = ?", bindingRef, consumer).Take(&fence).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return state, nil
 	}

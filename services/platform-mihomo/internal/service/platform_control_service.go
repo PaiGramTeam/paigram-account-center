@@ -31,6 +31,7 @@ type PlatformControlService struct {
 	credentials      biz.CredentialRepository
 	fences           biz.AuthorizationFenceRepository
 	invalidationRepo grantInvalidationStore
+	artifacts        *usecase.ArtifactLifecycle
 }
 
 func NewPlatformControlService(
@@ -43,6 +44,7 @@ func NewPlatformControlService(
 	credentials biz.CredentialRepository,
 	fences biz.AuthorizationFenceRepository,
 	invalidationRepo grantInvalidationStore,
+	artifacts *usecase.ArtifactLifecycle,
 ) *PlatformControlService {
 	return &PlatformControlService{
 		ticketVerifier:   ticketVerifier,
@@ -54,6 +56,7 @@ func NewPlatformControlService(
 		credentials:      credentials,
 		fences:           fences,
 		invalidationRepo: invalidationRepo,
+		artifacts:        artifacts,
 	}
 }
 
@@ -190,6 +193,13 @@ func (s *PlatformControlService) ApplyAuthorizationFence(ctx context.Context, re
 		if s.fences == nil || s.invalidationRepo == nil {
 			return nil, status.Error(codes.FailedPrecondition, "authorization fence storage is not configured")
 		}
+		credential, err := s.credentials.GetByBindingRefForUpdate(txCtx, operation.BindingRef)
+		if err != nil {
+			return nil, err
+		}
+		if credential == nil || credential.Generation != operation.PreGeneration {
+			return nil, status.Error(codes.Aborted, "credential generation changed concurrently")
+		}
 		fence := biz.AuthorizationFence{
 			BindingRef:           operation.BindingRef,
 			ConsumerPrincipal:    req.GetConsumerPrincipal(),
@@ -204,12 +214,8 @@ func (s *PlatformControlService) ApplyAuthorizationFence(ctx context.Context, re
 		if err := s.invalidationRepo.Upsert(txCtx, operation.BindingRef, req.GetConsumerPrincipal(), req.GetMinimumGrantVersion()); err != nil {
 			return nil, err
 		}
-		credential, err := s.credentials.GetByBindingRef(txCtx, operation.BindingRef)
-		if err != nil {
+		if err := s.artifacts.InvalidateBinding(txCtx, operation.BindingRef); err != nil && !errors.Is(err, biz.ErrArtifactRevocationPending) {
 			return nil, err
-		}
-		if credential == nil || credential.Generation != operation.PreGeneration {
-			return nil, status.Error(codes.Aborted, "credential generation changed concurrently")
 		}
 		summary, err := s.managementUC.GetCredentialSummary(txCtx, credential.AccountKey)
 		if err != nil {
@@ -375,7 +381,13 @@ func (s *PlatformControlService) advanceGeneration(ctx context.Context, operatio
 	if errors.Is(err, biz.ErrCredentialGenerationConflict) {
 		return nil, status.Error(codes.Aborted, "credential generation changed concurrently")
 	}
-	return updated, err
+	if err != nil {
+		return nil, err
+	}
+	if err := s.artifacts.InvalidateBinding(ctx, operation.BindingRef); err != nil && !errors.Is(err, biz.ErrArtifactRevocationPending) {
+		return nil, err
+	}
+	return updated, nil
 }
 
 func mapOperationError(err error) error {

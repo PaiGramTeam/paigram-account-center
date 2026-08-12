@@ -44,7 +44,7 @@ type BindUsecase struct {
 	encryptionKey  []byte
 }
 
-type bindTransactioner interface {
+type credentialTransactioner interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 }
 
@@ -96,7 +96,7 @@ func (uc *BindUsecase) bindCredential(ctx context.Context, input BindCredentialI
 }
 
 func (uc *BindUsecase) runInTransaction(ctx context.Context, fn func(context.Context) error) error {
-	if txRepo, ok := uc.credentialRepo.(bindTransactioner); ok {
+	if txRepo, ok := uc.credentialRepo.(credentialTransactioner); ok {
 		return txRepo.WithinTransaction(ctx, fn)
 	}
 	return fn(ctx)

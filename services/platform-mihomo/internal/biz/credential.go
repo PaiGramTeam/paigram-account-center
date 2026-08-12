@@ -34,6 +34,7 @@ type CredentialRepository interface {
 	AdvanceProfileRevision(ctx context.Context, bindingRef, accountKey string, generation, expectedRevision uint64) (*Credential, error)
 	SetProfileSnapshotState(ctx context.Context, bindingRef string, complete bool, revision, observedRevision uint64) error
 	GetByBindingRef(ctx context.Context, bindingRef string) (*Credential, error)
+	GetByBindingRefForUpdate(ctx context.Context, bindingRef string) (*Credential, error)
 	GetByAccountKey(ctx context.Context, accountKey string) (*Credential, error)
 	DeleteByAccountKey(ctx context.Context, accountKey string) error
 }

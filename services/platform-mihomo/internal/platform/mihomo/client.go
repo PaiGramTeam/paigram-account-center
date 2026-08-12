@@ -73,3 +73,11 @@ type Client interface {
 	ValidateAndDiscover(ctx context.Context, cookieBundleJSON string, regionHint string) (accountID string, region string, profiles []DiscoveredProfile, err error)
 	IssueAuthKey(ctx context.Context, cookieBundleJSON string, playerID string) (authKey string, expiresInSeconds int64, err error)
 }
+
+type BoundedAuthKeyIssuer interface {
+	IssueAuthKeyWithTTL(ctx context.Context, cookieBundleJSON string, playerID string, ttl time.Duration) (authKey string, expiresInSeconds int64, err error)
+}
+
+type AuthKeyRevoker interface {
+	RevokeAuthKey(ctx context.Context, authKey string) error
+}

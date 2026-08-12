@@ -47,6 +47,12 @@ func mapUsecaseError(err error) error {
 	if errors.Is(err, usecase.ErrCredentialNotFound) {
 		return status.Error(codes.NotFound, "credential not found")
 	}
+	if errors.Is(err, usecase.ErrCredentialRequiresAttention) {
+		return status.Error(codes.FailedPrecondition, "platform credential requires user attention")
+	}
+	if errors.Is(err, biz.ErrArtifactRevocationPending) {
+		return status.Error(codes.FailedPrecondition, "artifact revocation is pending")
+	}
 	if errors.Is(err, usecase.ErrProfileNotFound) {
 		return status.Error(codes.NotFound, "profile not found")
 	}

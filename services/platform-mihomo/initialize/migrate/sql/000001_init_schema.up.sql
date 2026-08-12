@@ -80,6 +80,7 @@ CREATE TABLE runtime_artifacts (
     artifact_value TEXT NOT NULL,
     scope_key VARCHAR(128) NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
+    revocation_pending BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_artifact_binding_account FOREIGN KEY (binding_ref, account_key)
@@ -91,6 +92,32 @@ CREATE INDEX idx_runtime_binding_ref ON runtime_artifacts (binding_ref);
 CREATE INDEX idx_runtime_account_key ON runtime_artifacts (account_key);
 CREATE INDEX idx_runtime_artifact_type ON runtime_artifacts (artifact_type);
 CREATE INDEX idx_runtime_expires_at ON runtime_artifacts (expires_at);
+
+CREATE TABLE artifact_revocation_intents (
+    intent_id VARCHAR(64) PRIMARY KEY,
+    binding_ref VARCHAR(64) NOT NULL,
+    account_key VARCHAR(64) NOT NULL,
+    artifact_type VARCHAR(64) NOT NULL,
+    artifact_value TEXT NOT NULL,
+    scope_key VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    state VARCHAR(16) NOT NULL CHECK (state IN ('provisional', 'ready')),
+    ready_after TIMESTAMPTZ NOT NULL,
+    lease_token VARCHAR(64),
+    lease_expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uniq_artifact_revocation_payload UNIQUE (binding_ref, artifact_type, scope_key, artifact_value),
+    CONSTRAINT ck_artifact_revocation_lease CHECK (
+        (lease_token IS NULL AND lease_expires_at IS NULL) OR
+        (lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_artifact_revocation_binding ON artifact_revocation_intents (binding_ref);
+CREATE INDEX idx_artifact_revocation_expiry ON artifact_revocation_intents (expires_at);
+CREATE INDEX idx_artifact_revocation_ready ON artifact_revocation_intents (state, ready_after);
+CREATE INDEX idx_artifact_revocation_lease ON artifact_revocation_intents (lease_expires_at);
 
 CREATE TABLE consumer_grant_invalidations (
     id BIGSERIAL PRIMARY KEY,

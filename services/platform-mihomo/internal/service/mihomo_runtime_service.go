@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	mihomov2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/mihomo/v2"
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
@@ -132,6 +133,35 @@ func (s *MihomoRuntimeService) GetAuthKey(ctx context.Context, req *mihomov2.Get
 	}
 	output, err := s.authkeyUC.GetAuthKey(ctx, resource.GetAccountKey(), profile.PlayerID)
 	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	authorizeDelivery := func(txCtx context.Context) error {
+		claims, err := verifyIncomingServiceTicket(txCtx, s.ticketVerifier)
+		if err != nil {
+			return err
+		}
+		if err := requireDelegationTicket(claims); err != nil {
+			return err
+		}
+		guard, err := scopedGuard(claims, usecase.ActionAuthKeyIssue)
+		if err != nil {
+			return mapUsecaseError(err)
+		}
+		if claims.BindingRef != resource.GetBindingRef() || claims.AccountKey != resource.GetAccountKey() {
+			return status.Error(codes.PermissionDenied, "resource does not match ticket")
+		}
+		if err := guard.RequireProfile(resource.GetBindingRef(), req.GetProfileRef()); err != nil {
+			return mapUsecaseError(err)
+		}
+		return nil
+	}
+	if err := s.authkeyUC.ConfirmDeliverable(ctx, resource.GetBindingRef(), authorizeDelivery); err != nil {
+		if invalidateErr := s.authkeyUC.InvalidateBinding(ctx, resource.GetBindingRef()); invalidateErr != nil && !errors.Is(invalidateErr, biz.ErrArtifactRevocationPending) {
+			return nil, mapUsecaseError(invalidateErr)
+		}
+		if status.Code(err) != codes.Unknown {
+			return nil, err
+		}
 		return nil, mapUsecaseError(err)
 	}
 	return &mihomov2.GetAuthKeyResponse{Authkey: output.AuthKey, ExpiresAt: toTimestamp(&output.ExpiresAt)}, nil

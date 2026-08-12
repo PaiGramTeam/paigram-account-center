@@ -28,7 +28,6 @@ import (
 	"platform-mihomo-service/internal/data"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/service"
-	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
 	"platform-mihomo-service/internal/usecase"
 )
 
@@ -45,7 +44,8 @@ var integrationTicketPrivateKey = ed25519.NewKeyFromSeed([]byte("abcdef012345678
 
 func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	stack := newIntegrationStack(t)
-	control, runtime := newV2ClientsForTest(t, stack)
+	upstream, simulator := newMihomoProtocolSimulator(t)
+	control, runtime := newV2ClientsForTest(t, stack, upstream)
 	descriptor, err := runtime.DescribePlatform(context.Background(), &mihomov2.DescribePlatformRequest{})
 	require.NoError(t, err)
 	require.Equal(t, "v2", descriptor.GetContractVersion())
@@ -201,6 +201,15 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, replaced.GetResult().GetProfileSnapshot().GetComplete())
 	require.Equal(t, uint64(3), replaced.GetResult().GetProfileSnapshot().GetRevision())
+	requireArtifactCount(t, stack, 0)
+	require.Equal(t, 1, simulator.revokedCount())
+
+	_, err = runtime.GetAuthKey(
+		ticketContextForDelegationGeneration(t, accountKey, "mihomo.authkey.issue", 2),
+		&mihomov2.GetAuthKeyRequest{Resource: bindingResource(accountKey), ProfileRef: profileRef},
+	)
+	require.NoError(t, err)
+	requireArtifactCount(t, stack, 1)
 
 	refreshOperation := operationRef("refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
 	refreshed, err := control.RefreshCredential(
@@ -210,6 +219,8 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, refreshed.GetResult().GetState())
 	require.True(t, refreshed.GetResult().GetProfileSnapshot().GetComplete())
+	requireArtifactCount(t, stack, 0)
+	require.Equal(t, 2, simulator.revokedCount())
 	refreshedState, err := control.GetBindingState(
 		ticketContext(t, accountKey, "mihomo.binding.read"),
 		&platformv2.GetBindingStateRequest{BindingRef: integrationBindingRef},
@@ -218,6 +229,13 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.True(t, refreshedState.GetState().GetProfileSnapshot().GetComplete())
 	require.Equal(t, uint64(4), refreshedState.GetState().GetProfileSnapshot().GetRevision())
 	require.Equal(t, uint64(4), refreshedState.GetState().GetProfileSnapshot().GetObservedRevision())
+
+	_, err = runtime.GetAuthKey(
+		ticketContextForDelegationGeneration(t, accountKey, "mihomo.authkey.issue", 3),
+		&mihomov2.GetAuthKeyRequest{Resource: bindingResource(accountKey), ProfileRef: profileRef},
+	)
+	require.NoError(t, err)
+	requireArtifactCount(t, stack, 1)
 
 	staleRefresh := operationRef("stale-refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
 	_, err = control.RefreshCredential(
@@ -236,6 +254,8 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, fenced.GetResult().GetState())
+	requireArtifactCount(t, stack, 0)
+	require.Equal(t, 3, simulator.revokedCount())
 	_, err = runtime.GetStatus(currentDelegation, &mihomov2.GetStatusRequest{Resource: bindingResource(accountKey)})
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 	conflictingFenceOperation := authorizationFenceOperationRef("fence-op", 3, "paigram-bot", 3, 1, 1, 1)
@@ -290,23 +310,40 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.Equal(t, platformv2.OperationState_OPERATION_STATE_NOT_RECEIVED, late.GetResult().GetState())
 }
 
-func newV2ClientsForTest(t *testing.T, stack *integrationStack) (platformv2.PlatformControlServiceClient, mihomov2.MihomoRuntimeServiceClient) {
+func requireArtifactCount(t *testing.T, stack *integrationStack, want int64) {
 	t.Helper()
+	var count int64
+	require.NoError(t, stack.DB.Table("runtime_artifacts").Where("binding_ref = ?", integrationBindingRef).Count(&count).Error)
+	require.Equal(t, want, count)
+	keys, err := stack.Redis.Keys(context.Background(), stack.RedisPrefix+"artifact:binding:"+integrationBindingRef+":*").Result()
+	require.NoError(t, err)
+	if want == 0 {
+		require.Empty(t, keys)
+	}
+}
+
+func newV2ClientsForTest(t *testing.T, stack *integrationStack, clients ...platformmihomo.Client) (platformv2.PlatformControlServiceClient, mihomov2.MihomoRuntimeServiceClient) {
+	t.Helper()
+	var client platformmihomo.Client
+	if len(clients) > 0 {
+		client = clients[0]
+	} else {
+		client, _ = newMihomoProtocolSimulator(t)
+	}
 	credentialRepo := data.NewCredentialRepo(stack.DB)
 	deviceRepo := data.NewDeviceRepo(stack.DB)
 	profileRepo := data.NewProfileRepo(stack.DB)
 	artifactRepo := data.NewArtifactRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	managementRepo := data.NewManagementRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	grantRepo := data.NewGrantInvalidationRepo(stack.DB)
-	client := mihomostub.Client{Profiles: []platformmihomo.DiscoveredProfile{
-		{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", Level: 60},
-		{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008612", Nickname: "Aether", Level: 55},
-	}}
+	revoker, ok := client.(platformmihomo.AuthKeyRevoker)
+	require.True(t, ok)
+	artifactLifecycle := usecase.NewArtifactLifecycle(artifactRepo, usecase.ArtifactLifecycleConfig{Revoker: revoker, EncryptionKey: integrationEncryptionKey})
 	verifier := data.NewStaticKeyTicketVerifier(integrationTicketIssuer, integrationTicketKeyID, integrationTicketPrivateKey.Public().(ed25519.PublicKey)).
 		WithGrantVersionLookup(grantRepo).
 		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(stack.DB))
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, integrationEncryptionKey, artifactRepo)
-	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, client, integrationEncryptionKey)
+	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, client, integrationEncryptionKey, artifactLifecycle)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
 	managementUC := usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC)
 	controlService := service.NewPlatformControlService(
@@ -319,12 +356,13 @@ func newV2ClientsForTest(t *testing.T, stack *integrationStack) (platformv2.Plat
 		credentialRepo,
 		data.NewAuthorizationFenceRepo(stack.DB),
 		grantRepo,
+		artifactLifecycle,
 	)
 	runtimeService := service.NewMihomoRuntimeService(
 		verifier,
 		statusUC,
 		profileUC,
-		usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, client, integrationEncryptionKey),
+		usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, artifactLifecycle, client, integrationEncryptionKey),
 		managementUC,
 		deviceRepo,
 	)

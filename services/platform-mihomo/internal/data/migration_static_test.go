@@ -36,6 +36,7 @@ func TestBaselineMigrationHasSymmetricDownMigration(t *testing.T) {
 		"platform_operations",
 		"authorization_fences",
 		"consumer_grant_invalidations",
+		"artifact_revocation_intents",
 		"runtime_artifacts",
 		"account_profiles",
 		"device_records",

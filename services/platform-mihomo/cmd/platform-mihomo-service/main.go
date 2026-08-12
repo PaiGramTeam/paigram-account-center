@@ -18,8 +18,6 @@ import (
 	internaldatabase "platform-mihomo-service/internal/database"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/server"
-	"platform-mihomo-service/internal/service"
-	"platform-mihomo-service/internal/usecase"
 )
 
 func main() {
@@ -54,48 +52,15 @@ func main() {
 		DB:       int(bc.GetData().GetRedis().GetDb()),
 	})
 
-	credentialRepo := data.NewCredentialRepo(database)
-	deviceRepo := data.NewDeviceRepo(database)
-	profileRepo := data.NewProfileRepo(database)
-	artifactRepo := data.NewArtifactRepo(database, redisClient, bc.GetData().GetRedis().GetPrefix())
-	managementRepo := data.NewManagementRepo(database, redisClient, bc.GetData().GetRedis().GetPrefix())
-	grantInvalidationRepo := data.NewGrantInvalidationRepo(database)
-	operationRepo := data.NewOperationRepo(database)
-	authorizationFenceRepo := data.NewAuthorizationFenceRepo(database)
-	client, err := newMihomoUpstreamClient(bc.GetUpstream())
+	components, err := buildProductionComponents(&bc, database, redisClient)
 	if err != nil {
 		log.Fatal(err)
 	}
-	ticketVerifier, err := newTicketVerifierFromSecurity(bc.GetSecurity())
-	if err != nil {
-		log.Fatal(err)
-	}
-	ticketVerifier.WithGrantVersionLookup(grantInvalidationRepo).
-		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(database))
 
-	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()), artifactRepo)
-	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
-	profileUC := usecase.NewProfileUsecase(profileRepo)
-	authkeyUC := usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
-	managementUC := usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC)
-	operationUC := usecase.NewOperationUsecase(operationRepo)
-	controlSvc := service.NewPlatformControlService(
-		ticketVerifier,
-		operationUC,
-		bindUC,
-		statusUC,
-		profileUC,
-		managementUC,
-		credentialRepo,
-		authorizationFenceRepo,
-		grantInvalidationRepo,
-	)
-	runtimeSvc := service.NewMihomoRuntimeService(ticketVerifier, statusUC, profileUC, authkeyUC, managementUC, deviceRepo)
-
-	grpcSrv := server.NewGRPCServer(&bc, controlSvc, runtimeSvc)
+	grpcSrv := server.NewGRPCServer(&bc, components.controlService, components.runtimeService)
 	app := kratos.New(
 		kratos.Name("platform-mihomo-service"),
-		kratos.Server(grpcSrv),
+		kratos.Server(grpcSrv, components.artifactCleanupServer),
 	)
 
 	if err := app.Run(); err != nil {

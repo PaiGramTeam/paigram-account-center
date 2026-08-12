@@ -127,8 +127,20 @@ func mapCredentialDuplicateError(err error) error {
 }
 
 func (r *CredentialRepo) GetByBindingRef(ctx context.Context, bindingRef string) (*biz.Credential, error) {
+	return r.getByBindingRef(ctx, bindingRef, false)
+}
+
+func (r *CredentialRepo) GetByBindingRefForUpdate(ctx context.Context, bindingRef string) (*biz.Credential, error) {
+	return r.getByBindingRef(ctx, bindingRef, true)
+}
+
+func (r *CredentialRepo) getByBindingRef(ctx context.Context, bindingRef string, forUpdate bool) (*biz.Credential, error) {
 	var record model.CredentialRecord
-	if err := dbFromContext(ctx, r.db).Where("binding_ref = ?", bindingRef).Order("id asc").Take(&record).Error; err != nil {
+	query := dbFromContext(ctx, r.db)
+	if forUpdate {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	if err := query.Where("binding_ref = ?", bindingRef).Order("id asc").Take(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}

@@ -4,12 +4,17 @@ import (
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/pem"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
+	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"platform-mihomo-service/internal/conf"
 )
@@ -162,6 +167,24 @@ func TestNewTicketVerifierFromSecurityUsesConfiguredEd25519PublicKeyAndKID(t *te
 	if _, err := verifier.Verify(signed, "platform-mihomo-service"); err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
+}
+
+func TestBuildProductionComponentsWiresHTTPUpstreamAndArtifactCleanup(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer upstream.Close()
+	bc := validMainTestBootstrap(t)
+	bc.Upstream.BaseUrl = upstream.URL
+	bc.Upstream.AllowInsecureHttp = true
+	database, err := gorm.Open(sqlite.Open("file:composition-root?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	redisClient := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	defer redisClient.Close()
+
+	components, err := buildProductionComponents(bc, database, redisClient)
+	require.NoError(t, err)
+	require.NotNil(t, components.controlService)
+	require.NotNil(t, components.runtimeService)
+	require.NotNil(t, components.artifactCleanupServer)
 }
 
 func mainTestPublicKeyPEM(t *testing.T) string {

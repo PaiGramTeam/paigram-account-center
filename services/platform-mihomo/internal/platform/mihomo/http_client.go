@@ -53,11 +53,16 @@ type refreshResponse struct {
 type authKeyRequest struct {
 	CredentialBundleJSON string `json:"credential_bundle_json"`
 	PlayerID             string `json:"player_id"`
+	TTLSeconds           int64  `json:"ttl_seconds"`
 }
 
 type authKeyResponse struct {
 	AuthKey          string `json:"authkey"`
 	ExpiresInSeconds int64  `json:"expires_in_seconds"`
+}
+
+type revokeAuthKeyRequest struct {
+	AuthKey string `json:"authkey"`
 }
 
 func NewHTTPClient(cfg HTTPClientConfig) (*HTTPClient, error) {
@@ -122,20 +127,57 @@ func (c *HTTPClient) RefreshCredential(ctx context.Context, cookieBundleJSON str
 }
 
 func (c *HTTPClient) IssueAuthKey(ctx context.Context, cookieBundleJSON string, playerID string) (string, int64, error) {
+	return c.IssueAuthKeyWithTTL(ctx, cookieBundleJSON, playerID, 5*time.Minute)
+}
+
+func (c *HTTPClient) IssueAuthKeyWithTTL(ctx context.Context, cookieBundleJSON string, playerID string, ttl time.Duration) (string, int64, error) {
+	if ttl <= 0 || ttl%time.Second != 0 {
+		return "", 0, &UpstreamError{Kind: ErrorInvalidResponse}
+	}
 	var response authKeyResponse
 	if err := c.postJSON(ctx, "/v1/authkeys:issue", authKeyRequest{
 		CredentialBundleJSON: cookieBundleJSON,
 		PlayerID:             playerID,
+		TTLSeconds:           int64(ttl / time.Second),
 	}, &response); err != nil {
 		return "", 0, err
 	}
-	if strings.TrimSpace(response.AuthKey) == "" || response.ExpiresInSeconds <= 0 {
+	if strings.TrimSpace(response.AuthKey) == "" {
 		return "", 0, &UpstreamError{Kind: ErrorInvalidResponse}
 	}
 	return response.AuthKey, response.ExpiresInSeconds, nil
 }
 
+func (c *HTTPClient) RevokeAuthKey(ctx context.Context, authKey string) error {
+	if strings.TrimSpace(authKey) == "" {
+		return &UpstreamError{Kind: ErrorInvalidResponse}
+	}
+	return c.postJSONWithErrorClassifier(
+		ctx,
+		"/v1/authkeys:revoke",
+		revokeAuthKeyRequest{AuthKey: authKey},
+		nil,
+		classifyRevokeHTTPError,
+		http.StatusNotFound,
+		http.StatusGone,
+	)
+}
+
 func (c *HTTPClient) postJSON(ctx context.Context, path string, input, output any) error {
+	return c.postJSONWithAcceptedStatus(ctx, path, input, output)
+}
+
+func (c *HTTPClient) postJSONWithAcceptedStatus(ctx context.Context, path string, input, output any, acceptedStatus ...int) error {
+	return c.postJSONWithErrorClassifier(ctx, path, input, output, classifyHTTPError, acceptedStatus...)
+}
+
+func (c *HTTPClient) postJSONWithErrorClassifier(
+	ctx context.Context,
+	path string,
+	input, output any,
+	classifier func(*http.Response) error,
+	acceptedStatus ...int,
+) error {
 	payload, err := json.Marshal(input)
 	if err != nil {
 		return fmt.Errorf("encode mihomo upstream request: %w", err)
@@ -157,13 +199,25 @@ func (c *HTTPClient) postJSON(ctx context.Context, path string, input, output an
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return classifyHTTPError(resp)
+		for _, accepted := range acceptedStatus {
+			if resp.StatusCode == accepted {
+				drainResponseBody(resp.Body)
+				return nil
+			}
+		}
+		drainResponseBody(resp.Body)
+		return classifier(resp)
+	}
+	if output == nil {
+		drainResponseBody(resp.Body)
+		return nil
 	}
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, maxUpstreamResponseBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(output); err != nil {
 		return &UpstreamError{Kind: ErrorInvalidResponse, StatusCode: resp.StatusCode}
 	}
+	drainResponseBody(resp.Body)
 	return nil
 }
 
@@ -198,6 +252,22 @@ func classifyHTTPError(resp *http.Response) error {
 		StatusCode: resp.StatusCode,
 		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
 	}
+}
+
+func classifyRevokeHTTPError(resp *http.Response) error {
+	kind := ErrorUnavailable
+	if resp.StatusCode == http.StatusTooManyRequests {
+		kind = ErrorRateLimited
+	}
+	return &UpstreamError{
+		Kind:       kind,
+		StatusCode: resp.StatusCode,
+		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+	}
+}
+
+func drainResponseBody(body io.Reader) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(body, maxUpstreamResponseBytes))
 }
 
 func parseRetryAfter(raw string) time.Duration {

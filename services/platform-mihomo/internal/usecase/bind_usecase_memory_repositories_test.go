@@ -8,12 +8,13 @@ import (
 )
 
 type memoryCredentialRepo struct {
-	byAccountKey  map[string]*biz.Credential
-	byBindingRef  map[string]*biz.Credential
-	deviceRepo    *memoryDeviceRepo
-	profileRepo   *memoryProfileRepo
-	artifactRepo  *memoryArtifactRepo
-	inTransaction bool
+	byAccountKey         map[string]*biz.Credential
+	byBindingRef         map[string]*biz.Credential
+	deviceRepo           *memoryDeviceRepo
+	profileRepo          *memoryProfileRepo
+	artifactRepo         *memoryArtifactRepo
+	inTransaction        bool
+	transactionCommitErr error
 }
 
 func newMemoryCredentialRepo() *memoryCredentialRepo {
@@ -96,6 +97,10 @@ func (r *memoryCredentialRepo) GetByBindingRef(_ context.Context, bindingRef str
 	return &clone, nil
 }
 
+func (r *memoryCredentialRepo) GetByBindingRefForUpdate(ctx context.Context, bindingRef string) (*biz.Credential, error) {
+	return r.GetByBindingRef(ctx, bindingRef)
+}
+
 func (r *memoryCredentialRepo) DeleteByAccountKey(_ context.Context, accountKey string) error {
 	if credential := r.byAccountKey[accountKey]; credential != nil {
 		if current := r.byBindingRef[credential.BindingRef]; current != nil && current.AccountKey == accountKey {
@@ -109,11 +114,22 @@ func (r *memoryCredentialRepo) DeleteByAccountKey(_ context.Context, accountKey 
 func (r *memoryCredentialRepo) WithinTransaction(ctx context.Context, fn func(context.Context) error) error {
 	credentialByPlatform := cloneCredentialMapByAccountKey(r.byAccountKey)
 	credentialByBinding := cloneCredentialMapByBindingRef(r.byBindingRef)
-	deviceByPlatform := cloneDeviceMapByAccountKey(r.deviceRepo.byAccountKey)
-	deviceByBinding := cloneDeviceMapByBindingRef(r.deviceRepo.byBindingRef)
-	profileByPlatform := cloneProfileMapByAccountKey(r.profileRepo.byAccountKey)
-	profileByBinding := cloneProfileMapByBindingRef(r.profileRepo.byBindingRef)
-	artifactByKey := cloneArtifactMap(r.artifactRepo.artifacts)
+	var deviceByPlatform map[string][]*biz.Device
+	var deviceByBinding map[string][]*biz.Device
+	if r.deviceRepo != nil {
+		deviceByPlatform = cloneDeviceMapByAccountKey(r.deviceRepo.byAccountKey)
+		deviceByBinding = cloneDeviceMapByBindingRef(r.deviceRepo.byBindingRef)
+	}
+	var profileByPlatform map[string][]*biz.Profile
+	var profileByBinding map[string][]*biz.Profile
+	if r.profileRepo != nil {
+		profileByPlatform = cloneProfileMapByAccountKey(r.profileRepo.byAccountKey)
+		profileByBinding = cloneProfileMapByBindingRef(r.profileRepo.byBindingRef)
+	}
+	var artifactByKey map[string]*biz.Artifact
+	if r.artifactRepo != nil {
+		artifactByKey = cloneArtifactMap(r.artifactRepo.artifacts)
+	}
 	r.inTransaction = true
 	defer func() {
 		r.inTransaction = false
@@ -121,12 +137,26 @@ func (r *memoryCredentialRepo) WithinTransaction(ctx context.Context, fn func(co
 	if err := fn(ctx); err != nil {
 		r.byAccountKey = credentialByPlatform
 		r.byBindingRef = credentialByBinding
-		r.deviceRepo.byAccountKey = deviceByPlatform
-		r.deviceRepo.byBindingRef = deviceByBinding
-		r.profileRepo.byAccountKey = profileByPlatform
-		r.profileRepo.byBindingRef = profileByBinding
-		r.artifactRepo.artifacts = artifactByKey
+		if r.deviceRepo != nil {
+			r.deviceRepo.byAccountKey = deviceByPlatform
+			r.deviceRepo.byBindingRef = deviceByBinding
+		}
+		if r.profileRepo != nil {
+			r.profileRepo.byAccountKey = profileByPlatform
+			r.profileRepo.byBindingRef = profileByBinding
+		}
+		if r.artifactRepo != nil {
+			r.artifactRepo.artifacts = artifactByKey
+		}
 		return err
+	}
+	if r.transactionCommitErr != nil {
+		r.byAccountKey = credentialByPlatform
+		r.byBindingRef = credentialByBinding
+		if r.artifactRepo != nil {
+			r.artifactRepo.artifacts = artifactByKey
+		}
+		return r.transactionCommitErr
 	}
 	return nil
 }

@@ -39,7 +39,7 @@ func (r *GrantInvalidationRepo) Upsert(ctx context.Context, bindingRef string, c
 
 func (r *GrantInvalidationRepo) MinimumVersion(ctx context.Context, bindingRef string, consumer string) (uint64, error) {
 	var row model.ConsumerGrantInvalidation
-	err := r.db.WithContext(ctx).Where("binding_ref = ? AND consumer = ?", bindingRef, consumer).First(&row).Error
+	err := dbFromContext(ctx, r.db).Where("binding_ref = ? AND consumer = ?", bindingRef, consumer).First(&row).Error
 	if err == gorm.ErrRecordNotFound {
 		return 0, nil
 	}

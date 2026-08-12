@@ -26,9 +26,40 @@ func NewArtifactRepo(db *gorm.DB, redisClient *redis.Client, prefix string) *Art
 }
 
 func (r *ArtifactRepo) Put(ctx context.Context, artifact *biz.Artifact) error {
+	return r.put(ctx, artifact)
+}
+
+func (r *ArtifactRepo) PutIfCredentialCurrent(ctx context.Context, artifact *biz.Artifact, expectedGeneration uint64) error {
+	db := dbFromContext(ctx, r.db)
+	var pending int64
+	if err := db.Model(&model.RuntimeArtifact{}).Where("binding_ref = ? AND revocation_pending = TRUE", artifact.BindingRef).Count(&pending).Error; err != nil {
+		return err
+	}
+	if pending > 0 {
+		return biz.ErrArtifactRevocationPending
+	}
+	var current model.CredentialRecord
+	err := db.Select("generation", "status", "expires_at").Where(
+		"binding_ref = ? AND account_key = ? AND generation = ? AND status = ? AND (expires_at IS NULL OR expires_at > ?)",
+		artifact.BindingRef,
+		artifact.AccountKey,
+		expectedGeneration,
+		"active",
+		time.Now(),
+	).Take(&current).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return biz.ErrArtifactCredentialStale
+	}
+	if err != nil {
+		return err
+	}
+	return r.put(ctx, artifact)
+}
+
+func (r *ArtifactRepo) put(ctx context.Context, artifact *biz.Artifact) error {
 	var previous model.RuntimeArtifact
 	if r.redis != nil {
-		_ = r.db.WithContext(ctx).Where(
+		_ = dbFromContext(ctx, r.db).WithContext(ctx).Where(
 			"binding_ref = ? AND artifact_type = ? AND scope_key = ?",
 			artifact.BindingRef,
 			artifact.ArtifactType,
@@ -45,14 +76,14 @@ func (r *ArtifactRepo) Put(ctx context.Context, artifact *biz.Artifact) error {
 		ExpiresAt:     artifact.ExpiresAt,
 	}
 
-	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+	if err := dbFromContext(ctx, r.db).WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "binding_ref"}, {Name: "artifact_type"}, {Name: "scope_key"}},
 		UpdateAll: true,
 	}).Create(&record).Error; err != nil {
 		return err
 	}
 
-	if r.redis == nil {
+	if r.redis == nil || txFromContext(ctx) != nil {
 		return nil
 	}
 
@@ -77,30 +108,52 @@ func (r *ArtifactRepo) Put(ctx context.Context, artifact *biz.Artifact) error {
 	return r.redis.Set(ctx, r.cacheKeyByBinding(artifact.BindingRef, artifact.ArtifactType, artifact.ScopeKey), payload, ttl).Err()
 }
 
-func (r *ArtifactRepo) GetByBindingRef(ctx context.Context, bindingRef string, artifactType, scopeKey string) (*biz.Artifact, error) {
-	if r.redis != nil {
-		payload, err := r.redis.Get(ctx, r.cacheKeyByBinding(bindingRef, artifactType, scopeKey)).Bytes()
-		if err == nil {
-			artifact := &biz.Artifact{}
-			if err := json.Unmarshal(payload, artifact); err == nil {
-				return artifact, nil
-			}
-		}
+func (r *ArtifactRepo) ListByBindingRef(ctx context.Context, bindingRef string) ([]*biz.Artifact, error) {
+	var records []model.RuntimeArtifact
+	if err := dbFromContext(ctx, r.db).Where("binding_ref = ?", bindingRef).Order("id asc").Find(&records).Error; err != nil {
+		return nil, err
 	}
+	artifacts := make([]*biz.Artifact, 0, len(records))
+	for _, record := range records {
+		artifacts = append(artifacts, artifactFromRecord(record))
+	}
+	return artifacts, nil
+}
 
-	artifact, err := r.get(ctx, "binding_ref = ? AND artifact_type = ? AND scope_key = ? AND expires_at > ?", bindingRef, artifactType, scopeKey, time.Now())
+func (r *ArtifactRepo) HasRevocationPending(ctx context.Context, bindingRef string) (bool, error) {
+	var count int64
+	if err := dbFromContext(ctx, r.db).Model(&model.RuntimeArtifact{}).
+		Where("binding_ref = ? AND revocation_pending = TRUE", bindingRef).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	if count > 0 {
+		return true, nil
+	}
+	if err := r.db.WithContext(ctx).Model(&model.ArtifactRevocationIntent{}).
+		Where("binding_ref = ?", bindingRef).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *ArtifactRepo) GetByBindingRef(ctx context.Context, bindingRef string, artifactType, scopeKey string) (*biz.Artifact, error) {
+	artifact, err := r.get(ctx, "binding_ref = ? AND artifact_type = ? AND scope_key = ? AND revocation_pending = FALSE", bindingRef, artifactType, scopeKey)
 	if err != nil || artifact == nil {
 		return artifact, err
 	}
+	if !artifact.ExpiresAt.After(time.Now()) {
+		return nil, r.deleteExpiredArtifact(ctx, artifact)
+	}
 
 	if r.redis != nil {
+		ttl := time.Until(artifact.ExpiresAt)
+		if ttl <= 0 {
+			return nil, r.deleteExpiredArtifact(ctx, artifact)
+		}
 		payload, err := json.Marshal(artifact)
 		if err == nil {
-			ttl := time.Until(artifact.ExpiresAt)
-			if ttl <= 0 {
-				_ = r.redis.Del(ctx, r.cacheKeyByBinding(bindingRef, artifactType, scopeKey)).Err()
-				return artifact, nil
-			}
 			_ = r.redis.Set(ctx, r.cacheKeyByBinding(bindingRef, artifactType, scopeKey), payload, ttl).Err()
 		}
 	}
@@ -109,37 +162,28 @@ func (r *ArtifactRepo) GetByBindingRef(ctx context.Context, bindingRef string, a
 }
 
 func (r *ArtifactRepo) Get(ctx context.Context, accountKey, artifactType, scopeKey string) (*biz.Artifact, error) {
-	if r.redis != nil {
-		payload, err := r.redis.Get(ctx, r.cacheKey(accountKey, artifactType, scopeKey)).Bytes()
-		if err == nil {
-			artifact := &biz.Artifact{}
-			if err := json.Unmarshal(payload, artifact); err == nil {
-				return artifact, nil
-			}
-		}
-	}
-
 	artifact, err := r.get(ctx,
-		"account_key = ? AND artifact_type = ? AND scope_key = ? AND expires_at > ?",
+		"account_key = ? AND artifact_type = ? AND scope_key = ? AND revocation_pending = FALSE",
 		accountKey,
 		artifactType,
-		scopeKey,
-		time.Now())
+		scopeKey)
 	if err != nil {
 		return nil, err
 	}
 	if artifact == nil {
 		return nil, nil
 	}
+	if !artifact.ExpiresAt.After(time.Now()) {
+		return nil, r.deleteExpiredArtifact(ctx, artifact)
+	}
 
 	if r.redis != nil {
+		ttl := time.Until(artifact.ExpiresAt)
+		if ttl <= 0 {
+			return nil, r.deleteExpiredArtifact(ctx, artifact)
+		}
 		payload, err := json.Marshal(artifact)
 		if err == nil {
-			ttl := time.Until(artifact.ExpiresAt)
-			if ttl <= 0 {
-				_ = r.redis.Del(ctx, r.cacheKey(accountKey, artifactType, scopeKey)).Err()
-				return artifact, nil
-			}
 			_ = r.redis.Set(ctx, r.cacheKey(accountKey, artifactType, scopeKey), payload, ttl).Err()
 		}
 	}
@@ -147,9 +191,23 @@ func (r *ArtifactRepo) Get(ctx context.Context, accountKey, artifactType, scopeK
 	return artifact, nil
 }
 
+func (r *ArtifactRepo) deleteExpiredArtifact(ctx context.Context, artifact *biz.Artifact) error {
+	db := dbFromContext(ctx, r.db)
+	if err := db.WithContext(ctx).Where(
+		"binding_ref = ? AND artifact_type = ? AND scope_key = ? AND expires_at <= ?",
+		artifact.BindingRef,
+		artifact.ArtifactType,
+		artifact.ScopeKey,
+		time.Now(),
+	).Delete(&model.RuntimeArtifact{}).Error; err != nil {
+		return err
+	}
+	return r.deleteCacheKeys(ctx, r.cacheKeysForArtifacts([]*biz.Artifact{artifact}))
+}
+
 func (r *ArtifactRepo) get(ctx context.Context, query any, args ...any) (*biz.Artifact, error) {
 	var record model.RuntimeArtifact
-	err := r.db.WithContext(ctx).Where(query, args...).Take(&record).Error
+	err := dbFromContext(ctx, r.db).WithContext(ctx).Where(query, args...).Take(&record).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -157,7 +215,11 @@ func (r *ArtifactRepo) get(ctx context.Context, query any, args ...any) (*biz.Ar
 		return nil, err
 	}
 
-	artifact := &biz.Artifact{
+	return artifactFromRecord(record), nil
+}
+
+func artifactFromRecord(record model.RuntimeArtifact) *biz.Artifact {
+	return &biz.Artifact{
 		BindingRef:    record.BindingRef,
 		AccountKey:    record.AccountKey,
 		ArtifactType:  record.ArtifactType,
@@ -165,7 +227,6 @@ func (r *ArtifactRepo) get(ctx context.Context, query any, args ...any) (*biz.Ar
 		ScopeKey:      record.ScopeKey,
 		ExpiresAt:     record.ExpiresAt,
 	}
-	return artifact, nil
 }
 
 func (r *ArtifactRepo) DeleteByAccountKey(ctx context.Context, accountKey string) error {
@@ -187,6 +248,71 @@ func (r *ArtifactRepo) deleteByAccountKey(ctx context.Context, db *gorm.DB, acco
 
 func (r *ArtifactRepo) DeleteByBindingRef(ctx context.Context, bindingRef string) error {
 	return r.deleteByBindingRef(ctx, dbFromContext(ctx, r.db), bindingRef)
+}
+
+func (r *ArtifactRepo) DeleteByBindingRefImmediately(ctx context.Context, bindingRef string) error {
+	return r.deleteByBindingRef(ctx, r.db, bindingRef)
+}
+
+func (r *ArtifactRepo) DeleteArtifactImmediately(ctx context.Context, bindingRef, artifactType, scopeKey, artifactValue string) error {
+	var record model.RuntimeArtifact
+	err := r.db.WithContext(ctx).Where(
+		"binding_ref = ? AND artifact_type = ? AND scope_key = ? AND artifact_value = ?",
+		bindingRef,
+		artifactType,
+		scopeKey,
+		artifactValue,
+	).Take(&record).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if err := r.db.WithContext(ctx).Where(
+		"binding_ref = ? AND artifact_type = ? AND scope_key = ? AND artifact_value = ?",
+		bindingRef,
+		artifactType,
+		scopeKey,
+		artifactValue,
+	).Delete(&model.RuntimeArtifact{}).Error; err != nil {
+		return err
+	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	return r.deleteCacheKeys(ctx, r.cacheKeysForRecords([]model.RuntimeArtifact{record}))
+}
+
+func (r *ArtifactRepo) MarkRevocationPendingImmediately(ctx context.Context, bindingRef string) error {
+	records, err := r.recordsForBindingCacheDeletion(ctx, r.db, bindingRef)
+	if err != nil {
+		return err
+	}
+	if err := r.db.WithContext(ctx).Model(&model.RuntimeArtifact{}).
+		Where("binding_ref = ?", bindingRef).
+		Update("revocation_pending", true).Error; err != nil {
+		return err
+	}
+	return r.deleteCacheKeys(ctx, r.cacheKeysForRecords(records))
+}
+
+func (r *ArtifactRepo) DeleteExpired(ctx context.Context, expiredBefore time.Time) (int64, error) {
+	db := dbFromContext(ctx, r.db)
+	var records []model.RuntimeArtifact
+	if r.redis != nil {
+		if err := db.WithContext(ctx).
+			Select("binding_ref", "account_key", "artifact_type", "scope_key").
+			Where("expires_at <= ? AND revocation_pending = FALSE", expiredBefore).
+			Find(&records).Error; err != nil {
+			return 0, err
+		}
+	}
+	deleted := db.WithContext(ctx).Where("expires_at <= ? AND revocation_pending = FALSE", expiredBefore).Delete(&model.RuntimeArtifact{})
+	if deleted.Error != nil {
+		return 0, deleted.Error
+	}
+	if err := r.deleteCacheKeys(ctx, r.cacheKeysForRecords(records)); err != nil {
+		return 0, err
+	}
+	return deleted.RowsAffected, nil
 }
 
 func (r *ArtifactRepo) deleteByBindingRef(ctx context.Context, db *gorm.DB, bindingRef string) error {
@@ -237,6 +363,17 @@ func (r *ArtifactRepo) cacheKeysForRecords(records []model.RuntimeArtifact) []st
 	}
 	return keys
 
+}
+
+func (r *ArtifactRepo) cacheKeysForArtifacts(artifacts []*biz.Artifact) []string {
+	keys := make([]string, 0, len(artifacts)*2)
+	for _, artifact := range artifacts {
+		keys = append(keys,
+			r.cacheKey(artifact.AccountKey, artifact.ArtifactType, artifact.ScopeKey),
+			r.cacheKeyByBinding(artifact.BindingRef, artifact.ArtifactType, artifact.ScopeKey),
+		)
+	}
+	return keys
 }
 
 func (r *ArtifactRepo) deleteCacheKeys(ctx context.Context, keys []string) error {
