@@ -12,6 +12,7 @@ service PlatformControlService {
   rpc RefreshCredential(RefreshCredentialRequest) returns (RefreshCredentialResponse);
   rpc DeleteCredential(DeleteCredentialRequest) returns (DeleteCredentialResponse);
   rpc ApplyAuthorizationFence(ApplyAuthorizationFenceRequest) returns (ApplyAuthorizationFenceResponse);
+  rpc SetPrimaryProfile(SetPrimaryProfileRequest) returns (SetPrimaryProfileResponse);
   rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
   rpc ResolveOperation(ResolveOperationRequest) returns (ResolveOperationResponse);
   rpc GetBindingState(GetBindingStateRequest) returns (GetBindingStateResponse);
@@ -64,6 +65,17 @@ message ApplyAuthorizationFenceRequest {
 }
 
 message ApplyAuthorizationFenceResponse {
+  OperationResult result = 1;
+}
+
+message SetPrimaryProfileRequest {
+  OperationRef operation = 1;
+  string account_key = 2;
+  string profile_ref = 3;
+  uint64 expected_profile_revision = 4;
+}
+
+message SetPrimaryProfileResponse {
   OperationResult result = 1;
 }
 

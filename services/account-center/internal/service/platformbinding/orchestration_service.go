@@ -31,6 +31,7 @@ type orchestrationBindingReader interface {
 type orchestrationProfileSyncer interface {
 	SyncProfiles(input SyncProfilesInput) ([]model.PlatformAccountProfile, error)
 	DeleteProfiles(bindingID uint64) error
+	GetProfile(bindingID, profileID uint64) (*model.PlatformAccountProfile, error)
 }
 
 type orchestrationGrantCleaner interface {
@@ -48,6 +49,7 @@ type credentialGateway interface {
 	ReplaceCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
 	RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error
 	DeleteCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error
+	SetPrimaryProfile(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, profileRef string) (*RuntimeSummary, error)
 }
 
 type OrchestrationService struct {
@@ -268,18 +270,6 @@ func (s *OrchestrationService) RepairDeleteFailedBinding(ctx context.Context, bi
 		return nil
 	}
 	return s.deleteBinding(ctx, binding, "consumer", "platform-binding-delete-repair")
-}
-
-func (s *OrchestrationService) SetPrimaryProfileForOwner(ctx context.Context, ownerUserID, bindingID, profileID uint64, actorID string) (*model.PlatformAccountBinding, error) {
-	binding, err := s.bindingReader.GetBindingForOwner(ownerUserID, bindingID)
-	if err != nil {
-		return nil, err
-	}
-	if binding == nil || !binding.ExternalAccountKey.Valid || binding.ExternalAccountKey.String == "" {
-		return nil, ErrBindingRuntimeSummaryNotReady
-	}
-	s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", reasonCode(ErrCredentialGatewayUnavailable), uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profileID})
-	return nil, ErrCredentialGatewayUnavailable
 }
 
 func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *model.PlatformAccountBinding, actorType, actorID string) (*model.PlatformAccountBinding, error) {
@@ -683,6 +673,10 @@ func (unavailableCredentialGateway) ReplaceCredential(context.Context, string, s
 
 func (unavailableCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
 	return ErrCredentialGatewayUnavailable
+}
+
+func (unavailableCredentialGateway) SetPrimaryProfile(context.Context, string, string, string, *model.PlatformAccountBinding, string) (*RuntimeSummary, error) {
+	return nil, ErrCredentialGatewayUnavailable
 }
 
 func (unavailableCredentialGateway) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {

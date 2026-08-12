@@ -80,6 +80,27 @@ func (uc *ProfileUsecase) GetPrimaryProfileWithScope(ctx context.Context, guard 
 	return toProfileSummary(profiles[0]), nil
 }
 
+func (uc *ProfileUsecase) SetPrimaryProfileByRef(ctx context.Context, guard ScopeGuard, accountKey, profileRef string) (*ProfileSummary, error) {
+	if err := guard.RequireAccountKey(accountKey); err != nil {
+		return nil, err
+	}
+	if err := guard.RequireBindingWide(); err != nil {
+		return nil, err
+	}
+	profile, err := uc.GetProfileByRef(ctx, guard, accountKey, profileRef)
+	if err != nil {
+		return nil, err
+	}
+	if profile == nil {
+		return nil, ErrProfileNotFound
+	}
+	if err := uc.profileRepo.SetDefaultByBindingAndPlayerID(ctx, profile.BindingRef, accountKey, profile.PlayerID); err != nil {
+		return nil, err
+	}
+	profile.IsDefault = true
+	return toProfileSummary(profile), nil
+}
+
 func (uc *ProfileUsecase) ConfirmPrimaryProfile(ctx context.Context, accountKey string, playerID string) (*ProfileSummary, error) {
 	profiles, err := uc.profileRepo.ListByAccountKey(ctx, accountKey)
 	if err != nil {

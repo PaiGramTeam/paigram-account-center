@@ -79,20 +79,36 @@ func (r *CredentialRepo) AdvanceGeneration(ctx context.Context, bindingRef, acco
 	return r.GetByBindingRef(ctx, bindingRef)
 }
 
+func (r *CredentialRepo) AdvanceProfileRevision(ctx context.Context, bindingRef, accountKey string, generation, expectedRevision uint64) (*biz.Credential, error) {
+	write := dbFromContext(ctx, r.db).Model(&model.CredentialRecord{}).
+		Where("binding_ref = ? AND account_key = ? AND generation = ? AND profile_revision = ? AND profile_observed_revision = ? AND profile_snapshot_complete = ?", bindingRef, accountKey, generation, expectedRevision, expectedRevision, true).
+		Updates(map[string]any{
+			"profile_revision":          expectedRevision + 1,
+			"profile_observed_revision": expectedRevision + 1,
+		})
+	if write.Error != nil {
+		return nil, write.Error
+	}
+	if write.RowsAffected != 1 {
+		return nil, biz.ErrCredentialGenerationConflict
+	}
+	return r.GetByBindingRef(ctx, bindingRef)
+}
+
 func credentialRecord(credential *biz.Credential) model.CredentialRecord {
 	return model.CredentialRecord{
-		BindingRef:        credential.BindingRef,
-		AccountKey:        credential.AccountKey,
-		Generation:        credential.Generation,
-		Platform:          credential.Platform,
-		AccountID:         credential.AccountID,
-		Region:            credential.Region,
-		CredentialBlob:    credential.CredentialBlob,
-		CredentialVersion: credential.CredentialVersion,
-		Status:            credential.Status,
-		LastValidatedAt:   credential.LastValidatedAt,
-		LastRefreshedAt:   credential.LastRefreshedAt,
-		ExpiresAt:         credential.ExpiresAt,
+		BindingRef:              credential.BindingRef,
+		AccountKey:              credential.AccountKey,
+		Generation:              credential.Generation,
+		Platform:                credential.Platform,
+		AccountID:               credential.AccountID,
+		Region:                  credential.Region,
+		CredentialBlob:          credential.CredentialBlob,
+		CredentialVersion:       credential.CredentialVersion,
+		Status:                  credential.Status,
+		LastValidatedAt:         credential.LastValidatedAt,
+		LastRefreshedAt:         credential.LastRefreshedAt,
+		ExpiresAt:               credential.ExpiresAt,
 		ProfileSnapshotComplete: credential.ProfileSnapshotComplete,
 		ProfileRevision:         credential.ProfileRevision,
 		ProfileObservedRevision: credential.ProfileObservedRevision,
@@ -140,18 +156,18 @@ func (r *CredentialRepo) DeleteByAccountKey(ctx context.Context, accountKey stri
 
 func credentialFromRecord(record model.CredentialRecord) *biz.Credential {
 	return &biz.Credential{
-		BindingRef:        record.BindingRef,
-		AccountKey:        record.AccountKey,
-		Generation:        record.Generation,
-		Platform:          record.Platform,
-		AccountID:         record.AccountID,
-		Region:            record.Region,
-		CredentialBlob:    record.CredentialBlob,
-		CredentialVersion: record.CredentialVersion,
-		Status:            record.Status,
-		LastValidatedAt:   record.LastValidatedAt,
-		LastRefreshedAt:   record.LastRefreshedAt,
-		ExpiresAt:         record.ExpiresAt,
+		BindingRef:              record.BindingRef,
+		AccountKey:              record.AccountKey,
+		Generation:              record.Generation,
+		Platform:                record.Platform,
+		AccountID:               record.AccountID,
+		Region:                  record.Region,
+		CredentialBlob:          record.CredentialBlob,
+		CredentialVersion:       record.CredentialVersion,
+		Status:                  record.Status,
+		LastValidatedAt:         record.LastValidatedAt,
+		LastRefreshedAt:         record.LastRefreshedAt,
+		ExpiresAt:               record.ExpiresAt,
 		ProfileSnapshotComplete: record.ProfileSnapshotComplete,
 		ProfileRevision:         record.ProfileRevision,
 		ProfileObservedRevision: record.ProfileObservedRevision,

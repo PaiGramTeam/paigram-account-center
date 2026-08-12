@@ -135,6 +135,10 @@ func (f *fakeNonSensitiveCredentialGateway) DeleteCredential(context.Context, st
 	return f.deleteErr
 }
 
+func (f *fakeNonSensitiveCredentialGateway) SetPrimaryProfile(context.Context, string, string, string, *model.PlatformAccountBinding, string) (*RuntimeSummary, error) {
+	panic("unexpected call")
+}
+
 func newDurableNonSensitiveService(t *testing.T, gateway credentialGateway) (*OrchestrationService, *OperationIntentService, *fakeRuntimeSummaryBindingReader) {
 	t.Helper()
 	store := NewOperationIntentService(openOperationIntentTestDB(t))

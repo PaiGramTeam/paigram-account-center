@@ -99,6 +99,27 @@ func TestV2BaselineRejectsInvalidOperationGeneration(t *testing.T) {
 	require.Equal(t, "valid_operation_generation", postgresError.ConstraintName)
 }
 
+func TestV2BaselineRequiresPrimaryProfileOperationsToKeepCredentialGeneration(t *testing.T) {
+	stack := newEmptyIntegrationStack(t)
+	requireMigrationsApplied(t, stack.SQLDB)
+	insert := func(operationID string, targetGeneration uint64) error {
+		_, err := stack.SQLDB.Exec(`
+			INSERT INTO platform_operations (
+				operation_id, kind, binding_ref, pre_generation, target_generation, request_fingerprint,
+				execution_token, lease_expires_at, state
+			) VALUES ($1, 'OPERATION_KIND_SET_PRIMARY_PROFILE', 'binding-a', 1, $2, 'fingerprint', 'token', $3, 'pending')
+		`, operationID, targetGeneration, time.Now().UTC().Add(time.Minute))
+		return err
+	}
+
+	require.NoError(t, insert("op-primary-valid", 1))
+	err := insert("op-primary-invalid", 2)
+	var postgresError *pgconn.PgError
+	require.ErrorAs(t, err, &postgresError)
+	require.Equal(t, "23514", postgresError.Code)
+	require.Equal(t, "valid_operation_generation", postgresError.ConstraintName)
+}
+
 func requireMigrationsApplied(t *testing.T, db *sql.DB) {
 	t.Helper()
 	pattern := filepath.Join(repoRoot(t), "initialize", "migrate", "sql", "*.up.sql")

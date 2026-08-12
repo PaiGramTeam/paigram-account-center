@@ -26,6 +26,7 @@ type PlatformControlService struct {
 	operationUC      *usecase.OperationUsecase
 	bindUC           *usecase.BindUsecase
 	statusUC         *usecase.StatusUsecase
+	profileUC        *usecase.ProfileUsecase
 	managementUC     *usecase.ManagementUsecase
 	credentials      biz.CredentialRepository
 	fences           biz.AuthorizationFenceRepository
@@ -37,6 +38,7 @@ func NewPlatformControlService(
 	operationUC *usecase.OperationUsecase,
 	bindUC *usecase.BindUsecase,
 	statusUC *usecase.StatusUsecase,
+	profileUC *usecase.ProfileUsecase,
 	managementUC *usecase.ManagementUsecase,
 	credentials biz.CredentialRepository,
 	fences biz.AuthorizationFenceRepository,
@@ -47,6 +49,7 @@ func NewPlatformControlService(
 		operationUC:      operationUC,
 		bindUC:           bindUC,
 		statusUC:         statusUC,
+		profileUC:        profileUC,
 		managementUC:     managementUC,
 		credentials:      credentials,
 		fences:           fences,
@@ -126,9 +129,6 @@ func (s *PlatformControlService) RefreshCredential(ctx context.Context, req *pla
 		}
 		if _, err := s.statusUC.RefreshCredential(txCtx, req.GetAccountKey()); err != nil {
 			return nil, mapUsecaseError(err)
-		}
-		if err := s.credentials.SetProfileSnapshotState(txCtx, operation.BindingRef, false, operation.TargetGeneration, operation.PreGeneration); err != nil {
-			return nil, err
 		}
 		summary, err := s.managementUC.GetCredentialSummary(txCtx, req.GetAccountKey())
 		if err != nil {
@@ -221,6 +221,44 @@ func (s *PlatformControlService) ApplyAuthorizationFence(ctx context.Context, re
 		return nil, mapOperationError(err)
 	}
 	return &platformv2.ApplyAuthorizationFenceResponse{Result: toOperationResult(result)}, nil
+}
+
+func (s *PlatformControlService) SetPrimaryProfile(ctx context.Context, req *platformv2.SetPrimaryProfileRequest) (*platformv2.SetPrimaryProfileResponse, error) {
+	requestOperation := operationRequest(req)
+	operation, claims, err := s.authorizeOperation(
+		ctx,
+		requestOperation,
+		platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE,
+		usecase.ActionProfilePrimarySet,
+		req.GetAccountKey(),
+		primaryProfileFingerprint(requestOperation, req),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if req.GetProfileRef() == "" {
+		return nil, status.Error(codes.InvalidArgument, "profile_ref is required")
+	}
+	result, err := s.operationUC.Execute(ctx, operation, func(txCtx context.Context) (*biz.OperationResult, error) {
+		if _, err := s.credentials.AdvanceProfileRevision(txCtx, operation.BindingRef, req.GetAccountKey(), operation.PreGeneration, req.GetExpectedProfileRevision()); err != nil {
+			if errors.Is(err, biz.ErrCredentialGenerationConflict) {
+				return nil, status.Error(codes.Aborted, "profile revision changed concurrently")
+			}
+			return nil, err
+		}
+		if _, err := s.profileUC.SetPrimaryProfileByRef(txCtx, toScopeGuardMust(claims), req.GetAccountKey(), req.GetProfileRef()); err != nil {
+			return nil, mapUsecaseError(err)
+		}
+		summary, err := s.managementUC.GetCredentialSummary(txCtx, req.GetAccountKey())
+		if err != nil {
+			return nil, mapUsecaseError(err)
+		}
+		return successfulOperationResult(summary)
+	})
+	if err != nil {
+		return nil, mapOperationError(err)
+	}
+	return &platformv2.SetPrimaryProfileResponse{Result: toOperationResult(result)}, nil
 }
 
 func (s *PlatformControlService) GetOperation(ctx context.Context, req *platformv2.GetOperationRequest) (*platformv2.GetOperationResponse, error) {
@@ -380,6 +418,15 @@ func authorizationFenceFingerprint(operation *platformv2.OperationRef, request *
 	return operationid.AuthorizationFenceFingerprint(
 		operation.GetKind().String(), operation.GetBindingRef(), request.GetConsumerPrincipal(), operation.GetPreGeneration(),
 		request.GetMinimumGrantVersion(), request.GetMinimumOwnerEpoch(), request.GetMinimumConsumerEpoch(), request.GetMinimumEntryEpoch(),
+	)
+}
+
+func primaryProfileFingerprint(operation *platformv2.OperationRef, request *platformv2.SetPrimaryProfileRequest) string {
+	if operation == nil || request == nil {
+		return ""
+	}
+	return operationid.PrimaryProfileFingerprint(
+		operation.GetKind().String(), operation.GetBindingRef(), request.GetProfileRef(), operation.GetPreGeneration(), request.GetExpectedProfileRevision(),
 	)
 }
 

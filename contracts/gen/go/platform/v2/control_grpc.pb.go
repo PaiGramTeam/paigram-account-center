@@ -24,6 +24,7 @@ const (
 	PlatformControlService_RefreshCredential_FullMethodName       = "/paigram.platform.v2.PlatformControlService/RefreshCredential"
 	PlatformControlService_DeleteCredential_FullMethodName        = "/paigram.platform.v2.PlatformControlService/DeleteCredential"
 	PlatformControlService_ApplyAuthorizationFence_FullMethodName = "/paigram.platform.v2.PlatformControlService/ApplyAuthorizationFence"
+	PlatformControlService_SetPrimaryProfile_FullMethodName       = "/paigram.platform.v2.PlatformControlService/SetPrimaryProfile"
 	PlatformControlService_GetOperation_FullMethodName            = "/paigram.platform.v2.PlatformControlService/GetOperation"
 	PlatformControlService_ResolveOperation_FullMethodName        = "/paigram.platform.v2.PlatformControlService/ResolveOperation"
 	PlatformControlService_GetBindingState_FullMethodName         = "/paigram.platform.v2.PlatformControlService/GetBindingState"
@@ -38,6 +39,7 @@ type PlatformControlServiceClient interface {
 	RefreshCredential(ctx context.Context, in *RefreshCredentialRequest, opts ...grpc.CallOption) (*RefreshCredentialResponse, error)
 	DeleteCredential(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error)
 	ApplyAuthorizationFence(ctx context.Context, in *ApplyAuthorizationFenceRequest, opts ...grpc.CallOption) (*ApplyAuthorizationFenceResponse, error)
+	SetPrimaryProfile(ctx context.Context, in *SetPrimaryProfileRequest, opts ...grpc.CallOption) (*SetPrimaryProfileResponse, error)
 	GetOperation(ctx context.Context, in *GetOperationRequest, opts ...grpc.CallOption) (*GetOperationResponse, error)
 	ResolveOperation(ctx context.Context, in *ResolveOperationRequest, opts ...grpc.CallOption) (*ResolveOperationResponse, error)
 	GetBindingState(ctx context.Context, in *GetBindingStateRequest, opts ...grpc.CallOption) (*GetBindingStateResponse, error)
@@ -101,6 +103,16 @@ func (c *platformControlServiceClient) ApplyAuthorizationFence(ctx context.Conte
 	return out, nil
 }
 
+func (c *platformControlServiceClient) SetPrimaryProfile(ctx context.Context, in *SetPrimaryProfileRequest, opts ...grpc.CallOption) (*SetPrimaryProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetPrimaryProfileResponse)
+	err := c.cc.Invoke(ctx, PlatformControlService_SetPrimaryProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformControlServiceClient) GetOperation(ctx context.Context, in *GetOperationRequest, opts ...grpc.CallOption) (*GetOperationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetOperationResponse)
@@ -140,6 +152,7 @@ type PlatformControlServiceServer interface {
 	RefreshCredential(context.Context, *RefreshCredentialRequest) (*RefreshCredentialResponse, error)
 	DeleteCredential(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error)
 	ApplyAuthorizationFence(context.Context, *ApplyAuthorizationFenceRequest) (*ApplyAuthorizationFenceResponse, error)
+	SetPrimaryProfile(context.Context, *SetPrimaryProfileRequest) (*SetPrimaryProfileResponse, error)
 	GetOperation(context.Context, *GetOperationRequest) (*GetOperationResponse, error)
 	ResolveOperation(context.Context, *ResolveOperationRequest) (*ResolveOperationResponse, error)
 	GetBindingState(context.Context, *GetBindingStateRequest) (*GetBindingStateResponse, error)
@@ -167,6 +180,9 @@ func (UnimplementedPlatformControlServiceServer) DeleteCredential(context.Contex
 }
 func (UnimplementedPlatformControlServiceServer) ApplyAuthorizationFence(context.Context, *ApplyAuthorizationFenceRequest) (*ApplyAuthorizationFenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApplyAuthorizationFence not implemented")
+}
+func (UnimplementedPlatformControlServiceServer) SetPrimaryProfile(context.Context, *SetPrimaryProfileRequest) (*SetPrimaryProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPrimaryProfile not implemented")
 }
 func (UnimplementedPlatformControlServiceServer) GetOperation(context.Context, *GetOperationRequest) (*GetOperationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOperation not implemented")
@@ -289,6 +305,24 @@ func _PlatformControlService_ApplyAuthorizationFence_Handler(srv interface{}, ct
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformControlService_SetPrimaryProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPrimaryProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformControlServiceServer).SetPrimaryProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformControlService_SetPrimaryProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformControlServiceServer).SetPrimaryProfile(ctx, req.(*SetPrimaryProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformControlService_GetOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetOperationRequest)
 	if err := dec(in); err != nil {
@@ -369,6 +403,10 @@ var PlatformControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyAuthorizationFence",
 			Handler:    _PlatformControlService_ApplyAuthorizationFence_Handler,
+		},
+		{
+			MethodName: "SetPrimaryProfile",
+			Handler:    _PlatformControlService_SetPrimaryProfile_Handler,
 		},
 		{
 			MethodName: "GetOperation",

@@ -617,6 +617,8 @@ func writeBindingError(c *gin.Context, err error, fallback string) {
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid platform binding mutation", nil)
 	case errors.Is(err, serviceplatformbinding.ErrBindingRuntimeSummaryNotReady):
 		response.Conflict(c, "platform binding runtime summary is not ready")
+	case errors.Is(err, serviceplatformbinding.ErrBindingGenerationConflict):
+		response.Conflict(c, "platform binding changed concurrently")
 	case errors.Is(err, serviceplatformbinding.ErrPrimaryProfileNotOwned):
 		response.ErrorWithCode(c, http.StatusUnprocessableEntity, pkgerrors.ErrorCodePrimaryProfileInvalid, "primary profile must belong to platform binding", nil)
 	default:

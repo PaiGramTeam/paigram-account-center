@@ -26,6 +26,7 @@ class OperationKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     OPERATION_KIND_REFRESH_CREDENTIAL: _ClassVar[OperationKind]
     OPERATION_KIND_DELETE_CREDENTIAL: _ClassVar[OperationKind]
     OPERATION_KIND_APPLY_AUTHORIZATION_FENCE: _ClassVar[OperationKind]
+    OPERATION_KIND_SET_PRIMARY_PROFILE: _ClassVar[OperationKind]
 
 class OperationState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -46,6 +47,7 @@ OPERATION_KIND_REPLACE_CREDENTIAL: OperationKind
 OPERATION_KIND_REFRESH_CREDENTIAL: OperationKind
 OPERATION_KIND_DELETE_CREDENTIAL: OperationKind
 OPERATION_KIND_APPLY_AUTHORIZATION_FENCE: OperationKind
+OPERATION_KIND_SET_PRIMARY_PROFILE: OperationKind
 OPERATION_STATE_UNSPECIFIED: OperationState
 OPERATION_STATE_PENDING: OperationState
 OPERATION_STATE_SUCCEEDED: OperationState

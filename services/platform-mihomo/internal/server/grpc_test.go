@@ -103,7 +103,7 @@ func TestNewGRPCServerExposesHealth(t *testing.T) {
 }
 
 func testV2Services() (*service.PlatformControlService, *service.MihomoRuntimeService) {
-	return service.NewPlatformControlService(nil, nil, nil, nil, nil, nil, nil, nil),
+	return service.NewPlatformControlService(nil, nil, nil, nil, nil, nil, nil, nil, nil),
 		service.NewMihomoRuntimeService(nil, nil, nil, nil, nil, nil)
 }
 

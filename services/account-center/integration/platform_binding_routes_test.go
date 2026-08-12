@@ -119,6 +119,7 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		{
 			BindingID:          binding.ID,
 			PlatformProfileKey: "mihomo:10001",
+			ProfileRef:         "mihomo:10001",
 			GameBiz:            "hk4e_cn",
 			Region:             "cn_gf01",
 			PlayerUID:          "10001",
@@ -129,6 +130,7 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		{
 			BindingID:          binding.ID,
 			PlatformProfileKey: "mihomo:10002",
+			ProfileRef:         "mihomo:10002",
 			GameBiz:            "hk4e_global",
 			Region:             "os_asia",
 			PlayerUID:          "10002",
@@ -234,12 +236,14 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		patchPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 			"profile_id": profiles[1].ID,
 		}, authHeaders(ownerAccessToken))
-		require.Equal(t, http.StatusServiceUnavailable, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
+		require.Equal(t, http.StatusOK, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
+		require.NotNil(t, createStub.lastPrimary)
+		assert.Equal(t, "mihomo:10002", createStub.lastPrimary.GetProfileRef())
 
 		invalidPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 			"profile_id": uint64(99999999),
 		}, authHeaders(ownerAccessToken))
-		require.Equal(t, http.StatusServiceUnavailable, invalidPrimaryResp.Code, invalidPrimaryResp.Body.String())
+		require.Equal(t, http.StatusUnprocessableEntity, invalidPrimaryResp.Code, invalidPrimaryResp.Body.String())
 
 		summaryResp := performJSONRequest(t, stack.Router, http.MethodGet, fmt.Sprintf("/api/v1/me/platform-accounts/%d/runtime-summary", binding.ID), nil, authHeaders(ownerAccessToken))
 		require.Equal(t, http.StatusOK, summaryResp.Code, summaryResp.Body.String())

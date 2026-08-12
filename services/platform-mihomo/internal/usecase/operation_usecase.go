@@ -105,7 +105,7 @@ func validateOperationRef(operation biz.OperationRef) error {
 	if operation.OperationID == "" || operation.Kind == "" || operation.BindingRef == "" || operation.RequestFingerprint == "" {
 		return ErrOperationRequired
 	}
-	if operation.Kind == "OPERATION_KIND_APPLY_AUTHORIZATION_FENCE" {
+	if operation.Kind == "OPERATION_KIND_APPLY_AUTHORIZATION_FENCE" || operation.Kind == "OPERATION_KIND_SET_PRIMARY_PROFILE" {
 		if operation.TargetGeneration != operation.PreGeneration {
 			return ErrOperationRequired
 		}

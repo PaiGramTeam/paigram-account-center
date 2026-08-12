@@ -115,6 +115,32 @@ func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, end
 	return requireSucceededOperationResult(resp.GetResult(), operation)
 }
 
+func (g *GRPCGenericCredentialGateway) SetPrimaryProfile(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, profileRef string) (*RuntimeSummary, error) {
+	conn, err := g.dial(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	defer cancel()
+	operation := newPrimaryProfileOperationRef(binding, operationID, profileRef)
+	resp, err := platformv2.NewPlatformControlServiceClient(conn).SetPrimaryProfile(callCtx, &platformv2.SetPrimaryProfileRequest{
+		Operation:               operation,
+		AccountKey:              bindingExternalAccountKey(binding),
+		ProfileRef:              profileRef,
+		ExpectedProfileRevision: binding.ProfileRevision,
+	})
+	if err != nil {
+		return nil, err
+	}
+	summary, err := genericOperationResultMapForOperation(resp.GetResult(), operation)
+	if err != nil {
+		return nil, err
+	}
+	return decodeRuntimeSummary(summary)
+}
+
 func newOperationRef(binding *model.PlatformAccountBinding, kind platformv2.OperationKind, operationID string) *platformv2.OperationRef {
 	if binding == nil {
 		return nil
@@ -127,6 +153,21 @@ func newOperationRef(binding *model.PlatformAccountBinding, kind platformv2.Oper
 		PreGeneration:      binding.Generation,
 		TargetGeneration:   binding.Generation + 1,
 		RequestFingerprint: fingerprint,
+	}
+}
+
+func newPrimaryProfileOperationRef(binding *model.PlatformAccountBinding, operationID, profileRef string) *platformv2.OperationRef {
+	if binding == nil {
+		return nil
+	}
+	kind := platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE
+	return &platformv2.OperationRef{
+		OperationId:        operationID,
+		Kind:               kind,
+		BindingRef:         binding.BindingRef,
+		PreGeneration:      binding.Generation,
+		TargetGeneration:   binding.Generation,
+		RequestFingerprint: operationid.PrimaryProfileFingerprint(kind.String(), binding.BindingRef, profileRef, binding.Generation, binding.ProfileRevision),
 	}
 }
 

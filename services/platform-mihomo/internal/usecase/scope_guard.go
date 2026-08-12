@@ -24,6 +24,7 @@ const (
 	ActionCredentialUpdate   = platformaction.MihomoCredentialUpdate
 	ActionCredentialRefresh  = platformaction.MihomoCredentialRefresh
 	ActionCredentialDelete   = platformaction.MihomoCredentialDelete
+	ActionProfilePrimarySet  = platformaction.MihomoProfilePrimarySet
 )
 
 type ScopeGuard struct {

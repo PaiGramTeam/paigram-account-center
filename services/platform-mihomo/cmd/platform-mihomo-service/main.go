@@ -74,7 +74,7 @@ func main() {
 		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(database))
 
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()), artifactRepo)
-	statusUC := usecase.NewStatusUsecase(credentialRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
+	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
 	profileUC := usecase.NewProfileUsecase(profileRepo)
 	authkeyUC := usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
 	managementUC := usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC)
@@ -84,6 +84,7 @@ func main() {
 		operationUC,
 		bindUC,
 		statusUC,
+		profileUC,
 		managementUC,
 		credentialRepo,
 		authorizationFenceRepo,

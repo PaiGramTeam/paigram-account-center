@@ -70,6 +70,23 @@ func TestCredentialRepoCreateRejectsExistingBinding(t *testing.T) {
 	require.ErrorIs(t, repo.Create(context.Background(), credential), biz.ErrCredentialAlreadyBound)
 }
 
+func TestCredentialRepoAdvanceProfileRevisionUsesCompareAndSwap(t *testing.T) {
+	repo := NewCredentialRepo(newRepoTestDB(t))
+	require.NoError(t, repo.Create(context.Background(), &biz.Credential{
+		BindingRef: "binding-42", AccountKey: "account-42", Generation: 7,
+		Platform: "mihomo", AccountID: "42", Region: "cn_gf01", CredentialBlob: "blob", CredentialVersion: "v1", Status: "active",
+		ProfileSnapshotComplete: true, ProfileRevision: 3, ProfileObservedRevision: 3,
+	}))
+
+	updated, err := repo.AdvanceProfileRevision(context.Background(), "binding-42", "account-42", 7, 3)
+	require.NoError(t, err)
+	require.Equal(t, uint64(4), updated.ProfileRevision)
+	require.Equal(t, uint64(4), updated.ProfileObservedRevision)
+
+	_, err = repo.AdvanceProfileRevision(context.Background(), "binding-42", "account-42", 7, 3)
+	require.ErrorIs(t, err, biz.ErrCredentialGenerationConflict)
+}
+
 func newRepoTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

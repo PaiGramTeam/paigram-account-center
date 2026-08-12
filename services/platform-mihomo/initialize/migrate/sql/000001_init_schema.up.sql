@@ -133,8 +133,8 @@ CREATE TABLE platform_operations (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT valid_operation_generation CHECK (
-        (kind = 'OPERATION_KIND_APPLY_AUTHORIZATION_FENCE' AND target_generation = pre_generation)
-        OR (kind <> 'OPERATION_KIND_APPLY_AUTHORIZATION_FENCE' AND target_generation = pre_generation + 1)
+        (kind IN ('OPERATION_KIND_APPLY_AUTHORIZATION_FENCE', 'OPERATION_KIND_SET_PRIMARY_PROFILE') AND target_generation = pre_generation)
+        OR (kind NOT IN ('OPERATION_KIND_APPLY_AUTHORIZATION_FENCE', 'OPERATION_KIND_SET_PRIMARY_PROFILE') AND target_generation = pre_generation + 1)
     ),
     CONSTRAINT valid_operation_request_fingerprint CHECK (request_fingerprint <> ''),
     CONSTRAINT valid_operation_execution_token CHECK (execution_token <> ''),

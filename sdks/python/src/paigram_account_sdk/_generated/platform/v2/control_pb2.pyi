@@ -86,6 +86,24 @@ class ApplyAuthorizationFenceResponse(_message.Message):
     result: _types_pb2.OperationResult
     def __init__(self, result: _Optional[_Union[_types_pb2.OperationResult, _Mapping]] = ...) -> None: ...
 
+class SetPrimaryProfileRequest(_message.Message):
+    __slots__ = ("operation", "account_key", "profile_ref", "expected_profile_revision")
+    OPERATION_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    PROFILE_REF_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_PROFILE_REVISION_FIELD_NUMBER: _ClassVar[int]
+    operation: _types_pb2.OperationRef
+    account_key: str
+    profile_ref: str
+    expected_profile_revision: int
+    def __init__(self, operation: _Optional[_Union[_types_pb2.OperationRef, _Mapping]] = ..., account_key: _Optional[str] = ..., profile_ref: _Optional[str] = ..., expected_profile_revision: _Optional[int] = ...) -> None: ...
+
+class SetPrimaryProfileResponse(_message.Message):
+    __slots__ = ("result",)
+    RESULT_FIELD_NUMBER: _ClassVar[int]
+    result: _types_pb2.OperationResult
+    def __init__(self, result: _Optional[_Union[_types_pb2.OperationResult, _Mapping]] = ...) -> None: ...
+
 class GetOperationRequest(_message.Message):
     __slots__ = ("operation_id",)
     OPERATION_ID_FIELD_NUMBER: _ClassVar[int]

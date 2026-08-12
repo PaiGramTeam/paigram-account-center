@@ -33,3 +33,10 @@ func TestAuthorizationFenceFingerprintIncludesEveryNonSensitiveMinimum(t *testin
 	require.NotEqual(t, base, AuthorizationFenceFingerprint("fence", "binding-1", "consumer-1", 4, 2, 3, 6, 7))
 	require.NotEqual(t, base, AuthorizationFenceFingerprint("fence", "binding-1", "consumer-1", 4, 2, 3, 5, 8))
 }
+
+func TestPrimaryProfileFingerprintIncludesProfileAndExpectedRevision(t *testing.T) {
+	base := PrimaryProfileFingerprint("primary", "binding-1", "profile-1", 4, 7)
+	require.Equal(t, base, PrimaryProfileFingerprint("primary", "binding-1", "profile-1", 4, 7))
+	require.NotEqual(t, base, PrimaryProfileFingerprint("primary", "binding-1", "profile-2", 4, 7))
+	require.NotEqual(t, base, PrimaryProfileFingerprint("primary", "binding-1", "profile-1", 4, 8))
+}

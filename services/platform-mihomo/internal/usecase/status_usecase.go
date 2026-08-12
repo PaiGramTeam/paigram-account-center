@@ -23,23 +23,30 @@ type ValidateCredentialOutput struct {
 }
 
 type RefreshCredentialOutput struct {
-	Status      CredentialStatus
-	RefreshedAt *time.Time
+	Status                  CredentialStatus
+	RefreshedAt             *time.Time
+	Profiles                []*ProfileSummary
+	ProfileSnapshotComplete bool
+	ProfileRevision         uint64
+	ProfileObservedRevision uint64
 }
 
 type StatusUsecase struct {
 	credentials   biz.CredentialRepository
+	profiles      biz.ProfileRepository
 	hoyoClient    platformmihomo.Client
 	encryptionKey []byte
 }
 
 func NewStatusUsecase(
 	credentials biz.CredentialRepository,
+	profiles biz.ProfileRepository,
 	hoyoClient platformmihomo.Client,
 	encryptionKey []byte,
 ) *StatusUsecase {
 	return &StatusUsecase{
 		credentials:   credentials,
+		profiles:      profiles,
 		hoyoClient:    hoyoClient,
 		encryptionKey: encryptionKey,
 	}
@@ -71,22 +78,116 @@ func (uc *StatusUsecase) ValidateCredential(ctx context.Context, accountKey stri
 	return &ValidateCredentialOutput{Status: status, ErrorCode: errCode}, nil
 }
 
-// RefreshCredential performs version 1 credential revalidation.
-// It does not rotate or replace credential material; it validates the stored
-// credential blob, updates status metadata, and records LastRefreshedAt when
-// validation succeeds.
 func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey string) (*RefreshCredentialOutput, error) {
 	credential, err := uc.getCredential(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
-
-	status, _, err := uc.revalidate(ctx, credential, true)
+	cookieBundleJSON, err := internalcrypto.DecryptString(uc.encryptionKey, credential.CredentialBlob)
 	if err != nil {
 		return nil, err
 	}
+	existingProfiles, err := uc.profiles.ListByAccountKey(ctx, accountKey)
+	if err != nil {
+		return nil, err
+	}
+	accountID, region, discoveredProfiles, validationErr := uc.hoyoClient.ValidateAndDiscover(ctx, cookieBundleJSON, credential.Region)
+	now := time.Now().UTC()
+	credential.LastValidatedAt = &now
+	if validationErr != nil {
+		credential.Status = classifyCredentialStatus(validationErr)
+		credential.ProfileSnapshotComplete = false
+		credential.ProfileRevision = credential.Generation
+		if err := uc.credentials.Save(ctx, credential); err != nil {
+			return nil, err
+		}
+		return &RefreshCredentialOutput{
+			Status:                  credentialStatusFromStorage(credential.Status),
+			Profiles:                profileSummariesFromProfiles(existingProfiles),
+			ProfileSnapshotComplete: false,
+			ProfileRevision:         credential.ProfileRevision,
+			ProfileObservedRevision: credential.ProfileObservedRevision,
+		}, nil
+	}
+	if credential.AccountID != "" && credential.AccountID != accountID {
+		return nil, errors.New("discovered account does not match credential")
+	}
 
-	return &RefreshCredentialOutput{Status: status, RefreshedAt: credential.LastRefreshedAt}, nil
+	previousPrimary := primaryProfileIdentity(existingProfiles)
+	if err := uc.profiles.DeleteByAccountKey(ctx, accountKey); err != nil {
+		return nil, err
+	}
+	refreshedProfiles := make([]*ProfileSummary, 0, len(discoveredProfiles))
+	primaryIndex := refreshedPrimaryIndex(discoveredProfiles, previousPrimary)
+	for index, discovered := range discoveredProfiles {
+		profile := &biz.Profile{
+			BindingRef:   credential.BindingRef,
+			AccountKey:   accountKey,
+			ProfileRef:   FormatProfileRef(accountKey, discovered.GameBiz, discovered.Region, discovered.PlayerID),
+			GameBiz:      discovered.GameBiz,
+			Region:       discovered.Region,
+			PlayerID:     discovered.PlayerID,
+			Nickname:     discovered.Nickname,
+			Level:        int(discovered.Level),
+			IsDefault:    index == primaryIndex,
+			DiscoveredAt: now,
+		}
+		if err := uc.profiles.Save(ctx, profile); err != nil {
+			return nil, err
+		}
+		refreshedProfiles = append(refreshedProfiles, toProfileSummary(profile))
+	}
+
+	credential.AccountID = accountID
+	credential.Region = region
+	credential.Status = "active"
+	credential.LastRefreshedAt = &now
+	credential.ProfileSnapshotComplete = true
+	credential.ProfileRevision = credential.Generation
+	credential.ProfileObservedRevision = credential.Generation
+	if err := uc.credentials.Save(ctx, credential); err != nil {
+		return nil, err
+	}
+
+	return &RefreshCredentialOutput{
+		Status:                  CredentialStatusActive,
+		RefreshedAt:             credential.LastRefreshedAt,
+		Profiles:                refreshedProfiles,
+		ProfileSnapshotComplete: true,
+		ProfileRevision:         credential.ProfileRevision,
+		ProfileObservedRevision: credential.ProfileObservedRevision,
+	}, nil
+}
+
+func primaryProfileIdentity(profiles []*biz.Profile) *biz.ProfileIdentity {
+	for _, profile := range profiles {
+		if profile.IsDefault {
+			return &biz.ProfileIdentity{PlayerID: profile.PlayerID, Region: profile.Region}
+		}
+	}
+	return nil
+}
+
+func refreshedPrimaryIndex(profiles []platformmihomo.DiscoveredProfile, previous *biz.ProfileIdentity) int {
+	if len(profiles) == 0 {
+		return -1
+	}
+	if previous != nil {
+		for index, profile := range profiles {
+			if profile.PlayerID == previous.PlayerID && profile.Region == previous.Region {
+				return index
+			}
+		}
+	}
+	return 0
+}
+
+func profileSummariesFromProfiles(profiles []*biz.Profile) []*ProfileSummary {
+	summaries := make([]*ProfileSummary, 0, len(profiles))
+	for _, profile := range profiles {
+		summaries = append(summaries, toProfileSummary(profile))
+	}
+	return summaries
 }
 
 func (uc *StatusUsecase) getCredential(ctx context.Context, accountKey string) (*biz.Credential, error) {

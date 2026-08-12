@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"platform-mihomo-service/internal/data"
+	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/service"
 	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
 	"platform-mihomo-service/internal/usecase"
@@ -69,8 +70,9 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, profiles.GetSnapshot().GetComplete())
 	require.Equal(t, uint64(1), profiles.GetSnapshot().GetRevision())
-	require.Len(t, profiles.GetSnapshot().GetProfiles(), 1)
+	require.Len(t, profiles.GetSnapshot().GetProfiles(), 2)
 	profileRef := profiles.GetSnapshot().GetProfiles()[0].GetProfileRef()
+	secondProfileRef := profiles.GetSnapshot().GetProfiles()[1].GetProfileRef()
 	require.NotEmpty(t, profileRef)
 	primary, err := runtime.GetPrimaryProfile(
 		ticketContext(t, accountKey, "mihomo.profile.read"),
@@ -78,6 +80,32 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, profileRef, primary.GetProfile().GetProfileRef())
+	primaryOperation := primaryProfileOperationRef("primary-op", 1, secondProfileRef, 1)
+	selected, err := control.SetPrimaryProfile(
+		ticketContextForOperation(t, accountKey, platformaction.MihomoProfilePrimarySet, contractticket.TypeControl, primaryOperation.GetOperationId(), primaryOperation.GetPreGeneration()),
+		&platformv2.SetPrimaryProfileRequest{Operation: primaryOperation, AccountKey: accountKey, ProfileRef: secondProfileRef, ExpectedProfileRevision: 1},
+	)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), selected.GetResult().GetProfileSnapshot().GetRevision())
+	require.Equal(t, uint64(2), selected.GetResult().GetProfileSnapshot().GetObservedRevision())
+	primary, err = runtime.GetPrimaryProfile(
+		ticketContext(t, accountKey, "mihomo.profile.read"),
+		&mihomov2.GetPrimaryProfileRequest{Resource: bindingResource(accountKey)},
+	)
+	require.NoError(t, err)
+	require.Equal(t, secondProfileRef, primary.GetProfile().GetProfileRef())
+	missingPrimaryOperation := primaryProfileOperationRef("missing-primary-op", 1, "profile-missing", 2)
+	_, err = control.SetPrimaryProfile(
+		ticketContextForOperation(t, accountKey, platformaction.MihomoProfilePrimarySet, contractticket.TypeControl, missingPrimaryOperation.GetOperationId(), missingPrimaryOperation.GetPreGeneration()),
+		&platformv2.SetPrimaryProfileRequest{Operation: missingPrimaryOperation, AccountKey: accountKey, ProfileRef: "profile-missing", ExpectedProfileRevision: 2},
+	)
+	require.Equal(t, codes.NotFound, status.Code(err))
+	profilesAfterRejectedPrimary, err := runtime.ListProfiles(
+		ticketContext(t, accountKey, platformaction.MihomoProfileRead),
+		&mihomov2.ListProfilesRequest{Resource: bindingResource(accountKey)},
+	)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), profilesAfterRejectedPrimary.GetSnapshot().GetRevision())
 	validated, err := runtime.ValidateCredential(
 		ticketContext(t, accountKey, "mihomo.credential.validate"),
 		&mihomov2.ValidateCredentialRequest{Resource: bindingResource(accountKey)},
@@ -180,15 +208,15 @@ func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, refreshed.GetResult().GetState())
-	require.False(t, refreshed.GetResult().GetProfileSnapshot().GetComplete())
-	partialState, err := control.GetBindingState(
+	require.True(t, refreshed.GetResult().GetProfileSnapshot().GetComplete())
+	refreshedState, err := control.GetBindingState(
 		ticketContext(t, accountKey, "mihomo.binding.read"),
 		&platformv2.GetBindingStateRequest{BindingRef: integrationBindingRef},
 	)
 	require.NoError(t, err)
-	require.False(t, partialState.GetState().GetProfileSnapshot().GetComplete())
-	require.Equal(t, refreshOperation.GetTargetGeneration(), partialState.GetState().GetProfileSnapshot().GetRevision())
-	require.Equal(t, refreshOperation.GetPreGeneration(), partialState.GetState().GetProfileSnapshot().GetObservedRevision())
+	require.True(t, refreshedState.GetState().GetProfileSnapshot().GetComplete())
+	require.Equal(t, refreshOperation.GetTargetGeneration(), refreshedState.GetState().GetProfileSnapshot().GetRevision())
+	require.Equal(t, refreshOperation.GetTargetGeneration(), refreshedState.GetState().GetProfileSnapshot().GetObservedRevision())
 
 	staleRefresh := operationRef("stale-refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
 	_, err = control.RefreshCredential(
@@ -269,12 +297,15 @@ func newV2ClientsForTest(t *testing.T, stack *integrationStack) (platformv2.Plat
 	artifactRepo := data.NewArtifactRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	managementRepo := data.NewManagementRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	grantRepo := data.NewGrantInvalidationRepo(stack.DB)
-	client := mihomostub.Client{}
+	client := mihomostub.Client{Profiles: []platformmihomo.DiscoveredProfile{
+		{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", Level: 60},
+		{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008612", Nickname: "Aether", Level: 55},
+	}}
 	verifier := data.NewStaticKeyTicketVerifier(integrationTicketIssuer, integrationTicketKeyID, integrationTicketPrivateKey.Public().(ed25519.PublicKey)).
 		WithGrantVersionLookup(grantRepo).
 		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(stack.DB))
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, integrationEncryptionKey, artifactRepo)
-	statusUC := usecase.NewStatusUsecase(credentialRepo, client, integrationEncryptionKey)
+	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, client, integrationEncryptionKey)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
 	managementUC := usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC)
 	controlService := service.NewPlatformControlService(
@@ -282,6 +313,7 @@ func newV2ClientsForTest(t *testing.T, stack *integrationStack) (platformv2.Plat
 		usecase.NewOperationUsecase(data.NewOperationRepo(stack.DB)),
 		bindUC,
 		statusUC,
+		profileUC,
 		managementUC,
 		credentialRepo,
 		data.NewAuthorizationFenceRepo(stack.DB),
@@ -417,6 +449,17 @@ func authorizationFenceOperationRef(id string, generation uint64, consumer strin
 			platformv2.OperationKind_OPERATION_KIND_APPLY_AUTHORIZATION_FENCE.String(), integrationBindingRef, consumer, generation,
 			minimumGrantVersion, minimumOwnerEpoch, minimumConsumerEpoch, minimumEntryEpoch,
 		),
+	}
+}
+
+func primaryProfileOperationRef(id string, generation uint64, profileRef string, expectedRevision uint64) *platformv2.OperationRef {
+	return &platformv2.OperationRef{
+		OperationId:        id,
+		Kind:               platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE,
+		BindingRef:         integrationBindingRef,
+		PreGeneration:      generation,
+		TargetGeneration:   generation,
+		RequestFingerprint: operationid.PrimaryProfileFingerprint(platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE.String(), integrationBindingRef, profileRef, generation, expectedRevision),
 	}
 }
 

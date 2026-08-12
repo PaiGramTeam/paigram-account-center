@@ -50,6 +50,20 @@ func (r *memoryCredentialRepo) AdvanceGeneration(_ context.Context, bindingRef, 
 	return &result, nil
 }
 
+func (r *memoryCredentialRepo) AdvanceProfileRevision(_ context.Context, bindingRef, accountKey string, generation, expectedRevision uint64) (*biz.Credential, error) {
+	credential := r.byAccountKey[accountKey]
+	if credential == nil || credential.BindingRef != bindingRef || credential.Generation != generation || !credential.ProfileSnapshotComplete || credential.ProfileRevision != expectedRevision || credential.ProfileObservedRevision != expectedRevision {
+		return nil, biz.ErrCredentialGenerationConflict
+	}
+	copy := *credential
+	copy.ProfileRevision++
+	copy.ProfileObservedRevision++
+	r.byAccountKey[accountKey] = &copy
+	r.byBindingRef[bindingRef] = &copy
+	result := copy
+	return &result, nil
+}
+
 func (r *memoryCredentialRepo) SetProfileSnapshotState(_ context.Context, bindingRef string, complete bool, revision, observedRevision uint64) error {
 	credential := r.byBindingRef[bindingRef]
 	if credential == nil {

@@ -24,6 +24,7 @@ type platformBindingRouteStub struct {
 	authorizationFenceErr     error
 	lastBind                  *platformv2.BindCredentialRequest
 	lastReplace               *platformv2.ReplaceCredentialRequest
+	lastPrimary               *platformv2.SetPrimaryProfileRequest
 	deleteRequests            []*platformv2.DeleteCredentialRequest
 }
 
@@ -73,6 +74,27 @@ func (s *platformBindingRouteStub) ReplaceCredential(_ context.Context, req *pla
 
 func (s *platformBindingRouteStub) RefreshCredential(_ context.Context, req *platformv2.RefreshCredentialRequest) (*platformv2.RefreshCredentialResponse, error) {
 	return &platformv2.RefreshCredentialResponse{Result: operationResultForRequest(routeSummaryToOperationResult(s.credentialMutationSummary), req.GetOperation())}, nil
+}
+
+func (s *platformBindingRouteStub) SetPrimaryProfile(_ context.Context, req *platformv2.SetPrimaryProfileRequest) (*platformv2.SetPrimaryProfileResponse, error) {
+	s.lastPrimary = req
+	if s.credentialMutationErr != nil {
+		return nil, s.credentialMutationErr
+	}
+	state := routeSummaryToBindingState(s.summaryResponse)
+	if state == nil {
+		return &platformv2.SetPrimaryProfileResponse{}, nil
+	}
+	for _, profile := range state.GetProfileSnapshot().GetProfiles() {
+		profile.IsDefault = profile.GetProfileRef() == req.GetProfileRef()
+	}
+	state.ProfileSnapshot.Revision = req.GetExpectedProfileRevision() + 1
+	state.ProfileSnapshot.ObservedRevision = req.GetExpectedProfileRevision() + 1
+	result := &platformv2.OperationResult{
+		AccountKey: state.GetAccountKey(), CredentialStatus: state.GetCredentialStatus(), ProfileSnapshot: state.GetProfileSnapshot(),
+		LastValidatedAt: state.GetLastValidatedAt(), LastRefreshedAt: state.GetLastRefreshedAt(),
+	}
+	return &platformv2.SetPrimaryProfileResponse{Result: operationResultForRequest(result, req.GetOperation())}, nil
 }
 
 func routeSummaryToOperationResult(summary *routeCredentialSummary) *platformv2.OperationResult {

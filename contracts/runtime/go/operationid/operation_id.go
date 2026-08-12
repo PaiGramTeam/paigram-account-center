@@ -33,6 +33,19 @@ func AuthorizationFenceFingerprint(kind, bindingRef, consumer string, generation
 	return hex.EncodeToString(digest.Sum(nil))
 }
 
+func PrimaryProfileFingerprint(kind, bindingRef, profileRef string, generation, expectedRevision uint64) string {
+	digest := sha256.New()
+	writeString(digest, kind)
+	writeString(digest, bindingRef)
+	writeString(digest, profileRef)
+	for _, value := range []uint64{generation, expectedRevision} {
+		var encoded [8]byte
+		binary.BigEndian.PutUint64(encoded[:], value)
+		_, _ = digest.Write(encoded[:])
+	}
+	return hex.EncodeToString(digest.Sum(nil))
+}
+
 func NewID() (string, error) {
 	var value [18]byte
 	if _, err := rand.Read(value[:]); err != nil {

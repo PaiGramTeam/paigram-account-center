@@ -59,6 +59,11 @@ class PlatformControlServiceStub:
                 request_serializer=platform_dot_v2_dot_control__pb2.ApplyAuthorizationFenceRequest.SerializeToString,
                 response_deserializer=platform_dot_v2_dot_control__pb2.ApplyAuthorizationFenceResponse.FromString,
                 _registered_method=True)
+        self.SetPrimaryProfile = channel.unary_unary(
+                '/paigram.platform.v2.PlatformControlService/SetPrimaryProfile',
+                request_serializer=platform_dot_v2_dot_control__pb2.SetPrimaryProfileRequest.SerializeToString,
+                response_deserializer=platform_dot_v2_dot_control__pb2.SetPrimaryProfileResponse.FromString,
+                _registered_method=True)
         self.GetOperation = channel.unary_unary(
                 '/paigram.platform.v2.PlatformControlService/GetOperation',
                 request_serializer=platform_dot_v2_dot_control__pb2.GetOperationRequest.SerializeToString,
@@ -109,6 +114,12 @@ class PlatformControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SetPrimaryProfile(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetOperation(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -154,6 +165,11 @@ def add_PlatformControlServiceServicer_to_server(servicer, server):
                     servicer.ApplyAuthorizationFence,
                     request_deserializer=platform_dot_v2_dot_control__pb2.ApplyAuthorizationFenceRequest.FromString,
                     response_serializer=platform_dot_v2_dot_control__pb2.ApplyAuthorizationFenceResponse.SerializeToString,
+            ),
+            'SetPrimaryProfile': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetPrimaryProfile,
+                    request_deserializer=platform_dot_v2_dot_control__pb2.SetPrimaryProfileRequest.FromString,
+                    response_serializer=platform_dot_v2_dot_control__pb2.SetPrimaryProfileResponse.SerializeToString,
             ),
             'GetOperation': grpc.unary_unary_rpc_method_handler(
                     servicer.GetOperation,
@@ -306,6 +322,33 @@ class PlatformControlService:
             '/paigram.platform.v2.PlatformControlService/ApplyAuthorizationFence',
             platform_dot_v2_dot_control__pb2.ApplyAuthorizationFenceRequest.SerializeToString,
             platform_dot_v2_dot_control__pb2.ApplyAuthorizationFenceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetPrimaryProfile(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v2.PlatformControlService/SetPrimaryProfile',
+            platform_dot_v2_dot_control__pb2.SetPrimaryProfileRequest.SerializeToString,
+            platform_dot_v2_dot_control__pb2.SetPrimaryProfileResponse.FromString,
             options,
             channel_credentials,
             insecure,

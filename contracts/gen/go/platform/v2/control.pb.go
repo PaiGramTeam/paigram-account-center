@@ -541,6 +541,118 @@ func (x *ApplyAuthorizationFenceResponse) GetResult() *OperationResult {
 	return nil
 }
 
+type SetPrimaryProfileRequest struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Operation               *OperationRef          `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	AccountKey              string                 `protobuf:"bytes,2,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	ProfileRef              string                 `protobuf:"bytes,3,opt,name=profile_ref,json=profileRef,proto3" json:"profile_ref,omitempty"`
+	ExpectedProfileRevision uint64                 `protobuf:"varint,4,opt,name=expected_profile_revision,json=expectedProfileRevision,proto3" json:"expected_profile_revision,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *SetPrimaryProfileRequest) Reset() {
+	*x = SetPrimaryProfileRequest{}
+	mi := &file_platform_v2_control_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetPrimaryProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetPrimaryProfileRequest) ProtoMessage() {}
+
+func (x *SetPrimaryProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v2_control_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetPrimaryProfileRequest.ProtoReflect.Descriptor instead.
+func (*SetPrimaryProfileRequest) Descriptor() ([]byte, []int) {
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SetPrimaryProfileRequest) GetOperation() *OperationRef {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *SetPrimaryProfileRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SetPrimaryProfileRequest) GetProfileRef() string {
+	if x != nil {
+		return x.ProfileRef
+	}
+	return ""
+}
+
+func (x *SetPrimaryProfileRequest) GetExpectedProfileRevision() uint64 {
+	if x != nil {
+		return x.ExpectedProfileRevision
+	}
+	return 0
+}
+
+type SetPrimaryProfileResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *OperationResult       `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetPrimaryProfileResponse) Reset() {
+	*x = SetPrimaryProfileResponse{}
+	mi := &file_platform_v2_control_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetPrimaryProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetPrimaryProfileResponse) ProtoMessage() {}
+
+func (x *SetPrimaryProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v2_control_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetPrimaryProfileResponse.ProtoReflect.Descriptor instead.
+func (*SetPrimaryProfileResponse) Descriptor() ([]byte, []int) {
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SetPrimaryProfileResponse) GetResult() *OperationResult {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
 type GetOperationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OperationId   string                 `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
@@ -550,7 +662,7 @@ type GetOperationRequest struct {
 
 func (x *GetOperationRequest) Reset() {
 	*x = GetOperationRequest{}
-	mi := &file_platform_v2_control_proto_msgTypes[10]
+	mi := &file_platform_v2_control_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -562,7 +674,7 @@ func (x *GetOperationRequest) String() string {
 func (*GetOperationRequest) ProtoMessage() {}
 
 func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v2_control_proto_msgTypes[10]
+	mi := &file_platform_v2_control_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -575,7 +687,7 @@ func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetOperationRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v2_control_proto_rawDescGZIP(), []int{10}
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetOperationRequest) GetOperationId() string {
@@ -594,7 +706,7 @@ type GetOperationResponse struct {
 
 func (x *GetOperationResponse) Reset() {
 	*x = GetOperationResponse{}
-	mi := &file_platform_v2_control_proto_msgTypes[11]
+	mi := &file_platform_v2_control_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -606,7 +718,7 @@ func (x *GetOperationResponse) String() string {
 func (*GetOperationResponse) ProtoMessage() {}
 
 func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v2_control_proto_msgTypes[11]
+	mi := &file_platform_v2_control_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -619,7 +731,7 @@ func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationResponse.ProtoReflect.Descriptor instead.
 func (*GetOperationResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v2_control_proto_rawDescGZIP(), []int{11}
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GetOperationResponse) GetResult() *OperationResult {
@@ -638,7 +750,7 @@ type ResolveOperationRequest struct {
 
 func (x *ResolveOperationRequest) Reset() {
 	*x = ResolveOperationRequest{}
-	mi := &file_platform_v2_control_proto_msgTypes[12]
+	mi := &file_platform_v2_control_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -650,7 +762,7 @@ func (x *ResolveOperationRequest) String() string {
 func (*ResolveOperationRequest) ProtoMessage() {}
 
 func (x *ResolveOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v2_control_proto_msgTypes[12]
+	mi := &file_platform_v2_control_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -663,7 +775,7 @@ func (x *ResolveOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOperationRequest.ProtoReflect.Descriptor instead.
 func (*ResolveOperationRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v2_control_proto_rawDescGZIP(), []int{12}
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ResolveOperationRequest) GetOperation() *OperationRef {
@@ -682,7 +794,7 @@ type ResolveOperationResponse struct {
 
 func (x *ResolveOperationResponse) Reset() {
 	*x = ResolveOperationResponse{}
-	mi := &file_platform_v2_control_proto_msgTypes[13]
+	mi := &file_platform_v2_control_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -694,7 +806,7 @@ func (x *ResolveOperationResponse) String() string {
 func (*ResolveOperationResponse) ProtoMessage() {}
 
 func (x *ResolveOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v2_control_proto_msgTypes[13]
+	mi := &file_platform_v2_control_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -707,7 +819,7 @@ func (x *ResolveOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveOperationResponse.ProtoReflect.Descriptor instead.
 func (*ResolveOperationResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v2_control_proto_rawDescGZIP(), []int{13}
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResolveOperationResponse) GetResult() *OperationResult {
@@ -726,7 +838,7 @@ type GetBindingStateRequest struct {
 
 func (x *GetBindingStateRequest) Reset() {
 	*x = GetBindingStateRequest{}
-	mi := &file_platform_v2_control_proto_msgTypes[14]
+	mi := &file_platform_v2_control_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +850,7 @@ func (x *GetBindingStateRequest) String() string {
 func (*GetBindingStateRequest) ProtoMessage() {}
 
 func (x *GetBindingStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v2_control_proto_msgTypes[14]
+	mi := &file_platform_v2_control_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,7 +863,7 @@ func (x *GetBindingStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBindingStateRequest.ProtoReflect.Descriptor instead.
 func (*GetBindingStateRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v2_control_proto_rawDescGZIP(), []int{14}
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetBindingStateRequest) GetBindingRef() string {
@@ -770,7 +882,7 @@ type GetBindingStateResponse struct {
 
 func (x *GetBindingStateResponse) Reset() {
 	*x = GetBindingStateResponse{}
-	mi := &file_platform_v2_control_proto_msgTypes[15]
+	mi := &file_platform_v2_control_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -782,7 +894,7 @@ func (x *GetBindingStateResponse) String() string {
 func (*GetBindingStateResponse) ProtoMessage() {}
 
 func (x *GetBindingStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v2_control_proto_msgTypes[15]
+	mi := &file_platform_v2_control_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -795,7 +907,7 @@ func (x *GetBindingStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetBindingStateResponse.ProtoReflect.Descriptor instead.
 func (*GetBindingStateResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v2_control_proto_rawDescGZIP(), []int{15}
+	return file_platform_v2_control_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetBindingStateResponse) GetState() *BindingState {
@@ -842,6 +954,15 @@ const file_platform_v2_control_proto_rawDesc = "" +
 	"\x16minimum_consumer_epoch\x18\x05 \x01(\x04R\x14minimumConsumerEpoch\x12.\n" +
 	"\x13minimum_entry_epoch\x18\x06 \x01(\x04R\x11minimumEntryEpoch\"_\n" +
 	"\x1fApplyAuthorizationFenceResponse\x12<\n" +
+	"\x06result\x18\x01 \x01(\v2$.paigram.platform.v2.OperationResultR\x06result\"\xd9\x01\n" +
+	"\x18SetPrimaryProfileRequest\x12?\n" +
+	"\toperation\x18\x01 \x01(\v2!.paigram.platform.v2.OperationRefR\toperation\x12\x1f\n" +
+	"\vaccount_key\x18\x02 \x01(\tR\n" +
+	"accountKey\x12\x1f\n" +
+	"\vprofile_ref\x18\x03 \x01(\tR\n" +
+	"profileRef\x12:\n" +
+	"\x19expected_profile_revision\x18\x04 \x01(\x04R\x17expectedProfileRevision\"Y\n" +
+	"\x19SetPrimaryProfileResponse\x12<\n" +
 	"\x06result\x18\x01 \x01(\v2$.paigram.platform.v2.OperationResultR\x06result\"8\n" +
 	"\x13GetOperationRequest\x12!\n" +
 	"\foperation_id\x18\x01 \x01(\tR\voperationId\"T\n" +
@@ -855,13 +976,14 @@ const file_platform_v2_control_proto_rawDesc = "" +
 	"\vbinding_ref\x18\x01 \x01(\tR\n" +
 	"bindingRef\"R\n" +
 	"\x17GetBindingStateResponse\x127\n" +
-	"\x05state\x18\x01 \x01(\v2!.paigram.platform.v2.BindingStateR\x05state2\xa7\a\n" +
+	"\x05state\x18\x01 \x01(\v2!.paigram.platform.v2.BindingStateR\x05state2\x9b\b\n" +
 	"\x16PlatformControlService\x12i\n" +
 	"\x0eBindCredential\x12*.paigram.platform.v2.BindCredentialRequest\x1a+.paigram.platform.v2.BindCredentialResponse\x12r\n" +
 	"\x11ReplaceCredential\x12-.paigram.platform.v2.ReplaceCredentialRequest\x1a..paigram.platform.v2.ReplaceCredentialResponse\x12r\n" +
 	"\x11RefreshCredential\x12-.paigram.platform.v2.RefreshCredentialRequest\x1a..paigram.platform.v2.RefreshCredentialResponse\x12o\n" +
 	"\x10DeleteCredential\x12,.paigram.platform.v2.DeleteCredentialRequest\x1a-.paigram.platform.v2.DeleteCredentialResponse\x12\x84\x01\n" +
-	"\x17ApplyAuthorizationFence\x123.paigram.platform.v2.ApplyAuthorizationFenceRequest\x1a4.paigram.platform.v2.ApplyAuthorizationFenceResponse\x12c\n" +
+	"\x17ApplyAuthorizationFence\x123.paigram.platform.v2.ApplyAuthorizationFenceRequest\x1a4.paigram.platform.v2.ApplyAuthorizationFenceResponse\x12r\n" +
+	"\x11SetPrimaryProfile\x12-.paigram.platform.v2.SetPrimaryProfileRequest\x1a..paigram.platform.v2.SetPrimaryProfileResponse\x12c\n" +
 	"\fGetOperation\x12(.paigram.platform.v2.GetOperationRequest\x1a).paigram.platform.v2.GetOperationResponse\x12o\n" +
 	"\x10ResolveOperation\x12,.paigram.platform.v2.ResolveOperationRequest\x1a-.paigram.platform.v2.ResolveOperationResponse\x12l\n" +
 	"\x0fGetBindingState\x12+.paigram.platform.v2.GetBindingStateRequest\x1a,.paigram.platform.v2.GetBindingStateResponseBWZUgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2;platformv2b\x06proto3"
@@ -878,7 +1000,7 @@ func file_platform_v2_control_proto_rawDescGZIP() []byte {
 	return file_platform_v2_control_proto_rawDescData
 }
 
-var file_platform_v2_control_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_platform_v2_control_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_platform_v2_control_proto_goTypes = []any{
 	(*BindCredentialRequest)(nil),           // 0: paigram.platform.v2.BindCredentialRequest
 	(*BindCredentialResponse)(nil),          // 1: paigram.platform.v2.BindCredentialResponse
@@ -890,52 +1012,58 @@ var file_platform_v2_control_proto_goTypes = []any{
 	(*DeleteCredentialResponse)(nil),        // 7: paigram.platform.v2.DeleteCredentialResponse
 	(*ApplyAuthorizationFenceRequest)(nil),  // 8: paigram.platform.v2.ApplyAuthorizationFenceRequest
 	(*ApplyAuthorizationFenceResponse)(nil), // 9: paigram.platform.v2.ApplyAuthorizationFenceResponse
-	(*GetOperationRequest)(nil),             // 10: paigram.platform.v2.GetOperationRequest
-	(*GetOperationResponse)(nil),            // 11: paigram.platform.v2.GetOperationResponse
-	(*ResolveOperationRequest)(nil),         // 12: paigram.platform.v2.ResolveOperationRequest
-	(*ResolveOperationResponse)(nil),        // 13: paigram.platform.v2.ResolveOperationResponse
-	(*GetBindingStateRequest)(nil),          // 14: paigram.platform.v2.GetBindingStateRequest
-	(*GetBindingStateResponse)(nil),         // 15: paigram.platform.v2.GetBindingStateResponse
-	(*OperationRef)(nil),                    // 16: paigram.platform.v2.OperationRef
-	(*OperationResult)(nil),                 // 17: paigram.platform.v2.OperationResult
-	(*BindingState)(nil),                    // 18: paigram.platform.v2.BindingState
+	(*SetPrimaryProfileRequest)(nil),        // 10: paigram.platform.v2.SetPrimaryProfileRequest
+	(*SetPrimaryProfileResponse)(nil),       // 11: paigram.platform.v2.SetPrimaryProfileResponse
+	(*GetOperationRequest)(nil),             // 12: paigram.platform.v2.GetOperationRequest
+	(*GetOperationResponse)(nil),            // 13: paigram.platform.v2.GetOperationResponse
+	(*ResolveOperationRequest)(nil),         // 14: paigram.platform.v2.ResolveOperationRequest
+	(*ResolveOperationResponse)(nil),        // 15: paigram.platform.v2.ResolveOperationResponse
+	(*GetBindingStateRequest)(nil),          // 16: paigram.platform.v2.GetBindingStateRequest
+	(*GetBindingStateResponse)(nil),         // 17: paigram.platform.v2.GetBindingStateResponse
+	(*OperationRef)(nil),                    // 18: paigram.platform.v2.OperationRef
+	(*OperationResult)(nil),                 // 19: paigram.platform.v2.OperationResult
+	(*BindingState)(nil),                    // 20: paigram.platform.v2.BindingState
 }
 var file_platform_v2_control_proto_depIdxs = []int32{
-	16, // 0: paigram.platform.v2.BindCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
-	17, // 1: paigram.platform.v2.BindCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
-	16, // 2: paigram.platform.v2.ReplaceCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
-	17, // 3: paigram.platform.v2.ReplaceCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
-	16, // 4: paigram.platform.v2.RefreshCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
-	17, // 5: paigram.platform.v2.RefreshCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
-	16, // 6: paigram.platform.v2.DeleteCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
-	17, // 7: paigram.platform.v2.DeleteCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
-	16, // 8: paigram.platform.v2.ApplyAuthorizationFenceRequest.operation:type_name -> paigram.platform.v2.OperationRef
-	17, // 9: paigram.platform.v2.ApplyAuthorizationFenceResponse.result:type_name -> paigram.platform.v2.OperationResult
-	17, // 10: paigram.platform.v2.GetOperationResponse.result:type_name -> paigram.platform.v2.OperationResult
-	16, // 11: paigram.platform.v2.ResolveOperationRequest.operation:type_name -> paigram.platform.v2.OperationRef
-	17, // 12: paigram.platform.v2.ResolveOperationResponse.result:type_name -> paigram.platform.v2.OperationResult
-	18, // 13: paigram.platform.v2.GetBindingStateResponse.state:type_name -> paigram.platform.v2.BindingState
-	0,  // 14: paigram.platform.v2.PlatformControlService.BindCredential:input_type -> paigram.platform.v2.BindCredentialRequest
-	2,  // 15: paigram.platform.v2.PlatformControlService.ReplaceCredential:input_type -> paigram.platform.v2.ReplaceCredentialRequest
-	4,  // 16: paigram.platform.v2.PlatformControlService.RefreshCredential:input_type -> paigram.platform.v2.RefreshCredentialRequest
-	6,  // 17: paigram.platform.v2.PlatformControlService.DeleteCredential:input_type -> paigram.platform.v2.DeleteCredentialRequest
-	8,  // 18: paigram.platform.v2.PlatformControlService.ApplyAuthorizationFence:input_type -> paigram.platform.v2.ApplyAuthorizationFenceRequest
-	10, // 19: paigram.platform.v2.PlatformControlService.GetOperation:input_type -> paigram.platform.v2.GetOperationRequest
-	12, // 20: paigram.platform.v2.PlatformControlService.ResolveOperation:input_type -> paigram.platform.v2.ResolveOperationRequest
-	14, // 21: paigram.platform.v2.PlatformControlService.GetBindingState:input_type -> paigram.platform.v2.GetBindingStateRequest
-	1,  // 22: paigram.platform.v2.PlatformControlService.BindCredential:output_type -> paigram.platform.v2.BindCredentialResponse
-	3,  // 23: paigram.platform.v2.PlatformControlService.ReplaceCredential:output_type -> paigram.platform.v2.ReplaceCredentialResponse
-	5,  // 24: paigram.platform.v2.PlatformControlService.RefreshCredential:output_type -> paigram.platform.v2.RefreshCredentialResponse
-	7,  // 25: paigram.platform.v2.PlatformControlService.DeleteCredential:output_type -> paigram.platform.v2.DeleteCredentialResponse
-	9,  // 26: paigram.platform.v2.PlatformControlService.ApplyAuthorizationFence:output_type -> paigram.platform.v2.ApplyAuthorizationFenceResponse
-	11, // 27: paigram.platform.v2.PlatformControlService.GetOperation:output_type -> paigram.platform.v2.GetOperationResponse
-	13, // 28: paigram.platform.v2.PlatformControlService.ResolveOperation:output_type -> paigram.platform.v2.ResolveOperationResponse
-	15, // 29: paigram.platform.v2.PlatformControlService.GetBindingState:output_type -> paigram.platform.v2.GetBindingStateResponse
-	22, // [22:30] is the sub-list for method output_type
-	14, // [14:22] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	18, // 0: paigram.platform.v2.BindCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 1: paigram.platform.v2.BindCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
+	18, // 2: paigram.platform.v2.ReplaceCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 3: paigram.platform.v2.ReplaceCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
+	18, // 4: paigram.platform.v2.RefreshCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 5: paigram.platform.v2.RefreshCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
+	18, // 6: paigram.platform.v2.DeleteCredentialRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 7: paigram.platform.v2.DeleteCredentialResponse.result:type_name -> paigram.platform.v2.OperationResult
+	18, // 8: paigram.platform.v2.ApplyAuthorizationFenceRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 9: paigram.platform.v2.ApplyAuthorizationFenceResponse.result:type_name -> paigram.platform.v2.OperationResult
+	18, // 10: paigram.platform.v2.SetPrimaryProfileRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 11: paigram.platform.v2.SetPrimaryProfileResponse.result:type_name -> paigram.platform.v2.OperationResult
+	19, // 12: paigram.platform.v2.GetOperationResponse.result:type_name -> paigram.platform.v2.OperationResult
+	18, // 13: paigram.platform.v2.ResolveOperationRequest.operation:type_name -> paigram.platform.v2.OperationRef
+	19, // 14: paigram.platform.v2.ResolveOperationResponse.result:type_name -> paigram.platform.v2.OperationResult
+	20, // 15: paigram.platform.v2.GetBindingStateResponse.state:type_name -> paigram.platform.v2.BindingState
+	0,  // 16: paigram.platform.v2.PlatformControlService.BindCredential:input_type -> paigram.platform.v2.BindCredentialRequest
+	2,  // 17: paigram.platform.v2.PlatformControlService.ReplaceCredential:input_type -> paigram.platform.v2.ReplaceCredentialRequest
+	4,  // 18: paigram.platform.v2.PlatformControlService.RefreshCredential:input_type -> paigram.platform.v2.RefreshCredentialRequest
+	6,  // 19: paigram.platform.v2.PlatformControlService.DeleteCredential:input_type -> paigram.platform.v2.DeleteCredentialRequest
+	8,  // 20: paigram.platform.v2.PlatformControlService.ApplyAuthorizationFence:input_type -> paigram.platform.v2.ApplyAuthorizationFenceRequest
+	10, // 21: paigram.platform.v2.PlatformControlService.SetPrimaryProfile:input_type -> paigram.platform.v2.SetPrimaryProfileRequest
+	12, // 22: paigram.platform.v2.PlatformControlService.GetOperation:input_type -> paigram.platform.v2.GetOperationRequest
+	14, // 23: paigram.platform.v2.PlatformControlService.ResolveOperation:input_type -> paigram.platform.v2.ResolveOperationRequest
+	16, // 24: paigram.platform.v2.PlatformControlService.GetBindingState:input_type -> paigram.platform.v2.GetBindingStateRequest
+	1,  // 25: paigram.platform.v2.PlatformControlService.BindCredential:output_type -> paigram.platform.v2.BindCredentialResponse
+	3,  // 26: paigram.platform.v2.PlatformControlService.ReplaceCredential:output_type -> paigram.platform.v2.ReplaceCredentialResponse
+	5,  // 27: paigram.platform.v2.PlatformControlService.RefreshCredential:output_type -> paigram.platform.v2.RefreshCredentialResponse
+	7,  // 28: paigram.platform.v2.PlatformControlService.DeleteCredential:output_type -> paigram.platform.v2.DeleteCredentialResponse
+	9,  // 29: paigram.platform.v2.PlatformControlService.ApplyAuthorizationFence:output_type -> paigram.platform.v2.ApplyAuthorizationFenceResponse
+	11, // 30: paigram.platform.v2.PlatformControlService.SetPrimaryProfile:output_type -> paigram.platform.v2.SetPrimaryProfileResponse
+	13, // 31: paigram.platform.v2.PlatformControlService.GetOperation:output_type -> paigram.platform.v2.GetOperationResponse
+	15, // 32: paigram.platform.v2.PlatformControlService.ResolveOperation:output_type -> paigram.platform.v2.ResolveOperationResponse
+	17, // 33: paigram.platform.v2.PlatformControlService.GetBindingState:output_type -> paigram.platform.v2.GetBindingStateResponse
+	25, // [25:34] is the sub-list for method output_type
+	16, // [16:25] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_platform_v2_control_proto_init() }
@@ -950,7 +1078,7 @@ func file_platform_v2_control_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_platform_v2_control_proto_rawDesc), len(file_platform_v2_control_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

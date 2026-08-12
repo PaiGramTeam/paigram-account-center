@@ -68,6 +68,27 @@ func TestGRPCGenericCredentialGatewayDeleteCredentialUsesResolvedAccountKey(t *t
 	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
 }
 
+func TestGRPCGenericCredentialGatewaySetPrimaryProfileUsesStableRef(t *testing.T) {
+	stub := &genericCredentialGatewayStub{primaryResponse: &platformv2.SetPrimaryProfileResponse{Result: &platformv2.OperationResult{
+		State: platformv2.OperationState_OPERATION_STATE_SUCCEEDED, AccountKey: "account-101",
+		ProfileSnapshot: &platformv2.ProfileSnapshot{Complete: true, Revision: 8, ObservedRevision: 8},
+	}}}
+	gateway := newTestCredentialGateway(t, stub)
+	binding := &model.PlatformAccountBinding{
+		BindingRef: "binding-101", Generation: 4, ProfileRevision: 7,
+		ExternalAccountKey: sql.NullString{String: "account-101", Valid: true},
+	}
+
+	summary, err := gateway.SetPrimaryProfile(context.Background(), "bufnet", "ticket-123", "op-primary", binding, "profile-stable")
+	require.NoError(t, err)
+	require.Equal(t, "account-101", stub.lastPrimary.GetAccountKey())
+	require.Equal(t, "profile-stable", stub.lastPrimary.GetProfileRef())
+	require.Equal(t, uint64(7), stub.lastPrimary.GetExpectedProfileRevision())
+	requireOperation(t, stub.lastPrimary.GetOperation(), platformv2.OperationKind_OPERATION_KIND_SET_PRIMARY_PROFILE, "binding-101", 4, 4)
+	require.Equal(t, uint64(8), summary.ProfileRevision)
+	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
+}
+
 func TestGRPCGenericCredentialGatewayResolvesOperationWithoutCredentialPayload(t *testing.T) {
 	stub := &genericCredentialGatewayStub{resolveResponse: &platformv2.ResolveOperationResponse{Result: successfulCredentialOperationResult()}}
 	gateway := newTestCredentialGateway(t, stub)
@@ -171,11 +192,13 @@ type genericCredentialGatewayStub struct {
 	bindErr                     error
 	replaceResponse             *platformv2.ReplaceCredentialResponse
 	deleteResponse              *platformv2.DeleteCredentialResponse
+	primaryResponse             *platformv2.SetPrimaryProfileResponse
 	resolveResponse             *platformv2.ResolveOperationResponse
 	bindingStateResponse        *platformv2.GetBindingStateResponse
 	lastBind                    *platformv2.BindCredentialRequest
 	lastReplace                 *platformv2.ReplaceCredentialRequest
 	lastDelete                  *platformv2.DeleteCredentialRequest
+	lastPrimary                 *platformv2.SetPrimaryProfileRequest
 	lastResolve                 *platformv2.ResolveOperationRequest
 	lastBindingState            *platformv2.GetBindingStateRequest
 	lastAuthorization           []string
@@ -213,6 +236,12 @@ func (s *genericCredentialGatewayStub) DeleteCredential(ctx context.Context, req
 	s.captureAuthorization(ctx)
 	s.lastDelete = req
 	return &platformv2.DeleteCredentialResponse{Result: resultForRequestedOperation(s.deleteResponse.GetResult(), req.GetOperation())}, nil
+}
+
+func (s *genericCredentialGatewayStub) SetPrimaryProfile(ctx context.Context, req *platformv2.SetPrimaryProfileRequest) (*platformv2.SetPrimaryProfileResponse, error) {
+	s.captureAuthorization(ctx)
+	s.lastPrimary = req
+	return &platformv2.SetPrimaryProfileResponse{Result: resultForRequestedOperation(s.primaryResponse.GetResult(), req.GetOperation())}, nil
 }
 
 func (s *genericCredentialGatewayStub) ResolveOperation(ctx context.Context, req *platformv2.ResolveOperationRequest) (*platformv2.ResolveOperationResponse, error) {

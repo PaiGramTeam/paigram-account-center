@@ -91,7 +91,7 @@ func TestRefreshCredentialDoesNotMarkRefreshedOnValidationFailure(t *testing.T) 
 		CredentialVersion: "v1",
 		Status:            "active",
 	}
-	uc := NewStatusUsecase(credentialRepo, failingStatusClient{err: &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorExpiredCredential}}, testEncryptionKey)
+	uc := NewStatusUsecase(credentialRepo, newMemoryProfileRepo(), failingStatusClient{err: &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorExpiredCredential}}, testEncryptionKey)
 
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestRefreshCredentialRevalidatesWithoutReplacingCredentialBlob(t *testing.T
 		CredentialVersion: "v1",
 		Status:            "active",
 	}))
-	uc := NewStatusUsecase(credentialRepo, successfulStatusClient{}, testEncryptionKey)
+	uc := NewStatusUsecase(credentialRepo, newMemoryProfileRepo(), successfulStatusClient{}, testEncryptionKey)
 
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
@@ -125,6 +125,74 @@ func TestRefreshCredentialRevalidatesWithoutReplacingCredentialBlob(t *testing.T
 	require.NotNil(t, stored.LastValidatedAt)
 	require.NotNil(t, stored.LastRefreshedAt)
 	require.Equal(t, stored.LastRefreshedAt, resp.RefreshedAt)
+}
+
+func TestRefreshCredentialReturnsAuthoritativeSnapshotAndRepairsMissingPrimary(t *testing.T) {
+	credentialRepo := newMemoryCredentialRepo()
+	profileRepo := newMemoryProfileRepo()
+	encryptedBlob, err := internalcrypto.EncryptString(testEncryptionKey, `{"account_id":"10001","cookie_token":"abc"}`)
+	require.NoError(t, err)
+	require.NoError(t, credentialRepo.Save(context.Background(), &biz.Credential{
+		BindingRef:        "binding-101",
+		AccountKey:        "hoyo_10001",
+		Generation:        4,
+		Platform:          "mihomo",
+		AccountID:         "10001",
+		Region:            "cn_gf01",
+		CredentialBlob:    encryptedBlob,
+		CredentialVersion: "v1",
+		Status:            "active",
+	}))
+	require.NoError(t, profileRepo.Save(context.Background(), &biz.Profile{
+		BindingRef: "binding-101",
+		AccountKey: "hoyo_10001",
+		ProfileRef: "old-primary",
+		GameBiz:    "hk4e_cn",
+		Region:     "cn_gf01",
+		PlayerID:   "deleted-player",
+		Nickname:   "Deleted",
+		IsDefault:  true,
+	}))
+	client := discoveryStatusClient{profiles: []platformmihomo.DiscoveredProfile{
+		{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", Level: 60},
+		{GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008612", Nickname: "Aether", Level: 55},
+	}}
+	uc := NewStatusUsecase(credentialRepo, profileRepo, client, testEncryptionKey)
+
+	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
+	require.NoError(t, err)
+	require.True(t, resp.ProfileSnapshotComplete)
+	require.Equal(t, uint64(4), resp.ProfileRevision)
+	require.Equal(t, uint64(4), resp.ProfileObservedRevision)
+	require.Len(t, resp.Profiles, 2)
+	require.True(t, resp.Profiles[0].IsDefault)
+	require.False(t, resp.Profiles[1].IsDefault)
+	require.Equal(t, "1008611", resp.Profiles[0].PlayerID)
+}
+
+func TestRefreshCredentialReturnsCompleteEmptySnapshot(t *testing.T) {
+	credentialRepo := newMemoryCredentialRepo()
+	profileRepo := newMemoryProfileRepo()
+	encryptedBlob, err := internalcrypto.EncryptString(testEncryptionKey, `{"account_id":"10001","cookie_token":"abc"}`)
+	require.NoError(t, err)
+	require.NoError(t, credentialRepo.Save(context.Background(), &biz.Credential{
+		BindingRef: "binding-101", AccountKey: "hoyo_10001", Generation: 5,
+		Platform: "mihomo", AccountID: "10001", Region: "cn_gf01", CredentialBlob: encryptedBlob, CredentialVersion: "v1", Status: "active",
+	}))
+	require.NoError(t, profileRepo.Save(context.Background(), &biz.Profile{
+		BindingRef: "binding-101", AccountKey: "hoyo_10001", ProfileRef: "old-primary", Region: "cn_gf01", PlayerID: "deleted-player", IsDefault: true,
+	}))
+	uc := NewStatusUsecase(credentialRepo, profileRepo, discoveryStatusClient{}, testEncryptionKey)
+
+	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
+	require.NoError(t, err)
+	require.True(t, resp.ProfileSnapshotComplete)
+	require.Empty(t, resp.Profiles)
+	require.Equal(t, uint64(5), resp.ProfileRevision)
+	require.Equal(t, uint64(5), resp.ProfileObservedRevision)
+	primary, err := NewProfileUsecase(profileRepo).GetPrimaryProfile(context.Background(), "hoyo_10001")
+	require.NoError(t, err)
+	require.Nil(t, primary)
 }
 
 func TestValidateCredentialMapsChallengeRequiredStatus(t *testing.T) {
@@ -140,7 +208,7 @@ func TestValidateCredentialMapsChallengeRequiredStatus(t *testing.T) {
 		CredentialVersion: "v1",
 		Status:            "active",
 	}
-	uc := NewStatusUsecase(credentialRepo, failingStatusClient{err: &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorChallengeRequired}}, testEncryptionKey)
+	uc := NewStatusUsecase(credentialRepo, newMemoryProfileRepo(), failingStatusClient{err: &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorChallengeRequired}}, testEncryptionKey)
 
 	resp, err := uc.ValidateCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
@@ -153,6 +221,18 @@ type failingStatusClient struct {
 }
 
 type successfulStatusClient struct{}
+
+type discoveryStatusClient struct {
+	profiles []platformmihomo.DiscoveredProfile
+}
+
+func (c discoveryStatusClient) ValidateAndDiscover(_ context.Context, _ string, _ string) (string, string, []platformmihomo.DiscoveredProfile, error) {
+	return "10001", "cn_gf01", c.profiles, nil
+}
+
+func (discoveryStatusClient) IssueAuthKey(_ context.Context, _ string, _ string) (string, int64, error) {
+	return "", 0, errors.New("not implemented")
+}
 
 func (successfulStatusClient) ValidateAndDiscover(_ context.Context, _ string, _ string) (string, string, []platformmihomo.DiscoveredProfile, error) {
 	return "10001", "cn_gf01", []platformmihomo.DiscoveredProfile{{
