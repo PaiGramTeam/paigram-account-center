@@ -236,7 +236,7 @@ func TestGrantServiceRevokeGrantIsIdempotentWhenGrantDoesNotExist(t *testing.T) 
 
 	var count int64
 	require.NoError(t, db.Model(&model.ConsumerGrant{}).Where("binding_id = ? AND consumer = ?", binding.ID, ConsumerPaiGramBot).Count(&count).Error)
-	assert.Zero(t, count)
+	assert.Equal(t, int64(1), count)
 }
 
 func TestGrantServiceRevokeGrantIncrementsTicketVersion(t *testing.T) {

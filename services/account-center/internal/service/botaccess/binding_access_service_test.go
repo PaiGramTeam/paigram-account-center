@@ -208,42 +208,6 @@ func TestBindingAccessService_GetGrantedBindingForConsumerRejectsProfileFromOthe
 	assert.Nil(t, resolvedGrant)
 }
 
-func TestBindingAccessService_GetGrantedScopesForConsumerReadsGrantScopes(t *testing.T) {
-	db := setupBotAccessServiceTestDB(t)
-	service := &BindingAccessService{db: db}
-
-	identity := seedBotIdentity(t, db, "bot-paigram", "external-grant-scopes", 34)
-	binding := model.PlatformAccountBinding{
-		OwnerUserID:        identity.UserID,
-		Platform:           "telegram",
-		ExternalAccountKey: sql.NullString{String: "acct-scope", Valid: true},
-		PlatformServiceKey: "tg-main",
-		DisplayName:        "Scoped",
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	require.NoError(t, db.Create(&binding).Error)
-	consumer := "paigram-client"
-	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-		grant := model.ConsumerGrant{
-			BindingID: binding.ID,
-			Consumer:  consumer,
-			Status:    model.ConsumerGrantStatusActive,
-			GrantedAt: time.Now().UTC(),
-		}
-		if err := tx.Create(&grant).Error; err != nil {
-			return err
-		}
-		return tx.Create(&[]model.ConsumerGrantAction{
-			{GrantID: grant.ID, Action: "messages:read"},
-			{GrantID: grant.ID, Action: "messages:write"},
-		}).Error
-	}))
-
-	scopes, err := service.GetGrantedScopesForConsumer(consumer, binding.ID)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"messages:read", "messages:write"}, scopes)
-}
-
 func TestBindingAccessService_ListAccessibleBindingsReturnsEmptyForBotWithoutGrants(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
 	service := &BindingAccessService{db: db}

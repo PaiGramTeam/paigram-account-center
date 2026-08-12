@@ -5,11 +5,13 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
@@ -82,6 +84,7 @@ func TestConsumerGrantActionConstraintSerializesConcurrentDeletes(t *testing.T) 
 	lockHeld = false
 	results := collectCommitResults(commitResults)
 	require.Equal(t, 1, countNilErrors(results), "exactly one deletion must commit")
+	require.Equal(t, []string{"23514"}, failedSQLStates(t, results))
 
 	var actionCount int
 	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM consumer_grant_actions WHERE grant_id = $1`, grantID).Scan(&actionCount))
@@ -95,13 +98,16 @@ func TestGrantServiceSerializesConcurrentActionChanges(t *testing.T) {
 	_, bindingID := insertGrantWithActions(t, ctx, stack, "cn:grant-service-race", "mihomo.credential.read_meta")
 
 	callbackName := fmt.Sprintf("test:grant-read-barrier:%d", time.Now().UnixNano())
-	readArrivals := make(chan struct{}, 2)
+	readArrivals := make(chan struct{}, 8)
 	releaseReads := make(chan struct{})
 	require.NoError(t, stack.DB.Callback().Query().After("gorm:query").Before("gorm:preload").Register(callbackName, func(tx *gorm.DB) {
 		if tx.Statement.Schema == nil || tx.Statement.Schema.Table != "consumer_grants" {
 			return
 		}
-		readArrivals <- struct{}{}
+		select {
+		case readArrivals <- struct{}{}:
+		default:
+		}
 		<-releaseReads
 	}))
 	t.Cleanup(func() { _ = stack.DB.Callback().Query().Remove(callbackName) })
@@ -120,18 +126,7 @@ func TestGrantServiceSerializesConcurrentActionChanges(t *testing.T) {
 		}()
 	}
 
-	arrivals := 0
-	timer := time.NewTimer(250 * time.Millisecond)
-	defer timer.Stop()
-	waiting := true
-	for waiting && arrivals < 2 {
-		select {
-		case <-readArrivals:
-			arrivals++
-		case <-timer.C:
-			waiting = false
-		}
-	}
+	waitForSignals(t, ctx, readArrivals, 2, "concurrent grant reads")
 	close(releaseReads)
 	require.NoError(t, <-results)
 	require.NoError(t, <-results)
@@ -139,6 +134,118 @@ func TestGrantServiceSerializesConcurrentActionChanges(t *testing.T) {
 	var version uint64
 	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT ticket_version FROM consumer_grants WHERE binding_id = $1`, bindingID).Scan(&version))
 	require.Equal(t, uint64(3), version, "both committed mutations must advance the version")
+}
+
+func TestGrantServiceSerializesConcurrentInitialUpserts(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ownerID := insertTestUser(t, ctx, stack.SQLDB)
+	bindingID := insertTestBinding(t, ctx, stack.SQLDB, ownerID, "mihomo", "cn:grant-initial-race")
+
+	readArrivals, releaseReads := installGrantReadBarrier(t, stack, "initial-upsert")
+	type upsertResult struct {
+		created bool
+		err     error
+	}
+	results := make(chan upsertResult, 2)
+	service := serviceplatformbinding.NewGrantService(stack.DB)
+	for _, action := range []string{"mihomo.status.read", "mihomo.profile.read"} {
+		action := action
+		go func() {
+			_, created, err := service.UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+				BindingID: bindingID,
+				Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
+				Actions:   []string{action},
+			})
+			results <- upsertResult{created: created, err: err}
+		}()
+	}
+	waitForSignals(t, ctx, readArrivals, 2, "initial grant reads")
+	close(releaseReads)
+
+	createdCount := 0
+	for range 2 {
+		result := <-results
+		require.NoError(t, result.err)
+		if result.created {
+			createdCount++
+		}
+	}
+	require.Equal(t, 1, createdCount)
+	var version uint64
+	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT ticket_version FROM consumer_grants WHERE binding_id = $1`, bindingID).Scan(&version))
+	require.Equal(t, uint64(2), version)
+}
+
+func TestGrantServiceSerializesMissingRevokeWithInitialUpsert(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ownerID := insertTestUser(t, ctx, stack.SQLDB)
+	bindingID := insertTestBinding(t, ctx, stack.SQLDB, ownerID, "mihomo", "cn:grant-revoke-upsert-race")
+
+	readArrivals, releaseReads := installGrantReadBarrier(t, stack, "revoke-upsert")
+	results := make(chan error, 2)
+	service := serviceplatformbinding.NewGrantService(stack.DB)
+	go func() {
+		_, _, err := service.UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+			BindingID: bindingID,
+			Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
+			Actions:   []string{"mihomo.status.read"},
+		})
+		results <- err
+	}()
+	go func() {
+		_, err := service.RevokeGrant(serviceplatformbinding.RevokeGrantInput{
+			BindingID: bindingID,
+			Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
+		})
+		results <- err
+	}()
+	waitForSignals(t, ctx, readArrivals, 2, "missing revoke and initial upsert reads")
+	close(releaseReads)
+	require.NoError(t, <-results)
+	require.NoError(t, <-results)
+
+	var version uint64
+	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT ticket_version FROM consumer_grants WHERE binding_id = $1`, bindingID).Scan(&version))
+	require.Equal(t, uint64(2), version, "both serialized operations must be reflected")
+}
+
+func TestGrantServiceDoesNotDeadlockWithDirectActionDelete(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	grantID, bindingID := insertGrantWithActions(t, ctx, stack, "cn:grant-lock-order", "mihomo.authkey.issue", "mihomo.status.read")
+
+	directTx, err := stack.SQLDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = directTx.Rollback() })
+	_, err = directTx.ExecContext(ctx, `DELETE FROM consumer_grant_actions WHERE grant_id = $1 AND action = 'mihomo.authkey.issue'`, grantID)
+	require.NoError(t, err)
+
+	serviceResult := make(chan error, 1)
+	go func() {
+		_, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+			BindingID: bindingID,
+			Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
+			Actions:   []string{"mihomo.profile.read"},
+		})
+		serviceResult <- err
+	}()
+	waitForDatabaseLockWaiter(t, ctx, stack.SQLDB)
+	require.NoError(t, directTx.Commit())
+	select {
+	case err = <-serviceResult:
+		require.NoError(t, err)
+	case <-ctx.Done():
+		t.Fatalf("grant service remained blocked after direct action mutation committed: %v", ctx.Err())
+	}
+
+	var version uint64
+	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT ticket_version FROM consumer_grants WHERE id = $1`, grantID).Scan(&version))
+	require.Equal(t, uint64(2), version)
 }
 
 func TestDeletingBindingCascadesConsumerGrantActions(t *testing.T) {
@@ -253,4 +360,72 @@ func countNilErrors(errors []error) int {
 		}
 	}
 	return count
+}
+
+func failedSQLStates(t *testing.T, transactionErrors []error) []string {
+	t.Helper()
+	states := make([]string, 0, len(transactionErrors))
+	for _, err := range transactionErrors {
+		if err == nil {
+			continue
+		}
+		var postgresError *pgconn.PgError
+		require.True(t, errors.As(err, &postgresError), "expected PostgreSQL error, got %T: %v", err, err)
+		states = append(states, postgresError.Code)
+	}
+	return states
+}
+
+func installGrantReadBarrier(t *testing.T, stack *integrationStack, suffix string) (<-chan struct{}, chan struct{}) {
+	t.Helper()
+	callbackName := fmt.Sprintf("test:grant-read-%s:%d", suffix, time.Now().UnixNano())
+	readArrivals := make(chan struct{}, 8)
+	releaseReads := make(chan struct{})
+	require.NoError(t, stack.DB.Callback().Query().After("gorm:query").Before("gorm:preload").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement.Schema == nil || tx.Statement.Schema.Table != "consumer_grants" {
+			return
+		}
+		select {
+		case readArrivals <- struct{}{}:
+		default:
+		}
+		<-releaseReads
+	}))
+	t.Cleanup(func() { _ = stack.DB.Callback().Query().Remove(callbackName) })
+	return readArrivals, releaseReads
+}
+
+func waitForSignals(t *testing.T, ctx context.Context, signals <-chan struct{}, expected int, description string) {
+	t.Helper()
+	for range expected {
+		select {
+		case <-signals:
+		case <-ctx.Done():
+			t.Fatalf("wait for %s: %v", description, ctx.Err())
+		}
+	}
+}
+
+func waitForDatabaseLockWaiter(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var waiters int
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND wait_event_type = 'Lock'
+		`).Scan(&waiters)
+		require.NoError(t, err)
+		if waiters > 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("wait for database lock contention: %v", ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }

@@ -107,25 +107,6 @@ func (s *BindingAccessService) GetGrantedBindingForConsumer(botID, consumer, ext
 	return identity, &binding, &grant, nil
 }
 
-func (s *BindingAccessService) GetGrantedScopesForConsumer(consumer string, bindingID uint64) ([]string, error) {
-	if consumer == "" {
-		return nil, ErrConsumerNotSupported
-	}
-
-	var grant model.ConsumerGrant
-	if err := s.db.Preload("Actions").Where("binding_id = ? AND consumer = ?", bindingID, consumer).First(&grant).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, ErrConsumerGrantNotFound
-		}
-		return nil, fmt.Errorf("get consumer grant scopes: %w", err)
-	}
-	if grant.Status != model.ConsumerGrantStatusActive || grant.RevokedAt.Valid {
-		return nil, ErrConsumerGrantRevoked
-	}
-
-	return GrantActions(grant), nil
-}
-
 func nullableBindingExternalAccountKey(value sql.NullString) string {
 	if !value.Valid {
 		return ""

@@ -11,7 +11,6 @@ import (
 
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"paigram/internal/model"
 	serviceaudit "paigram/internal/service/audit"
@@ -55,9 +54,9 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 
 	var grant model.ConsumerGrant
 	created := false
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		lookup := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Actions").
-			Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
+	err = runGrantTransaction(s.db, func(tx *gorm.DB) error {
+		created = false
+		lookup := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
 		if lookup.Error != nil {
 			if !errors.Is(lookup.Error, gorm.ErrRecordNotFound) {
 				return lookup.Error
@@ -89,16 +88,16 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 		if grant.TicketVersion == 0 {
 			grant.TicketVersion = 1
 		}
+		if actionsChanged {
+			if err := replaceGrantActions(tx, &grant, actions); err != nil {
+				return err
+			}
+		}
 		grant.GrantedBy = input.GrantedBy
 		grant.GrantedAt = grantedAt
 		grant.RevokedAt = sql.NullTime{}
 		if err := tx.Save(&grant).Error; err != nil {
 			return err
-		}
-		if actionsChanged {
-			if err := replaceGrantActions(tx, &grant, actions); err != nil {
-				return err
-			}
 		}
 		return writeGrantAudit(tx, binding, input.BindingID, input.Consumer, auditActorUserID(input.GrantedBy), true, created)
 	})
@@ -188,21 +187,25 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 	var grant model.ConsumerGrant
 	shouldInvalidate := false
 	minimumGrantVersion := uint64(0)
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Actions").
-			Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
+	err = runGrantTransaction(s.db, func(tx *gorm.DB) error {
+		shouldInvalidate = false
+		minimumGrantVersion = 0
+		if err := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				grant = model.ConsumerGrant{
-					BindingID:         input.BindingID,
-					Consumer:          input.Consumer,
-					Status:            model.ConsumerGrantStatusRevoked,
-					TicketVersion:     1,
-					RevokedAt:         sql.NullTime{Time: revokedAt, Valid: true},
-					LastInvalidatedAt: sql.NullTime{Time: revokedAt, Valid: true},
+					BindingID:     input.BindingID,
+					Consumer:      input.Consumer,
+					Status:        model.ConsumerGrantStatusRevoked,
+					TicketVersion: 1,
+					GrantedAt:     revokedAt,
+					RevokedAt:     sql.NullTime{Time: revokedAt, Valid: true},
+				}
+				if err := tx.Create(&grant).Error; err != nil {
+					return err
 				}
 				shouldInvalidate = true
 				minimumGrantVersion = 1
-				writeGrantAuditBestEffort(tx, binding, input.BindingID, input.Consumer, auditActorUserID(input.ActorUserID), false, true)
+				writeGrantAuditBestEffort(tx, binding, input.BindingID, input.Consumer, auditActorUserID(input.ActorUserID), false, false)
 				return nil
 			}
 
