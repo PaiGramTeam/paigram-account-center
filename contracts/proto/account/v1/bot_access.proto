@@ -27,7 +27,8 @@ message PlatformAccountBinding {
   string platform_account_id = 5;
   string display_name = 6;
   PlatformAccountStatus status = 7;
-  string meta_json = 8;
+  reserved 8;
+  reserved "meta_json";
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
 }
@@ -41,21 +42,6 @@ message ResolveBotUserResponse {
   string bot_id = 2;
   string external_user_id = 3;
   string external_username = 4;
-}
-
-message UpsertPlatformBindingRequest {
-  string external_user_id = 1;
-  string platform = 2;
-  string platform_service_key = 3;
-  string platform_account_id = 4;
-  string display_name = 5;
-  string meta_json = 6;
-  repeated string grant_scopes = 7;
-}
-
-message UpsertPlatformBindingResponse {
-  PlatformAccountBinding binding = 1;
-  bool created = 2;
 }
 
 message ListAccessibleBindingsRequest {

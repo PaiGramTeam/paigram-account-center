@@ -562,7 +562,6 @@ def _binding_from_proto(binding: bot_access_pb2.PlatformAccountBinding) -> Platf
         platform_account_id=binding.platform_account_id,
         display_name=binding.display_name,
         status=_platform_account_status(binding.status),
-        meta_json=binding.meta_json,
         created_at=_datetime_from_timestamp(binding.created_at),
         updated_at=_datetime_from_timestamp(binding.updated_at),
     )

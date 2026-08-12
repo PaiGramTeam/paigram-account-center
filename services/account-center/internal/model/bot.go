@@ -16,16 +16,15 @@ import (
 // columns. Those moved to service_credentials per Path D §2.1; this row
 // is purely an identity anchor for platform-user binding.
 type Bot struct {
-	ID                      string         `gorm:"primaryKey;size:64"            json:"id"`
-	DisplayName             string         `gorm:"column:display_name;size:255;not null" json:"display_name"`
-	Description             string         `gorm:"type:text"                     json:"description"`
-	Type                    string         `gorm:"size:32;not null;default:'OTHER'" json:"type"`
-	Status                  string         `gorm:"size:32;not null;default:'ACTIVE';index" json:"status"`
-	OwnerUserID             uint64         `gorm:"index;not null"                json:"owner_user_id"`
-	AllowLegacyBindingWrite bool           `gorm:"not null;default:false"        json:"allow_legacy_binding_write"`
-	CreatedAt               time.Time      `                                     json:"created_at"`
-	UpdatedAt               time.Time      `                                     json:"updated_at"`
-	DeletedAt               gorm.DeletedAt `gorm:"index"                         json:"-"`
+	ID          string         `gorm:"primaryKey;size:64"            json:"id"`
+	DisplayName string         `gorm:"column:display_name;size:255;not null" json:"display_name"`
+	Description string         `gorm:"type:text"                     json:"description"`
+	Type        string         `gorm:"size:32;not null;default:'OTHER'" json:"type"`
+	Status      string         `gorm:"size:32;not null;default:'ACTIVE';index" json:"status"`
+	OwnerUserID uint64         `gorm:"index;not null"                json:"owner_user_id"`
+	CreatedAt   time.Time      `                                     json:"created_at"`
+	UpdatedAt   time.Time      `                                     json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"                         json:"-"`
 }
 
 // TableName pins the GORM table name to the migration's `bots`.

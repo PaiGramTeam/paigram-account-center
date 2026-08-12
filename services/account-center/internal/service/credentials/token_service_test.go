@@ -39,7 +39,6 @@ func setupCredentialsTestDB(t *testing.T) *gorm.DB {
 		type TEXT NOT NULL,
 		status TEXT NOT NULL,
 		owner_user_id INTEGER NOT NULL,
-		allow_legacy_binding_write BOOLEAN NOT NULL DEFAULT FALSE,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME

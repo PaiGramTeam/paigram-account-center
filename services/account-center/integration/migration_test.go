@@ -44,6 +44,7 @@ func TestMigrationsApplyToFreshPostgreSQL(t *testing.T) {
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "scopes")
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "metadata")
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "last_active_at")
+	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "allow_legacy_binding_write")
 
 	runMigrations(t, stack.SQLDB, stack.DatabaseCfg)
 }

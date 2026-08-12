@@ -36,7 +36,6 @@ class PlatformBinding:
     platform_account_id: str
     display_name: str
     status: PlatformAccountStatus
-    meta_json: str
     created_at: datetime | None
     updated_at: datetime | None
 

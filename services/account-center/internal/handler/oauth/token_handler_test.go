@@ -55,7 +55,6 @@ func newTokenHandlerFixture(t *testing.T) *tokenHandlerFixture {
 		type TEXT NOT NULL,
 		status TEXT NOT NULL,
 		owner_user_id INTEGER NOT NULL,
-		allow_legacy_binding_write INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME,
 		updated_at DATETIME,
 		deleted_at DATETIME
