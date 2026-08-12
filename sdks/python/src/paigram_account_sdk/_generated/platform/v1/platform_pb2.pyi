@@ -79,12 +79,10 @@ class ProfileSummary(_message.Message):
     def __init__(self, id: _Optional[int] = ..., platform_account_id: _Optional[str] = ..., game_biz: _Optional[str] = ..., region: _Optional[str] = ..., player_id: _Optional[str] = ..., nickname: _Optional[str] = ..., level: _Optional[int] = ..., is_default: _Optional[bool] = ...) -> None: ...
 
 class GetCredentialSummaryRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class GetCredentialSummaryResponse(_message.Message):
     __slots__ = ("platform_account_id", "status", "last_validated_at", "last_refreshed_at", "devices", "profiles")
@@ -103,12 +101,10 @@ class GetCredentialSummaryResponse(_message.Message):
     def __init__(self, platform_account_id: _Optional[str] = ..., status: _Optional[_Union[CredentialStatus, str]] = ..., last_validated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., last_refreshed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., devices: _Optional[_Iterable[_Union[DeviceSummary, _Mapping]]] = ..., profiles: _Optional[_Iterable[_Union[ProfileSummary, _Mapping]]] = ...) -> None: ...
 
 class GetCredentialStatusRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class GetCredentialStatusResponse(_message.Message):
     __slots__ = ("status", "last_validated_at")
@@ -119,12 +115,10 @@ class GetCredentialStatusResponse(_message.Message):
     def __init__(self, status: _Optional[_Union[CredentialStatus, str]] = ..., last_validated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class ValidateCredentialRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class ValidateCredentialResponse(_message.Message):
     __slots__ = ("status", "error_code")
@@ -135,12 +129,10 @@ class ValidateCredentialResponse(_message.Message):
     def __init__(self, status: _Optional[_Union[CredentialStatus, str]] = ..., error_code: _Optional[str] = ...) -> None: ...
 
 class ListProfilesRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class ListProfilesResponse(_message.Message):
     __slots__ = ("profiles",)
@@ -149,12 +141,10 @@ class ListProfilesResponse(_message.Message):
     def __init__(self, profiles: _Optional[_Iterable[_Union[ProfileSummary, _Mapping]]] = ...) -> None: ...
 
 class GetPrimaryProfileRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class GetPrimaryProfileResponse(_message.Message):
     __slots__ = ("profile",)
@@ -162,15 +152,27 @@ class GetPrimaryProfileResponse(_message.Message):
     profile: ProfileSummary
     def __init__(self, profile: _Optional[_Union[ProfileSummary, _Mapping]] = ...) -> None: ...
 
-class GetAuthKeyRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id", "player_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+class ConfirmPrimaryProfileRequest(_message.Message):
+    __slots__ = ("platform_account_id", "player_id")
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     PLAYER_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
     player_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ..., player_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ..., player_id: _Optional[str] = ...) -> None: ...
+
+class ConfirmPrimaryProfileResponse(_message.Message):
+    __slots__ = ("profile",)
+    PROFILE_FIELD_NUMBER: _ClassVar[int]
+    profile: ProfileSummary
+    def __init__(self, profile: _Optional[_Union[ProfileSummary, _Mapping]] = ...) -> None: ...
+
+class GetAuthKeyRequest(_message.Message):
+    __slots__ = ("platform_account_id", "player_id")
+    PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    PLAYER_ID_FIELD_NUMBER: _ClassVar[int]
+    platform_account_id: str
+    player_id: str
+    def __init__(self, platform_account_id: _Optional[str] = ..., player_id: _Optional[str] = ...) -> None: ...
 
 class GetAuthKeyResponse(_message.Message):
     __slots__ = ("authkey", "expires_at")
@@ -191,14 +193,12 @@ class DeviceInfo(_message.Message):
     def __init__(self, device_id: _Optional[str] = ..., device_fp: _Optional[str] = ..., device_name: _Optional[str] = ...) -> None: ...
 
 class UpsertDeviceRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id", "device")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id", "device")
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     DEVICE_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
     device: DeviceInfo
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ..., device: _Optional[_Union[DeviceInfo, _Mapping]] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ..., device: _Optional[_Union[DeviceInfo, _Mapping]] = ...) -> None: ...
 
 class UpsertDeviceResponse(_message.Message):
     __slots__ = ("success",)
@@ -207,14 +207,12 @@ class UpsertDeviceResponse(_message.Message):
     def __init__(self, success: _Optional[bool] = ...) -> None: ...
 
 class PutCredentialRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id", "credential_payload_json")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id", "credential_payload_json")
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     CREDENTIAL_PAYLOAD_JSON_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
     credential_payload_json: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ..., credential_payload_json: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ..., credential_payload_json: _Optional[str] = ...) -> None: ...
 
 class PutCredentialResponse(_message.Message):
     __slots__ = ("summary",)
@@ -223,12 +221,10 @@ class PutCredentialResponse(_message.Message):
     def __init__(self, summary: _Optional[_Union[GetCredentialSummaryResponse, _Mapping]] = ...) -> None: ...
 
 class RefreshCredentialRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class RefreshCredentialResponse(_message.Message):
     __slots__ = ("status", "refreshed_at")
@@ -239,12 +235,10 @@ class RefreshCredentialResponse(_message.Message):
     def __init__(self, status: _Optional[_Union[CredentialStatus, str]] = ..., refreshed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class DeleteCredentialRequest(_message.Message):
-    __slots__ = ("service_ticket", "platform_account_id")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("platform_account_id",)
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     platform_account_id: str
-    def __init__(self, service_ticket: _Optional[str] = ..., platform_account_id: _Optional[str] = ...) -> None: ...
+    def __init__(self, platform_account_id: _Optional[str] = ...) -> None: ...
 
 class DeleteCredentialResponse(_message.Message):
     __slots__ = ("success",)
@@ -253,16 +247,14 @@ class DeleteCredentialResponse(_message.Message):
     def __init__(self, success: _Optional[bool] = ...) -> None: ...
 
 class InvalidateConsumerGrantRequest(_message.Message):
-    __slots__ = ("service_ticket", "binding_id", "consumer", "minimum_grant_version")
-    SERVICE_TICKET_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("binding_id", "consumer", "minimum_grant_version")
     BINDING_ID_FIELD_NUMBER: _ClassVar[int]
     CONSUMER_FIELD_NUMBER: _ClassVar[int]
     MINIMUM_GRANT_VERSION_FIELD_NUMBER: _ClassVar[int]
-    service_ticket: str
     binding_id: int
     consumer: str
     minimum_grant_version: int
-    def __init__(self, service_ticket: _Optional[str] = ..., binding_id: _Optional[int] = ..., consumer: _Optional[str] = ..., minimum_grant_version: _Optional[int] = ...) -> None: ...
+    def __init__(self, binding_id: _Optional[int] = ..., consumer: _Optional[str] = ..., minimum_grant_version: _Optional[int] = ...) -> None: ...
 
 class InvalidateConsumerGrantResponse(_message.Message):
     __slots__ = ("success",)

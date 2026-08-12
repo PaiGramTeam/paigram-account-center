@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"paigram/internal/grpc/clientauth"
 	"paigram/internal/model"
 )
 
@@ -42,9 +43,9 @@ func (g *GRPCGenericCredentialGateway) PutCredential(ctx context.Context, endpoi
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = clientauth.WithServiceTicket(callCtx, ticket)
 
 	resp, err := platformv1.NewPlatformServiceClient(conn).PutCredential(callCtx, &platformv1.PutCredentialRequest{
-		ServiceTicket:         ticket,
 		PlatformAccountId:     nullableBindingExternalAccountKey(binding.ExternalAccountKey),
 		CredentialPayloadJson: string(payload),
 	})
@@ -67,9 +68,9 @@ func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, en
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = clientauth.WithServiceTicket(callCtx, ticket)
 
 	_, err = platformv1.NewPlatformServiceClient(conn).RefreshCredential(callCtx, &platformv1.RefreshCredentialRequest{
-		ServiceTicket:     ticket,
 		PlatformAccountId: nullableBindingExternalAccountKey(binding.ExternalAccountKey),
 	})
 	return err
@@ -84,9 +85,9 @@ func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, end
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = clientauth.WithServiceTicket(callCtx, ticket)
 
 	_, err = platformv1.NewPlatformServiceClient(conn).DeleteCredential(callCtx, &platformv1.DeleteCredentialRequest{
-		ServiceTicket:     ticket,
 		PlatformAccountId: nullableBindingExternalAccountKey(binding.ExternalAccountKey),
 	})
 	return err

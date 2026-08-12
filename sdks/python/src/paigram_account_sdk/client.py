@@ -236,10 +236,9 @@ class PaiGramAccountClient:
         response = await _grpc_call(
             stub.GetCredentialSummary(
                 platform_pb2.GetCredentialSummaryRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -264,10 +263,9 @@ class PaiGramAccountClient:
         response = await _grpc_call(
             stub.GetCredentialStatus(
                 platform_pb2.GetCredentialStatusRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -289,16 +287,15 @@ class PaiGramAccountClient:
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="status.read",
+            action_suffix="credential.validate",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
             stub.ValidateCredential(
                 platform_pb2.ValidateCredentialRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -323,10 +320,9 @@ class PaiGramAccountClient:
         response = await _grpc_call(
             stub.ListProfiles(
                 platform_pb2.ListProfilesRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -351,10 +347,9 @@ class PaiGramAccountClient:
         response = await _grpc_call(
             stub.GetPrimaryProfile(
                 platform_pb2.GetPrimaryProfileRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -382,11 +377,10 @@ class PaiGramAccountClient:
         response = await _grpc_call(
             stub.GetAuthKey(
                 platform_pb2.GetAuthKeyRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                     player_id=player_id,
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -414,7 +408,6 @@ class PaiGramAccountClient:
         response = await _grpc_call(
             stub.UpsertDevice(
                 platform_pb2.UpsertDeviceRequest(
-                    service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                     device=platform_pb2.DeviceInfo(
                         device_id=device.device_id,
@@ -422,7 +415,7 @@ class PaiGramAccountClient:
                         device_name=device.device_name,
                     ),
                 ),
-                metadata=_correlation_metadata(resolved_request_id),
+                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
@@ -647,3 +640,7 @@ def _find_action(actions: Sequence[str], suffix: str) -> str:
 
 def _correlation_metadata(request_id: str) -> tuple[tuple[str, str]]:
     return (("x-request-id", request_id),)
+
+
+def _service_ticket_metadata(ticket: str, request_id: str) -> tuple[tuple[str, str], ...]:
+    return (("authorization", f"Bearer {ticket}"), *_correlation_metadata(request_id))

@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
@@ -19,12 +20,41 @@ import (
 	"platform-mihomo-service/internal/usecase"
 )
 
+func TestGenericPlatformServiceValidateCredentialRejectsStatusReadAction(t *testing.T) {
+	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{
+		ActorType:         "consumer",
+		Consumer:          "paimon-bot",
+		GrantVersion:      1,
+		PlatformAccountID: "binding_101_10001",
+		Scopes:            []string{usecase.ActionStatusRead},
+	}))
+
+	_, err := adapter.ValidateCredential(ctx, &platformv1.ValidateCredentialRequest{PlatformAccountId: "binding_101_10001"})
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestGenericPlatformServiceConfirmPrimaryProfileRequiresWriteAction(t *testing.T) {
+	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{
+		ActorType:         "user",
+		PlatformAccountID: "binding_101_10001",
+		Scopes:            []string{usecase.ActionProfileRead},
+	}))
+
+	_, err := adapter.ConfirmPrimaryProfile(ctx, &platformv1.ConfirmPrimaryProfileRequest{
+		PlatformAccountId: "binding_101_10001",
+		PlayerId:          "10001",
+	})
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 func TestGenericPlatformServiceInvalidateConsumerGrantRejectsConsumerTicket(t *testing.T) {
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
 
-	_, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "consumer", Consumer: "paimon-bot", GrantVersion: 1, Scopes: []string{"mihomo.consumer_grant.invalidate"}}),
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "consumer", Consumer: "paimon-bot", GrantVersion: 1, Scopes: []string{"mihomo.consumer_grant.invalidate"}}))
+	_, err := adapter.InvalidateConsumerGrant(ctx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 2,
@@ -38,8 +68,8 @@ func TestGenericPlatformServiceInvalidateConsumerGrantRejectsSystemTicket(t *tes
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
 
-	_, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "system", Scopes: []string{"mihomo.consumer_grant.invalidate"}}),
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "system", Scopes: []string{"mihomo.consumer_grant.invalidate"}}))
+	_, err := adapter.InvalidateConsumerGrant(ctx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 2,
@@ -53,8 +83,8 @@ func TestGenericPlatformServiceInvalidateConsumerGrantStoresMinimumVersion(t *te
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
 
-	resp, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", Scopes: []string{"mihomo.consumer_grant.invalidate"}}),
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", Scopes: []string{"mihomo.consumer_grant.invalidate"}}))
+	resp, err := adapter.InvalidateConsumerGrant(ctx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 3,
@@ -68,8 +98,8 @@ func TestGenericPlatformServiceInvalidateConsumerGrantStoresMinimumVersion(t *te
 func TestGenericPlatformServiceInvalidateConsumerGrantRejectsMissingScope(t *testing.T) {
 	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
 
-	_, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "user", Scopes: []string{"mihomo.credential.read_meta"}}),
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "user", Scopes: []string{"mihomo.credential.read_meta"}}))
+	_, err := adapter.InvalidateConsumerGrant(ctx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 2,
@@ -82,8 +112,8 @@ func TestGenericPlatformServiceInvalidateConsumerGrantRejectsCrossPlatformTicket
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
 
-	_, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", Platform: "starrail", Scopes: []string{"mihomo.consumer_grant.invalidate"}}),
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", Platform: "starrail", Scopes: []string{"mihomo.consumer_grant.invalidate"}}))
+	_, err := adapter.InvalidateConsumerGrant(ctx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 2,
@@ -97,8 +127,8 @@ func TestGenericPlatformServiceInvalidateConsumerGrantRejectsProfileScopedTicket
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
 
-	_, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", ProfileID: 1001, Scopes: []string{"mihomo.consumer_grant.invalidate"}}),
+	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", ProfileID: 1001, Scopes: []string{"mihomo.consumer_grant.invalidate"}}))
+	_, err := adapter.InvalidateConsumerGrant(ctx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 2,
@@ -112,16 +142,16 @@ func TestGenericPlatformServiceRejectsStaleConsumerTicketAfterGrantInvalidation(
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
 
-	_, err := adapter.InvalidateConsumerGrant(context.Background(), &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", Scopes: []string{"mihomo.consumer_grant.invalidate"}}),
+	adminCtx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "admin", Scopes: []string{"mihomo.consumer_grant.invalidate"}}))
+	_, err := adapter.InvalidateConsumerGrant(adminCtx, &platformv1.InvalidateConsumerGrantRequest{
 		BindingId:           101,
 		Consumer:            "paimon-bot",
 		MinimumGrantVersion: 5,
 	})
 	require.NoError(t, err)
 
-	_, err = adapter.GetCredentialSummary(context.Background(), &platformv1.GetCredentialSummaryRequest{
-		ServiceTicket:     signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "consumer", Consumer: "paimon-bot", GrantVersion: 4, PlatformAccountID: "binding_101_10001", Scopes: []string{"mihomo.credential.read_meta"}}),
+	consumerCtx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{ActorType: "consumer", Consumer: "paimon-bot", GrantVersion: 4, PlatformAccountID: "binding_101_10001", Scopes: []string{"mihomo.credential.read_meta"}}))
+	_, err = adapter.GetCredentialSummary(consumerCtx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: "binding_101_10001",
 	})
 
@@ -169,7 +199,8 @@ func newGenericPlatformServiceForAdapterTest(store *memoryGrantInvalidationStore
 		profileUC,
 	)
 	ticketVerifier := serviceTestTicketVerifier().WithGrantVersionLookup(store)
-	return NewGenericPlatformService(ticketVerifier, bindUC, usecase.NewStatusUsecase(credentialRepo, client, serviceTestSigningKey), managementUC, store)
+	return NewGenericPlatformService(ticketVerifier, bindUC, usecase.NewStatusUsecase(credentialRepo, client, serviceTestSigningKey), managementUC, store).
+		WithConsumerUsecases(profileUC, nil)
 }
 
 type adapterTicketOptions struct {
@@ -295,8 +326,11 @@ func TestGenericPlatformServiceGetCredentialSummary(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := adapter.GetCredentialSummary(context.Background(), &platformv1.GetCredentialSummaryRequest{
-		ServiceTicket:     signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.read_meta"),
+	summaryCtx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"authorization",
+		"Bearer "+signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.read_meta"),
+	))
+	resp, err := adapter.GetCredentialSummary(summaryCtx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
@@ -304,22 +338,38 @@ func TestGenericPlatformServiceGetCredentialSummary(t *testing.T) {
 	require.NotEmpty(t, resp.Profiles)
 	require.NotEmpty(t, resp.Devices)
 
-	statusResp, err := adapter.GetCredentialStatus(context.Background(), &platformv1.GetCredentialStatusRequest{
-		ServiceTicket:     signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionStatusRead),
+	statusCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionStatusRead))
+	statusResp, err := adapter.GetCredentialStatus(statusCtx, &platformv1.GetCredentialStatusRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
 	require.Equal(t, platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, statusResp.Status)
 
-	profilesResp, err := adapter.ListProfiles(context.Background(), &platformv1.ListProfilesRequest{
-		ServiceTicket:     signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionProfileRead),
+	validationCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionCredentialValidate))
+	validationResp, err := adapter.ValidateCredential(validationCtx, &platformv1.ValidateCredentialRequest{
+		PlatformAccountId: bindResp.PlatformAccountID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, validationResp.Status)
+
+	profilesCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionProfileRead))
+	profilesResp, err := adapter.ListProfiles(profilesCtx, &platformv1.ListProfilesRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, profilesResp.Profiles)
 
-	authkeyResp, err := adapter.GetAuthKey(context.Background(), &platformv1.GetAuthKeyRequest{
-		ServiceTicket:     signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionAuthKeyIssue),
+	confirmCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionProfileWrite))
+	confirmResp, err := adapter.ConfirmPrimaryProfile(confirmCtx, &platformv1.ConfirmPrimaryProfileRequest{
+		PlatformAccountId: bindResp.PlatformAccountID,
+		PlayerId:          profilesResp.Profiles[0].PlayerId,
+	})
+	require.NoError(t, err)
+	require.Equal(t, profilesResp.Profiles[0].PlayerId, confirmResp.GetProfile().GetPlayerId())
+	require.True(t, confirmResp.GetProfile().GetIsDefault())
+
+	authkeyCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionAuthKeyIssue))
+	authkeyResp, err := adapter.GetAuthKey(authkeyCtx, &platformv1.GetAuthKeyRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 		PlayerId:          profilesResp.Profiles[0].PlayerId,
 	})
@@ -330,8 +380,8 @@ func TestGenericPlatformServiceGetCredentialSummary(t *testing.T) {
 func TestGenericPlatformServiceGetCredentialSummaryRejectsMachineAccessToken(t *testing.T) {
 	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
 
-	_, err := adapter.GetCredentialSummary(context.Background(), &platformv1.GetCredentialSummaryRequest{
-		ServiceTicket:     signedAdapterMachineAccessToken(t, adapterTicketOptions{PlatformAccountID: "binding_101_10001", Scopes: []string{"mihomo.credential.read_meta"}}),
+	ctx := incomingServiceTicketContext(signedAdapterMachineAccessToken(t, adapterTicketOptions{PlatformAccountID: "binding_101_10001", Scopes: []string{"mihomo.credential.read_meta"}}))
+	_, err := adapter.GetCredentialSummary(ctx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: "binding_101_10001",
 	})
 
@@ -341,8 +391,8 @@ func TestGenericPlatformServiceGetCredentialSummaryRejectsMachineAccessToken(t *
 func TestGenericPlatformServicePutCredentialRejectsMachineAccessToken(t *testing.T) {
 	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
 
-	_, err := adapter.PutCredential(context.Background(), &platformv1.PutCredentialRequest{
-		ServiceTicket:         signedAdapterMachineAccessToken(t, adapterTicketOptions{Scopes: []string{"mihomo.credential.bind"}}),
+	ctx := incomingServiceTicketContext(signedAdapterMachineAccessToken(t, adapterTicketOptions{Scopes: []string{"mihomo.credential.bind"}}))
+	_, err := adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 
@@ -384,8 +434,8 @@ func TestGenericPlatformServiceRejectsMissingSummaryScope(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = adapter.GetCredentialSummary(context.Background(), &platformv1.GetCredentialSummaryRequest{
-		ServiceTicket:     signedMihomoSummaryTicket(t, bindResp.PlatformAccountID),
+	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID))
+	_, err = adapter.GetCredentialSummary(ctx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.Error(t, err)
@@ -426,8 +476,8 @@ func TestGenericPlatformServiceRejectsProfileScopedSummaryTicket(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = adapter.GetCredentialSummary(context.Background(), &platformv1.GetCredentialSummaryRequest{
-		ServiceTicket:     signedServiceTicketForProfile(t, bindResp.PlatformAccountID, 999, "mihomo.credential.read_meta"),
+	ctx := incomingServiceTicketContext(signedServiceTicketForProfile(t, bindResp.PlatformAccountID, 999, "mihomo.credential.read_meta"))
+	_, err = adapter.GetCredentialSummary(ctx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.Error(t, err)
@@ -449,7 +499,7 @@ func TestGenericPlatformServiceDescribePlatform(t *testing.T) {
 	require.Equal(t, "mihomo", resp.PlatformKey)
 	require.Equal(t, "Mihomo", resp.DisplayName)
 	require.Equal(t, serviceTicketAudience, resp.ServiceAudience)
-	require.Equal(t, []string{"mihomo.status.read", "mihomo.profile.read", "mihomo.profile.write", "mihomo.authkey.issue", "mihomo.credential.read_meta", "mihomo.credential.bind", "mihomo.credential.update", "mihomo.credential.refresh", "mihomo.credential.delete", "mihomo.device.update", "mihomo.consumer_grant.invalidate"}, resp.SupportedActions)
+	require.Equal(t, []string{"mihomo.status.read", "mihomo.credential.validate", "mihomo.profile.read", "mihomo.profile.write", "mihomo.authkey.issue", "mihomo.credential.read_meta", "mihomo.credential.bind", "mihomo.credential.update", "mihomo.credential.refresh", "mihomo.credential.delete", "mihomo.device.update", "mihomo.consumer_grant.invalidate"}, resp.SupportedActions)
 	require.NotNil(t, resp.CredentialSchema)
 	require.NotEmpty(t, resp.CredentialSchema.Fields)
 }
@@ -508,8 +558,8 @@ func TestGenericPlatformServicePutCredentialBindsWhenPlatformAccountIDUnknown(t 
 		nil,
 	)
 
-	resp, err := adapter.PutCredential(context.Background(), &platformv1.PutCredentialRequest{
-		ServiceTicket:         signedMihomoSummaryTicket(t, "", "mihomo.credential.bind"),
+	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.bind"))
+	resp, err := adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 	require.NoError(t, err)
@@ -543,8 +593,8 @@ func TestGenericPlatformServicePutCredentialRejectsCreateWithUpdateOnlyScope(t *
 		nil,
 	)
 
-	_, err := adapter.PutCredential(context.Background(), &platformv1.PutCredentialRequest{
-		ServiceTicket:         signedMihomoSummaryTicket(t, "", "mihomo.credential.update"),
+	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.update"))
+	_, err := adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 	require.Error(t, err)
@@ -585,8 +635,8 @@ func TestGenericPlatformServicePutCredentialRejectsUpdateWithBindOnlyScope(t *te
 	})
 	require.NoError(t, err)
 
-	_, err = adapter.PutCredential(context.Background(), &platformv1.PutCredentialRequest{
-		ServiceTicket:         signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.bind"),
+	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.bind"))
+	_, err = adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
 		PlatformAccountId:     bindResp.PlatformAccountID,
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"updated\"}","device_id":"device-2","device_fp":"fp-2","device_name":"iPad","region_hint":"cn_gf01"}`,
 	})
@@ -628,10 +678,14 @@ func TestGenericPlatformServiceDeleteCredentialUsesDeleteScope(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	resp, err := adapter.DeleteCredential(context.Background(), &platformv1.DeleteCredentialRequest{
-		ServiceTicket:     signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.delete"),
+	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.delete"))
+	resp, err := adapter.DeleteCredential(ctx, &platformv1.DeleteCredentialRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
 	require.True(t, resp.GetSuccess())
+}
+
+func incomingServiceTicketContext(ticket string) context.Context {
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+ticket))
 }

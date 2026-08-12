@@ -49,6 +49,7 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
             "mihomo.credential.delete",
             "mihomo.credential.read_meta",
             "mihomo.credential.refresh",
+            "mihomo.credential.validate",
             "mihomo.device.update",
             "mihomo.profile.read",
             "mihomo.status.read",
@@ -72,6 +73,7 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
             supported_actions=[
                 "mihomo.credential.read_meta",
                 "mihomo.credential.refresh",
+                "mihomo.credential.validate",
                 "mihomo.credential.delete",
                 "mihomo.status.read",
                 "mihomo.profile.read",
@@ -82,8 +84,8 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
         )
 
     async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
-        if request.service_ticket != "service-ticket" or request.platform_account_id != "binding_7_10001":
+        await require_platform_metadata(context)
+        if request.platform_account_id != "binding_7_10001":
             await context.abort(grpc.StatusCode.PERMISSION_DENIED, "invalid service ticket")
         return platform_pb2.GetCredentialSummaryResponse(
             platform_account_id=request.platform_account_id,
@@ -109,41 +111,41 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
         )
 
     async def RefreshCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.RefreshCredentialResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
 
     async def DeleteCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.DeleteCredentialResponse(success=True)
 
     async def GetCredentialStatus(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.GetCredentialStatusResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
 
     async def ValidateCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.ValidateCredentialResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
 
     async def ListProfiles(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.ListProfilesResponse(profiles=[profile_proto(request.platform_account_id)])
 
     async def GetPrimaryProfile(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.GetPrimaryProfileResponse(profile=profile_proto(request.platform_account_id))
 
     async def GetAuthKey(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.GetAuthKeyResponse(authkey=f"authkey-{request.player_id}")
 
     async def UpsertDevice(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         return platform_pb2.UpsertDeviceResponse(success=bool(request.device.device_id))
 
 
 class PreconditionPlatformService(PlatformService):
     async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_request_id(context)
+        await require_platform_metadata(context)
         await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "credential is inactive")
 
 
@@ -157,6 +159,13 @@ async def require_account_metadata(context):  # type: ignore[no-untyped-def, no-
     metadata = dict(context.invocation_metadata())
     if metadata.get("authorization") != "Bearer machine-token":
         await context.abort(grpc.StatusCode.UNAUTHENTICATED, "missing machine token")
+    await require_request_id(context)
+
+
+async def require_platform_metadata(context):  # type: ignore[no-untyped-def, no-untyped-call]
+    metadata = dict(context.invocation_metadata())
+    if metadata.get("authorization") != "Bearer service-ticket":
+        await context.abort(grpc.StatusCode.UNAUTHENTICATED, "missing service ticket")
     await require_request_id(context)
 
 

@@ -19,6 +19,7 @@ import (
 var defaultConsumerActions = []string{
 	"mihomo.authkey.issue",
 	"mihomo.credential.read_meta",
+	"mihomo.credential.validate",
 	"mihomo.device.update",
 	"mihomo.profile.read",
 	"mihomo.status.read",
@@ -27,6 +28,7 @@ var defaultConsumerActions = []string{
 var delegatableActions = map[string]struct{}{
 	"mihomo.authkey.issue":        {},
 	"mihomo.credential.read_meta": {},
+	"mihomo.credential.validate":  {},
 	"mihomo.device.update":        {},
 	"mihomo.profile.read":         {},
 	"mihomo.status.read":          {},

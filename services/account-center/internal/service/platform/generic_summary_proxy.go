@@ -7,6 +7,8 @@ import (
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	"paigram/internal/grpc/clientauth"
 )
 
 type GRPCGenericSummaryProxy struct {
@@ -38,9 +40,9 @@ func (p *GRPCGenericSummaryProxy) GetCredentialSummary(ctx context.Context, endp
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = clientauth.WithServiceTicket(callCtx, ticket)
 
 	resp, err := platformv1.NewPlatformServiceClient(conn).GetCredentialSummary(callCtx, &platformv1.GetCredentialSummaryRequest{
-		ServiceTicket:     ticket,
 		PlatformAccountId: platformAccountID,
 	})
 	if err != nil {

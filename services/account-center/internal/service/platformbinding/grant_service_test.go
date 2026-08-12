@@ -306,7 +306,7 @@ func TestGrantServiceUpsertGrantReactivationPreservesTicketVersion(t *testing.T)
 		BindingID:         binding.ID,
 		Consumer:          ConsumerPaiGramBot,
 		Status:            model.ConsumerGrantStatusRevoked,
-		ScopesJSON:        `["mihomo.authkey.issue","mihomo.credential.read_meta","mihomo.device.update","mihomo.profile.read","mihomo.status.read"]`,
+		ScopesJSON:        `["mihomo.authkey.issue","mihomo.credential.read_meta","mihomo.credential.validate","mihomo.device.update","mihomo.profile.read","mihomo.status.read"]`,
 		TicketVersion:     4,
 		GrantedAt:         time.Now().UTC(),
 		RevokedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},

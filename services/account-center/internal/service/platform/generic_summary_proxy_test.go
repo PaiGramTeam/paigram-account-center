@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -68,7 +69,7 @@ func TestGRPCGenericSummaryProxyGetCredentialSummary(t *testing.T) {
 
 	summary, err := proxy.GetCredentialSummary(context.Background(), "bufnet", "ticket-123", "hoyo_ref_11_10001")
 	require.NoError(t, err)
-	require.Equal(t, "ticket-123", server.lastRequest.GetServiceTicket())
+	require.Equal(t, []string{"Bearer ticket-123"}, server.lastAuthorization)
 	require.Equal(t, "hoyo_ref_11_10001", server.lastRequest.GetPlatformAccountId())
 	require.Equal(t, map[string]any{
 		"platform_account_id": "hoyo_ref_11_10001",
@@ -106,11 +107,14 @@ func TestGRPCGenericSummaryProxyPropagatesRPCError(t *testing.T) {
 
 type genericPlatformServiceStub struct {
 	platformv1.UnimplementedPlatformServiceServer
-	response    *platformv1.GetCredentialSummaryResponse
-	lastRequest *platformv1.GetCredentialSummaryRequest
+	response          *platformv1.GetCredentialSummaryResponse
+	lastRequest       *platformv1.GetCredentialSummaryRequest
+	lastAuthorization []string
 }
 
-func (s *genericPlatformServiceStub) GetCredentialSummary(_ context.Context, req *platformv1.GetCredentialSummaryRequest) (*platformv1.GetCredentialSummaryResponse, error) {
+func (s *genericPlatformServiceStub) GetCredentialSummary(ctx context.Context, req *platformv1.GetCredentialSummaryRequest) (*platformv1.GetCredentialSummaryResponse, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	s.lastAuthorization = append([]string(nil), md.Get("authorization")...)
 	s.lastRequest = req
 	return s.response, nil
 }

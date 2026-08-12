@@ -25,6 +25,7 @@ const (
 	PlatformService_GetCredentialSummary_FullMethodName    = "/paigram.platform.v1.PlatformService/GetCredentialSummary"
 	PlatformService_ListProfiles_FullMethodName            = "/paigram.platform.v1.PlatformService/ListProfiles"
 	PlatformService_GetPrimaryProfile_FullMethodName       = "/paigram.platform.v1.PlatformService/GetPrimaryProfile"
+	PlatformService_ConfirmPrimaryProfile_FullMethodName   = "/paigram.platform.v1.PlatformService/ConfirmPrimaryProfile"
 	PlatformService_GetAuthKey_FullMethodName              = "/paigram.platform.v1.PlatformService/GetAuthKey"
 	PlatformService_UpsertDevice_FullMethodName            = "/paigram.platform.v1.PlatformService/UpsertDevice"
 	PlatformService_PutCredential_FullMethodName           = "/paigram.platform.v1.PlatformService/PutCredential"
@@ -43,6 +44,7 @@ type PlatformServiceClient interface {
 	GetCredentialSummary(ctx context.Context, in *GetCredentialSummaryRequest, opts ...grpc.CallOption) (*GetCredentialSummaryResponse, error)
 	ListProfiles(ctx context.Context, in *ListProfilesRequest, opts ...grpc.CallOption) (*ListProfilesResponse, error)
 	GetPrimaryProfile(ctx context.Context, in *GetPrimaryProfileRequest, opts ...grpc.CallOption) (*GetPrimaryProfileResponse, error)
+	ConfirmPrimaryProfile(ctx context.Context, in *ConfirmPrimaryProfileRequest, opts ...grpc.CallOption) (*ConfirmPrimaryProfileResponse, error)
 	GetAuthKey(ctx context.Context, in *GetAuthKeyRequest, opts ...grpc.CallOption) (*GetAuthKeyResponse, error)
 	UpsertDevice(ctx context.Context, in *UpsertDeviceRequest, opts ...grpc.CallOption) (*UpsertDeviceResponse, error)
 	PutCredential(ctx context.Context, in *PutCredentialRequest, opts ...grpc.CallOption) (*PutCredentialResponse, error)
@@ -119,6 +121,16 @@ func (c *platformServiceClient) GetPrimaryProfile(ctx context.Context, in *GetPr
 	return out, nil
 }
 
+func (c *platformServiceClient) ConfirmPrimaryProfile(ctx context.Context, in *ConfirmPrimaryProfileRequest, opts ...grpc.CallOption) (*ConfirmPrimaryProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmPrimaryProfileResponse)
+	err := c.cc.Invoke(ctx, PlatformService_ConfirmPrimaryProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformServiceClient) GetAuthKey(ctx context.Context, in *GetAuthKeyRequest, opts ...grpc.CallOption) (*GetAuthKeyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetAuthKeyResponse)
@@ -189,6 +201,7 @@ type PlatformServiceServer interface {
 	GetCredentialSummary(context.Context, *GetCredentialSummaryRequest) (*GetCredentialSummaryResponse, error)
 	ListProfiles(context.Context, *ListProfilesRequest) (*ListProfilesResponse, error)
 	GetPrimaryProfile(context.Context, *GetPrimaryProfileRequest) (*GetPrimaryProfileResponse, error)
+	ConfirmPrimaryProfile(context.Context, *ConfirmPrimaryProfileRequest) (*ConfirmPrimaryProfileResponse, error)
 	GetAuthKey(context.Context, *GetAuthKeyRequest) (*GetAuthKeyResponse, error)
 	UpsertDevice(context.Context, *UpsertDeviceRequest) (*UpsertDeviceResponse, error)
 	PutCredential(context.Context, *PutCredentialRequest) (*PutCredentialResponse, error)
@@ -222,6 +235,9 @@ func (UnimplementedPlatformServiceServer) ListProfiles(context.Context, *ListPro
 }
 func (UnimplementedPlatformServiceServer) GetPrimaryProfile(context.Context, *GetPrimaryProfileRequest) (*GetPrimaryProfileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPrimaryProfile not implemented")
+}
+func (UnimplementedPlatformServiceServer) ConfirmPrimaryProfile(context.Context, *ConfirmPrimaryProfileRequest) (*ConfirmPrimaryProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmPrimaryProfile not implemented")
 }
 func (UnimplementedPlatformServiceServer) GetAuthKey(context.Context, *GetAuthKeyRequest) (*GetAuthKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAuthKey not implemented")
@@ -370,6 +386,24 @@ func _PlatformService_GetPrimaryProfile_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_ConfirmPrimaryProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmPrimaryProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ConfirmPrimaryProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ConfirmPrimaryProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ConfirmPrimaryProfile(ctx, req.(*ConfirmPrimaryProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformService_GetAuthKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetAuthKeyRequest)
 	if err := dec(in); err != nil {
@@ -508,6 +542,10 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPrimaryProfile",
 			Handler:    _PlatformService_GetPrimaryProfile_Handler,
+		},
+		{
+			MethodName: "ConfirmPrimaryProfile",
+			Handler:    _PlatformService_ConfirmPrimaryProfile_Handler,
 		},
 		{
 			MethodName: "GetAuthKey",

@@ -64,6 +64,11 @@ class PlatformServiceStub:
                 request_serializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileRequest.SerializeToString,
                 response_deserializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileResponse.FromString,
                 _registered_method=True)
+        self.ConfirmPrimaryProfile = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/ConfirmPrimaryProfile',
+                request_serializer=platform_dot_v1_dot_platform__pb2.ConfirmPrimaryProfileRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.ConfirmPrimaryProfileResponse.FromString,
+                _registered_method=True)
         self.GetAuthKey = channel.unary_unary(
                 '/paigram.platform.v1.PlatformService/GetAuthKey',
                 request_serializer=platform_dot_v1_dot_platform__pb2.GetAuthKeyRequest.SerializeToString,
@@ -130,6 +135,12 @@ class PlatformServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def GetPrimaryProfile(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ConfirmPrimaryProfile(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -203,6 +214,11 @@ def add_PlatformServiceServicer_to_server(servicer, server):
                     servicer.GetPrimaryProfile,
                     request_deserializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileRequest.FromString,
                     response_serializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileResponse.SerializeToString,
+            ),
+            'ConfirmPrimaryProfile': grpc.unary_unary_rpc_method_handler(
+                    servicer.ConfirmPrimaryProfile,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.ConfirmPrimaryProfileRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.ConfirmPrimaryProfileResponse.SerializeToString,
             ),
             'GetAuthKey': grpc.unary_unary_rpc_method_handler(
                     servicer.GetAuthKey,
@@ -397,6 +413,33 @@ class PlatformService:
             '/paigram.platform.v1.PlatformService/GetPrimaryProfile',
             platform_dot_v1_dot_platform__pb2.GetPrimaryProfileRequest.SerializeToString,
             platform_dot_v1_dot_platform__pb2.GetPrimaryProfileResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ConfirmPrimaryProfile(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/ConfirmPrimaryProfile',
+            platform_dot_v1_dot_platform__pb2.ConfirmPrimaryProfileRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.ConfirmPrimaryProfileResponse.FromString,
             options,
             channel_credentials,
             insecure,

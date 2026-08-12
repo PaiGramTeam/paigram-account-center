@@ -13,12 +13,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 	grpcstatus "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protowire"
 	"gorm.io/gorm"
 
 	"paigram/internal/config"
+	"paigram/internal/grpc/clientauth"
 	"paigram/internal/model"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/platformbinding"
@@ -59,7 +58,6 @@ type PlatformService struct {
 	db                  *gorm.DB
 	ticketSigner        *serviceticket.Signer
 	dial                dialFunc
-	summaryProxy        platformSummaryProxy
 	genericSummaryProxy platformSummaryProxy
 	healthChecker       platformHealthChecker
 }
@@ -273,9 +271,9 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = clientauth.WithServiceTicket(callCtx, signed)
 
 	resp, err := platformv1.NewPlatformServiceClient(conn).InvalidateConsumerGrant(callCtx, &platformv1.InvalidateConsumerGrantRequest{
-		ServiceTicket:       signed,
 		BindingId:           input.BindingID,
 		Consumer:            input.Consumer,
 		MinimumGrantVersion: input.MinimumGrantVersion,
@@ -330,10 +328,6 @@ func isPlatformUnavailableRPCError(err error) bool {
 	return false
 }
 
-func (s *PlatformService) SetSummaryProxy(proxy platformSummaryProxy) {
-	s.summaryProxy = proxy
-}
-
 func (s *PlatformService) SetGenericSummaryProxy(proxy platformSummaryProxy) {
 	s.genericSummaryProxy = proxy
 }
@@ -349,7 +343,7 @@ func (s *PlatformService) GetPlatformAccountSummary(ctx context.Context, actorTy
 		return bindingSummary, nil
 	}
 
-	if s.genericSummaryProxy == nil && s.summaryProxy == nil {
+	if s.genericSummaryProxy == nil {
 		return nil, gorm.ErrRecordNotFound
 	}
 
@@ -371,11 +365,7 @@ func (s *PlatformService) GetPlatformAccountSummary(ctx context.Context, actorTy
 		return nil, err
 	}
 
-	if s.genericSummaryProxy != nil {
-		return s.genericSummaryProxy.GetCredentialSummary(ctx, platform.Endpoint, ticket, ref.PlatformAccountID)
-	}
-
-	return s.summaryProxy.GetCredentialSummary(ctx, platform.Endpoint, ticket, ref.PlatformAccountID)
+	return s.genericSummaryProxy.GetCredentialSummary(ctx, platform.Endpoint, ticket, ref.PlatformAccountID)
 }
 
 func (s *PlatformService) GetBindingRuntimeSummary(ctx context.Context, actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (map[string]any, error) {
@@ -385,7 +375,7 @@ func (s *PlatformService) GetBindingRuntimeSummary(ctx context.Context, actorTyp
 	if !binding.ExternalAccountKey.Valid {
 		return nil, gorm.ErrRecordNotFound
 	}
-	if s.genericSummaryProxy == nil && s.summaryProxy == nil {
+	if s.genericSummaryProxy == nil {
 		return nil, ErrPlatformSummaryProxyUnavailable
 	}
 
@@ -403,11 +393,7 @@ func (s *PlatformService) GetBindingRuntimeSummary(ctx context.Context, actorTyp
 	}
 
 	platformAccountID := nullableBindingExternalAccountKey(binding.ExternalAccountKey)
-	if s.genericSummaryProxy != nil {
-		return s.genericSummaryProxy.GetCredentialSummary(ctx, platformRow.Endpoint, ticket, platformAccountID)
-	}
-
-	return s.summaryProxy.GetCredentialSummary(ctx, platformRow.Endpoint, ticket, platformAccountID)
+	return s.genericSummaryProxy.GetCredentialSummary(ctx, platformRow.Endpoint, ticket, platformAccountID)
 }
 
 func (s *PlatformService) ConfirmBindingPrimaryProfile(ctx context.Context, actorType, actorID string, binding *model.PlatformAccountBinding, playerID string) error {
@@ -452,51 +438,13 @@ func (s *PlatformService) ConfirmBindingPrimaryProfile(ctx context.Context, acto
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = clientauth.WithServiceTicket(callCtx, ticket)
 
-	var resp []byte
-	err = conn.Invoke(callCtx,
-		"/mihomo.v1.MihomoAccountService/ConfirmPrimaryProfile",
-		encodeConfirmPrimaryProfileRequest(ticket, nullableBindingExternalAccountKey(binding.ExternalAccountKey), playerID),
-		&resp,
-		grpc.ForceCodec(rawProtoCodec{}),
-	)
+	_, err = platformv1.NewPlatformServiceClient(conn).ConfirmPrimaryProfile(callCtx, &platformv1.ConfirmPrimaryProfileRequest{
+		PlatformAccountId: nullableBindingExternalAccountKey(binding.ExternalAccountKey),
+		PlayerId:          playerID,
+	})
 	return err
-}
-
-type rawProtoCodec struct{}
-
-func (rawProtoCodec) Marshal(v any) ([]byte, error) {
-	bytes, ok := v.([]byte)
-	if !ok {
-		return nil, fmt.Errorf("raw proto codec expects []byte, got %T", v)
-	}
-	return bytes, nil
-}
-
-func (rawProtoCodec) Unmarshal(data []byte, v any) error {
-	bytes, ok := v.(*[]byte)
-	if !ok {
-		return fmt.Errorf("raw proto codec expects *[]byte, got %T", v)
-	}
-	*bytes = append((*bytes)[:0], data...)
-	return nil
-}
-
-func (rawProtoCodec) Name() string {
-	return "proto"
-}
-
-var _ encoding.Codec = rawProtoCodec{}
-
-func encodeConfirmPrimaryProfileRequest(ticket, platformAccountID, playerID string) []byte {
-	message := make([]byte, 0, len(ticket)+len(platformAccountID)+len(playerID)+8)
-	message = protowire.AppendTag(message, 1, protowire.BytesType)
-	message = protowire.AppendString(message, ticket)
-	message = protowire.AppendTag(message, 2, protowire.BytesType)
-	message = protowire.AppendString(message, platformAccountID)
-	message = protowire.AppendTag(message, 3, protowire.BytesType)
-	message = protowire.AppendString(message, playerID)
-	return message
 }
 
 func (s *PlatformService) getBindingSummary(ctx context.Context, ownerUserID, bindingID uint64) (map[string]any, bool, error) {

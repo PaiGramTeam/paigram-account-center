@@ -61,7 +61,7 @@ func (s *GenericPlatformService) DescribePlatform(context.Context, *platformv1.D
 		PlatformKey:      "mihomo",
 		DisplayName:      "Mihomo",
 		ServiceAudience:  serviceTicketAudience,
-		SupportedActions: []string{usecase.ActionStatusRead, usecase.ActionProfileRead, usecase.ActionProfileWrite, usecase.ActionAuthKeyIssue, usecase.ActionCredentialRead, usecase.ActionCredentialBind, usecase.ActionCredentialUpdate, usecase.ActionCredentialRefresh, usecase.ActionCredentialDelete, usecase.ActionDeviceUpdate, consumerGrantInvalidateScope},
+		SupportedActions: []string{usecase.ActionStatusRead, usecase.ActionCredentialValidate, usecase.ActionProfileRead, usecase.ActionProfileWrite, usecase.ActionAuthKeyIssue, usecase.ActionCredentialRead, usecase.ActionCredentialBind, usecase.ActionCredentialUpdate, usecase.ActionCredentialRefresh, usecase.ActionCredentialDelete, usecase.ActionDeviceUpdate, consumerGrantInvalidateScope},
 		CredentialSchema: credentialSchema,
 		Version:          "v1",
 	}, nil
@@ -72,9 +72,9 @@ func (s *GenericPlatformService) GetCredentialSummary(ctx context.Context, req *
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 
-	claims, err := s.ticketVerifier.VerifyContext(ctx, req.GetServiceTicket(), serviceTicketAudience)
+	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
-		return nil, mapTicketVerificationError(err)
+		return nil, err
 	}
 	guard, err := scopedGuardForPlatformAccount(claims, req.GetPlatformAccountId(), usecase.ActionCredentialRead)
 	if err != nil {
@@ -93,7 +93,7 @@ func (s *GenericPlatformService) GetCredentialStatus(ctx context.Context, req *p
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
-	if _, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionStatusRead, true); err != nil {
+	if _, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionStatusRead, true); err != nil {
 		return nil, err
 	}
 	output, err := s.statusUC.GetCredentialStatus(ctx, req.GetPlatformAccountId())
@@ -110,7 +110,7 @@ func (s *GenericPlatformService) ValidateCredential(ctx context.Context, req *pl
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
-	if _, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionStatusRead, true); err != nil {
+	if _, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionCredentialValidate, true); err != nil {
 		return nil, err
 	}
 	output, err := s.statusUC.ValidateCredential(ctx, req.GetPlatformAccountId())
@@ -130,7 +130,7 @@ func (s *GenericPlatformService) ListProfiles(ctx context.Context, req *platform
 	if s.profileUC == nil {
 		return nil, status.Error(codes.FailedPrecondition, "profile service is not configured")
 	}
-	guard, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionProfileRead, false)
+	guard, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionProfileRead, false)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (s *GenericPlatformService) GetPrimaryProfile(ctx context.Context, req *pla
 	if s.profileUC == nil {
 		return nil, status.Error(codes.FailedPrecondition, "profile service is not configured")
 	}
-	guard, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionProfileRead, false)
+	guard, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionProfileRead, false)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +163,24 @@ func (s *GenericPlatformService) GetPrimaryProfile(ctx context.Context, req *pla
 	return &platformv1.GetPrimaryProfileResponse{Profile: toGenericProfileSummary(profile)}, nil
 }
 
+func (s *GenericPlatformService) ConfirmPrimaryProfile(ctx context.Context, req *platformv1.ConfirmPrimaryProfileRequest) (*platformv1.ConfirmPrimaryProfileResponse, error) {
+	if req == nil || req.GetPlayerId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "request and player_id are required")
+	}
+	if s.profileUC == nil {
+		return nil, status.Error(codes.FailedPrecondition, "profile service is not configured")
+	}
+	guard, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionProfileWrite, true)
+	if err != nil {
+		return nil, err
+	}
+	profile, err := s.profileUC.ConfirmPrimaryProfileWithScope(ctx, guard, req.GetPlatformAccountId(), req.GetPlayerId())
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return &platformv1.ConfirmPrimaryProfileResponse{Profile: toGenericProfileSummary(profile)}, nil
+}
+
 func (s *GenericPlatformService) GetAuthKey(ctx context.Context, req *platformv1.GetAuthKeyRequest) (*platformv1.GetAuthKeyResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -170,7 +188,7 @@ func (s *GenericPlatformService) GetAuthKey(ctx context.Context, req *platformv1
 	if s.profileUC == nil || s.authkeyUC == nil {
 		return nil, status.Error(codes.FailedPrecondition, "authkey service is not configured")
 	}
-	guard, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionAuthKeyIssue, false)
+	guard, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionAuthKeyIssue, false)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +206,7 @@ func (s *GenericPlatformService) UpsertDevice(ctx context.Context, req *platform
 	if req == nil || req.GetDevice() == nil {
 		return nil, status.Error(codes.InvalidArgument, "request and device are required")
 	}
-	if _, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionDeviceUpdate, true); err != nil {
+	if _, err := s.authorizePlatformAccount(ctx, req.GetPlatformAccountId(), usecase.ActionDeviceUpdate, true); err != nil {
 		return nil, err
 	}
 	device := req.GetDevice()
@@ -198,13 +216,13 @@ func (s *GenericPlatformService) UpsertDevice(ctx context.Context, req *platform
 	return &platformv1.UpsertDeviceResponse{Success: true}, nil
 }
 
-func (s *GenericPlatformService) authorizePlatformAccount(ctx context.Context, ticket, platformAccountID, action string, bindingWide bool) (usecase.ScopeGuard, error) {
+func (s *GenericPlatformService) authorizePlatformAccount(ctx context.Context, platformAccountID, action string, bindingWide bool) (usecase.ScopeGuard, error) {
 	if platformAccountID == "" {
 		return usecase.ScopeGuard{}, status.Error(codes.InvalidArgument, "platform_account_id is required")
 	}
-	claims, err := s.ticketVerifier.VerifyContext(ctx, ticket, serviceTicketAudience)
+	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
-		return usecase.ScopeGuard{}, mapTicketVerificationError(err)
+		return usecase.ScopeGuard{}, err
 	}
 	guard, err := scopedGuardForPlatformAccount(claims, platformAccountID, action)
 	if err != nil {
@@ -223,9 +241,9 @@ func (s *GenericPlatformService) PutCredential(ctx context.Context, req *platfor
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 
-	claims, err := s.ticketVerifier.VerifyContext(ctx, req.GetServiceTicket(), serviceTicketAudience)
+	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
-		return nil, mapTicketVerificationError(err)
+		return nil, err
 	}
 	guard, err := scopedGuard(claims)
 	if err != nil {
@@ -285,9 +303,9 @@ func (s *GenericPlatformService) RefreshCredential(ctx context.Context, req *pla
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 
-	claims, err := s.ticketVerifier.VerifyContext(ctx, req.GetServiceTicket(), serviceTicketAudience)
+	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
-		return nil, mapTicketVerificationError(err)
+		return nil, err
 	}
 	guard, err := scopedGuard(claims, usecase.ActionCredentialRefresh)
 	if err != nil {
@@ -319,9 +337,9 @@ func (s *GenericPlatformService) DeleteCredential(ctx context.Context, req *plat
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 
-	claims, err := s.ticketVerifier.VerifyContext(ctx, req.GetServiceTicket(), serviceTicketAudience)
+	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
-		return nil, mapTicketVerificationError(err)
+		return nil, err
 	}
 	guard, err := scopedGuard(claims, usecase.ActionCredentialDelete)
 	if err != nil {
@@ -360,9 +378,9 @@ func (s *GenericPlatformService) InvalidateConsumerGrant(ctx context.Context, re
 		return nil, status.Error(codes.InvalidArgument, "minimum_grant_version is required")
 	}
 
-	claims, err := s.ticketVerifier.VerifyContext(ctx, req.GetServiceTicket(), serviceTicketAudience)
+	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
-		return nil, mapTicketVerificationError(err)
+		return nil, err
 	}
 	if claims.ActorType != "admin" && claims.ActorType != "user" {
 		return nil, status.Error(codes.PermissionDenied, "only admin or user tickets can invalidate grants")

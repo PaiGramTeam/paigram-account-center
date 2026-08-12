@@ -11,7 +11,35 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"platform-mihomo-service/internal/conf"
+	"platform-mihomo-service/internal/service"
 )
+
+func TestNewGRPCServerOnlyRegistersUnifiedPlatformAPI(t *testing.T) {
+	srv := NewGRPCServer(
+		testBootstrap(),
+		service.NewGenericPlatformService(nil, nil, nil, nil, nil),
+	)
+
+	services := srv.GetServiceInfo()
+	for _, legacyService := range []string{"mihomo.v1.MihomoAccountService", "paigram.mihomo.v1.MihomoCredentialService"} {
+		if _, ok := services[legacyService]; ok {
+			t.Fatalf("legacy service %q is registered", legacyService)
+		}
+	}
+	if _, ok := services["paigram.platform.v1.PlatformService"]; !ok {
+		t.Fatal("unified platform service is not registered")
+	}
+}
+
+func TestNewGRPCServerRequiresUnifiedPlatformService(t *testing.T) {
+	defer func() {
+		if recovered := recover(); recovered != "generic platform service is required" {
+			t.Fatalf("panic = %v, want generic platform service is required", recovered)
+		}
+	}()
+
+	NewGRPCServer(testBootstrap(), nil)
+}
 
 func TestRegisterHealthServerSkipsDuplicateRegistration(t *testing.T) {
 	srv := kratosgrpc.NewServer()
@@ -28,15 +56,7 @@ func TestNewGRPCServerExposesHealth(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	srv := NewGRPCServer(&conf.Bootstrap{
-		Server: &conf.Server{
-			Grpc: &conf.Server_GRPC{
-				Network:        "tcp",
-				Addr:           "127.0.0.1:0",
-				TimeoutSeconds: 5,
-			},
-		},
-	}, nil, nil, nil)
+	srv := NewGRPCServer(testBootstrap(), service.NewGenericPlatformService(nil, nil, nil, nil, nil))
 
 	endpoint, err := srv.Endpoint()
 	if err != nil {
@@ -78,5 +98,17 @@ func TestNewGRPCServerExposesHealth(t *testing.T) {
 
 	if resp.GetStatus() != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("health status = %s, want %s", resp.GetStatus(), healthpb.HealthCheckResponse_SERVING)
+	}
+}
+
+func testBootstrap() *conf.Bootstrap {
+	return &conf.Bootstrap{
+		Server: &conf.Server{
+			Grpc: &conf.Server_GRPC{
+				Network:        "tcp",
+				Addr:           "127.0.0.1:0",
+				TimeoutSeconds: 5,
+			},
+		},
 	}
 }

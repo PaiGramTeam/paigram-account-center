@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -14,10 +13,8 @@ import (
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"paigram/internal/model"
@@ -245,6 +242,11 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		require.Equal(t, http.StatusOK, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
 		patchPrimaryData := decodeResponseData(t, patchPrimaryResp)
 		assert.Equal(t, float64(profiles[1].ID), patchPrimaryData["primary_profile_id"])
+		require.NotNil(t, createStub.lastConfirmPrimaryProfile)
+		assert.Equal(t, "cn:owner-main", createStub.lastConfirmPrimaryProfile.GetPlatformAccountId())
+		assert.Equal(t, profiles[1].PlayerUID, createStub.lastConfirmPrimaryProfile.GetPlayerId())
+		require.Len(t, createStub.lastConfirmAuthorization, 1)
+		assert.Contains(t, createStub.lastConfirmAuthorization[0], "Bearer ")
 
 		invalidPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 			"profile_id": uint64(99999999),
@@ -908,104 +910,6 @@ func TestPlatformBindingProjectionRepairTaskRepairsStaleProjection(t *testing.T)
 	assert.Equal(t, "mihomo:42", profiles[0].PlatformProfileKey)
 	assert.Equal(t, "Traveler Repaired", profiles[0].Nickname)
 	assert.True(t, profiles[0].IsPrimary)
-}
-
-type platformBindingRouteStub struct {
-	platformv1.UnimplementedPlatformServiceServer
-	summaryResponse          *platformv1.GetCredentialSummaryResponse
-	putResponse              *platformv1.PutCredentialResponse
-	putErr                   error
-	deleteErr                error
-	confirmPrimaryProfileErr error
-	lastPut                  *platformv1.PutCredentialRequest
-	deleteRequests           []*platformv1.DeleteCredentialRequest
-}
-
-func (s *platformBindingRouteStub) DescribePlatform(context.Context, *platformv1.DescribePlatformRequest) (*platformv1.DescribePlatformResponse, error) {
-	return &platformv1.DescribePlatformResponse{}, nil
-}
-
-func (s *platformBindingRouteStub) GetCredentialSummary(context.Context, *platformv1.GetCredentialSummaryRequest) (*platformv1.GetCredentialSummaryResponse, error) {
-	if s.summaryResponse != nil {
-		return s.summaryResponse, nil
-	}
-	return &platformv1.GetCredentialSummaryResponse{}, nil
-}
-
-func (s *platformBindingRouteStub) PutCredential(_ context.Context, req *platformv1.PutCredentialRequest) (*platformv1.PutCredentialResponse, error) {
-	s.lastPut = req
-	if s.putErr != nil {
-		return nil, s.putErr
-	}
-	return s.putResponse, nil
-}
-
-func (s *platformBindingRouteStub) RefreshCredential(context.Context, *platformv1.RefreshCredentialRequest) (*platformv1.RefreshCredentialResponse, error) {
-	return &platformv1.RefreshCredentialResponse{}, nil
-}
-
-func (s *platformBindingRouteStub) DeleteCredential(_ context.Context, req *platformv1.DeleteCredentialRequest) (*platformv1.DeleteCredentialResponse, error) {
-	s.deleteRequests = append(s.deleteRequests, req)
-	if s.deleteErr != nil {
-		return nil, s.deleteErr
-	}
-	return &platformv1.DeleteCredentialResponse{Success: true}, nil
-}
-
-func (s *platformBindingRouteStub) InvalidateConsumerGrant(context.Context, *platformv1.InvalidateConsumerGrantRequest) (*platformv1.InvalidateConsumerGrantResponse, error) {
-	return &platformv1.InvalidateConsumerGrantResponse{Success: true}, nil
-}
-
-func (s *platformBindingRouteStub) ConfirmPrimaryProfile(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	if s.confirmPrimaryProfileErr != nil {
-		return nil, s.confirmPrimaryProfileErr
-	}
-	return &emptypb.Empty{}, nil
-}
-
-type confirmPrimaryProfileService interface {
-	ConfirmPrimaryProfile(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-}
-
-var confirmPrimaryProfileServiceDesc = grpc.ServiceDesc{
-	ServiceName: "mihomo.v1.MihomoAccountService",
-	HandlerType: (*confirmPrimaryProfileService)(nil),
-	Methods: []grpc.MethodDesc{{
-		MethodName: "ConfirmPrimaryProfile",
-		Handler: func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-			in := new(emptypb.Empty)
-			if err := dec(in); err != nil {
-				return nil, err
-			}
-			if interceptor == nil {
-				return srv.(confirmPrimaryProfileService).ConfirmPrimaryProfile(ctx, in)
-			}
-			info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/mihomo.v1.MihomoAccountService/ConfirmPrimaryProfile"}
-			handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-				return srv.(confirmPrimaryProfileService).ConfirmPrimaryProfile(ctx, req.(*emptypb.Empty))
-			}
-			return interceptor(ctx, in, info, handler)
-		},
-	}},
-}
-
-func startPlatformBindingRouteServer(t *testing.T, stub *platformBindingRouteStub) string {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	server := grpc.NewServer()
-	platformv1.RegisterPlatformServiceServer(server, stub)
-	server.RegisterService(&confirmPrimaryProfileServiceDesc, stub)
-	serveErrCh := make(chan error, 1)
-	go func() {
-		serveErrCh <- server.Serve(listener)
-	}()
-	t.Cleanup(func() {
-		server.Stop()
-		_ = listener.Close()
-		<-serveErrCh
-	})
-	return listener.Addr().String()
 }
 
 func seedEnabledPlatformService(t *testing.T, stack *integrationStack, endpoint string) {

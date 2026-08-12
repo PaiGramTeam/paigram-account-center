@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -38,7 +39,7 @@ func TestGRPCGenericCredentialGatewayPutCredential(t *testing.T) {
 	summary, err := gateway.PutCredential(context.Background(), "bufnet", "ticket-123", &model.PlatformAccountBinding{ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true}}, json.RawMessage(`{"cookie_bundle":"abc"}`))
 	require.NoError(t, err)
 	require.Equal(t, "binding_101_10001", stub.lastPut.PlatformAccountId)
-	require.Equal(t, "ticket-123", stub.lastPut.ServiceTicket)
+	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
 	require.Equal(t, `{"cookie_bundle":"abc"}`, stub.lastPut.CredentialPayloadJson)
 	require.Equal(t, "binding_101_10001", summary["platform_account_id"])
 }
@@ -60,17 +61,18 @@ func TestGRPCGenericCredentialGatewayDeleteCredentialUsesResolvedAccountKey(t *t
 	err := gateway.DeleteCredential(context.Background(), "bufnet", "ticket-123", &model.PlatformAccountBinding{ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true}})
 	require.NoError(t, err)
 	require.Equal(t, "binding_101_10001", stub.lastDelete.PlatformAccountId)
-	require.Equal(t, "ticket-123", stub.lastDelete.ServiceTicket)
+	require.Equal(t, []string{"Bearer ticket-123"}, stub.lastAuthorization)
 }
 
 type genericCredentialGatewayStub struct {
 	platformv1.UnimplementedPlatformServiceServer
-	putResponse     *platformv1.PutCredentialResponse
-	refreshResponse *platformv1.RefreshCredentialResponse
-	deleteResponse  *platformv1.DeleteCredentialResponse
-	lastPut         *platformv1.PutCredentialRequest
-	lastRefresh     *platformv1.RefreshCredentialRequest
-	lastDelete      *platformv1.DeleteCredentialRequest
+	putResponse       *platformv1.PutCredentialResponse
+	refreshResponse   *platformv1.RefreshCredentialResponse
+	deleteResponse    *platformv1.DeleteCredentialResponse
+	lastPut           *platformv1.PutCredentialRequest
+	lastRefresh       *platformv1.RefreshCredentialRequest
+	lastDelete        *platformv1.DeleteCredentialRequest
+	lastAuthorization []string
 }
 
 func (s *genericCredentialGatewayStub) DescribePlatform(context.Context, *platformv1.DescribePlatformRequest) (*platformv1.DescribePlatformResponse, error) {
@@ -81,12 +83,14 @@ func (s *genericCredentialGatewayStub) GetCredentialSummary(context.Context, *pl
 	return &platformv1.GetCredentialSummaryResponse{}, nil
 }
 
-func (s *genericCredentialGatewayStub) PutCredential(_ context.Context, req *platformv1.PutCredentialRequest) (*platformv1.PutCredentialResponse, error) {
+func (s *genericCredentialGatewayStub) PutCredential(ctx context.Context, req *platformv1.PutCredentialRequest) (*platformv1.PutCredentialResponse, error) {
+	s.captureAuthorization(ctx)
 	s.lastPut = req
 	return s.putResponse, nil
 }
 
-func (s *genericCredentialGatewayStub) RefreshCredential(_ context.Context, req *platformv1.RefreshCredentialRequest) (*platformv1.RefreshCredentialResponse, error) {
+func (s *genericCredentialGatewayStub) RefreshCredential(ctx context.Context, req *platformv1.RefreshCredentialRequest) (*platformv1.RefreshCredentialResponse, error) {
+	s.captureAuthorization(ctx)
 	s.lastRefresh = req
 	if s.refreshResponse == nil {
 		return &platformv1.RefreshCredentialResponse{}, nil
@@ -94,10 +98,16 @@ func (s *genericCredentialGatewayStub) RefreshCredential(_ context.Context, req 
 	return s.refreshResponse, nil
 }
 
-func (s *genericCredentialGatewayStub) DeleteCredential(_ context.Context, req *platformv1.DeleteCredentialRequest) (*platformv1.DeleteCredentialResponse, error) {
+func (s *genericCredentialGatewayStub) DeleteCredential(ctx context.Context, req *platformv1.DeleteCredentialRequest) (*platformv1.DeleteCredentialResponse, error) {
+	s.captureAuthorization(ctx)
 	s.lastDelete = req
 	if s.deleteResponse == nil {
 		return &platformv1.DeleteCredentialResponse{Success: true}, nil
 	}
 	return s.deleteResponse, nil
+}
+
+func (s *genericCredentialGatewayStub) captureAuthorization(ctx context.Context) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	s.lastAuthorization = append([]string(nil), md.Get("authorization")...)
 }

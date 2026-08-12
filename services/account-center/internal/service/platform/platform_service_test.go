@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/pem"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
@@ -284,7 +286,7 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 	require.Equal(t, uint64(8), stub.lastRequest.GetMinimumGrantVersion())
 
 	parsed := &ServiceTicketClaims{}
-	token, err := jwt.ParseWithClaims(stub.lastRequest.GetServiceTicket(), parsed, func(token *jwt.Token) (any, error) {
+	token, err := jwt.ParseWithClaims(stub.lastServiceTicket, parsed, func(token *jwt.Token) (any, error) {
 		return publicKey, nil
 	})
 	require.NoError(t, err)
@@ -399,7 +401,7 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 	require.NoError(t, err)
 
 	parsed := &ServiceTicketClaims{}
-	token, err := jwt.ParseWithClaims(stub.lastRequest.GetServiceTicket(), parsed, func(token *jwt.Token) (any, error) {
+	token, err := jwt.ParseWithClaims(stub.lastServiceTicket, parsed, func(token *jwt.Token) (any, error) {
 		return publicKey, nil
 	})
 	require.NoError(t, err)
@@ -435,11 +437,17 @@ func TestPlatformServiceListPlatformViews(t *testing.T) {
 
 type grantInvalidationPlatformServiceStub struct {
 	platformv1.UnimplementedPlatformServiceServer
-	response    *platformv1.InvalidateConsumerGrantResponse
-	lastRequest *platformv1.InvalidateConsumerGrantRequest
+	response          *platformv1.InvalidateConsumerGrantResponse
+	lastRequest       *platformv1.InvalidateConsumerGrantRequest
+	lastServiceTicket string
 }
 
-func (s *grantInvalidationPlatformServiceStub) InvalidateConsumerGrant(_ context.Context, req *platformv1.InvalidateConsumerGrantRequest) (*platformv1.InvalidateConsumerGrantResponse, error) {
+func (s *grantInvalidationPlatformServiceStub) InvalidateConsumerGrant(ctx context.Context, req *platformv1.InvalidateConsumerGrantRequest) (*platformv1.InvalidateConsumerGrantResponse, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	values := md.Get("authorization")
+	if len(values) == 1 {
+		s.lastServiceTicket = strings.TrimPrefix(values[0], "Bearer ")
+	}
 	s.lastRequest = req
 	return s.response, nil
 }
@@ -506,7 +514,7 @@ func TestPlatformServiceGetPlatformAccountSummaryIssuesScopedTicketAndCallsProxy
 	authConfig, publicKey := testPlatformAuth(t)
 	require.NoError(t, svc.ConfigureAuth(authConfig))
 	proxy := &fakeSummaryProxy{summary: map[string]any{"status": "active"}}
-	svc.SetSummaryProxy(proxy)
+	svc.SetGenericSummaryProxy(proxy)
 
 	summary, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
 	require.NoError(t, err)
@@ -585,13 +593,13 @@ func TestPlatformServiceGetPlatformAccountSummaryReturnsServiceUnavailableWhenRe
 
 	svc := NewServiceGroup(db).PlatformService
 	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
-	svc.SetSummaryProxy(&fakeSummaryProxy{summary: map[string]any{"status": "active"}})
+	svc.SetGenericSummaryProxy(&fakeSummaryProxy{summary: map[string]any{"status": "active"}})
 
 	_, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
 	require.ErrorIs(t, err, ErrPlatformServiceUnavailable)
 }
 
-func TestPlatformServiceGetPlatformAccountSummaryPrefersGenericProxy(t *testing.T) {
+func TestPlatformServiceGetPlatformAccountSummaryUsesGenericProxy(t *testing.T) {
 	db := testutil.OpenPostgreSQLTestDB(
 		t,
 		"platform_registry_generic_summary_proxy",
@@ -626,15 +634,12 @@ func TestPlatformServiceGetPlatformAccountSummaryPrefersGenericProxy(t *testing.
 
 	svc := NewServiceGroup(db).PlatformService
 	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
-	legacyProxy := &fakeSummaryProxy{summary: map[string]any{"path": "legacy"}}
 	genericProxy := &fakeSummaryProxy{summary: map[string]any{"path": "generic"}}
-	svc.SetSummaryProxy(legacyProxy)
 	svc.SetGenericSummaryProxy(genericProxy)
 
 	summary, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{"path": "generic"}, summary)
-	require.Equal(t, 0, legacyProxy.calls)
 	require.Equal(t, 1, genericProxy.calls)
 	require.Equal(t, "127.0.0.1:9000", genericProxy.endpoint)
 	require.Equal(t, ref.PlatformAccountID, genericProxy.platformAccountID)

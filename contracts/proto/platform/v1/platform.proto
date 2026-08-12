@@ -14,6 +14,7 @@ service PlatformService {
   rpc GetCredentialSummary(GetCredentialSummaryRequest) returns (GetCredentialSummaryResponse);
   rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse);
   rpc GetPrimaryProfile(GetPrimaryProfileRequest) returns (GetPrimaryProfileResponse);
+  rpc ConfirmPrimaryProfile(ConfirmPrimaryProfileRequest) returns (ConfirmPrimaryProfileResponse);
   rpc GetAuthKey(GetAuthKeyRequest) returns (GetAuthKeyResponse);
   rpc UpsertDevice(UpsertDeviceRequest) returns (UpsertDeviceResponse);
   rpc PutCredential(PutCredentialRequest) returns (PutCredentialResponse);
@@ -61,7 +62,8 @@ enum CredentialStatus {
 }
 
 message GetCredentialSummaryRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -75,7 +77,8 @@ message GetCredentialSummaryResponse {
 }
 
 message GetCredentialStatusRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -85,7 +88,8 @@ message GetCredentialStatusResponse {
 }
 
 message ValidateCredentialRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -95,7 +99,8 @@ message ValidateCredentialResponse {
 }
 
 message ListProfilesRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -104,7 +109,8 @@ message ListProfilesResponse {
 }
 
 message GetPrimaryProfileRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -112,8 +118,20 @@ message GetPrimaryProfileResponse {
   ProfileSummary profile = 1;
 }
 
+message ConfirmPrimaryProfileRequest {
+  reserved 1;
+  reserved "service_ticket";
+  string platform_account_id = 2;
+  string player_id = 3;
+}
+
+message ConfirmPrimaryProfileResponse {
+  ProfileSummary profile = 1;
+}
+
 message GetAuthKeyRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
   string player_id = 3;
 }
@@ -130,7 +148,8 @@ message DeviceInfo {
 }
 
 message UpsertDeviceRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
   DeviceInfo device = 3;
 }
@@ -140,7 +159,8 @@ message UpsertDeviceResponse {
 }
 
 message PutCredentialRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
   string credential_payload_json = 3;
 }
@@ -150,7 +170,8 @@ message PutCredentialResponse {
 }
 
 message RefreshCredentialRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -160,7 +181,8 @@ message RefreshCredentialResponse {
 }
 
 message DeleteCredentialRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   string platform_account_id = 2;
 }
 
@@ -169,7 +191,8 @@ message DeleteCredentialResponse {
 }
 
 message InvalidateConsumerGrantRequest {
-  string service_ticket = 1;
+  reserved 1;
+  reserved "service_ticket";
   uint64 binding_id = 2;
   string consumer = 3;
   uint64 minimum_grant_version = 4;
