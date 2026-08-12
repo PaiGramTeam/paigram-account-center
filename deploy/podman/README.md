@@ -2,7 +2,7 @@
 
 This project deploys Account Center, its PostgreSQL and Redis stores, and the user/admin frontend. Platform Mihomo has an independent project under `deploy/podman-platform-mihomo` and must be deployed first so the shared private network exists.
 
-Run `init-env.ps1` to create only non-secret settings. It requires immutable Account and frontend image references in `registry/repository@sha256:<64 hex characters>` form. Build those images from the checked-in Containerfiles in CI with `--build-arg VCS_REF=<full source commit>`, push them once, record their registry-reported manifest digests, and pass those canonical references to the initializer. The build rejects a missing or malformed source revision and stores it in the standard `org.opencontainers.image.revision` label. Production Compose never builds from a mutable working tree and the deployment entry point rejects tag-only images. Base images are also pinned by digest; update their readable tag and digest together during a reviewed dependency update. This follows [Docker's digest-pinning guidance](https://docs.docker.com/build/building/best-practices/#pin-base-image-versions).
+Run `init-env.ps1` to create only non-secret settings. It requires immutable Account and frontend image references in `registry/repository@sha256:<64 hex characters>` form. Build those images from the checked-in Containerfiles in CI with `VCS_REF` set to the full source commit, `CONTRACT_BASELINE` set to the full commit returned by the contract breaking-baseline query, and `SDK_VERSION` set to the Python project version. The build rejects missing or malformed metadata and stores it in `org.opencontainers.image.revision`, `org.paigram.contract-baseline`, and `org.paigram.sdk-version`. Push each image once, record its registry-reported manifest digest, and pass that canonical reference to the initializer. Production Compose never builds from a mutable working tree and the deployment entry point rejects tag-only images. Base images are also pinned by digest; update their readable tag and digest together during a reviewed dependency update. This follows [Docker's digest-pinning guidance](https://docs.docker.com/build/building/best-practices/#pin-base-image-versions).
 
 Provision every external secret named by `compose.yaml` with `podman secret create`; do not place database credentials, Redis credentials, signing/encryption keys, TLS private keys, or the bootstrap administrator password in `.env`, Compose environment entries, shell arguments, or logs.
 
@@ -41,15 +41,19 @@ The remaining Account secrets use these formats and pairings:
 
 Encode reserved DSN password characters using PostgreSQL URI percent-encoding. Do not copy a percent-encoded DSN password into the raw PostgreSQL password secret.
 
-```powershell
+```powershell annotate
+# Initializes deployment settings with immutable release images before starting the project.
 cd deploy/podman
-./init-env.ps1 -FrontendBaseUrl https://account.example.com
+./init-env.ps1 `
+  -FrontendBaseUrl https://account.example.com `
+  -AccountImage ghcr.io/paigramteam/paigram-account-center@sha256:<64-hex-digest> `
+  -FrontendImage ghcr.io/paigramteam/paigram-account-frontend@sha256:<64-hex-digest>
 ./deploy.ps1
 ```
 
 The frontend and Account Center Bot gRPC listener publish only their configured loopback ports. PostgreSQL, Redis, Account Center HTTP, and the Platform control listener remain private. Terminate public HTTPS and gRPC TLS routing at trusted ingress where required, and preserve the configured secure-cookie and trusted-proxy policy.
 
-The private `account-center` network intentionally uses `10.77.20.0/24`: the frontend proxy is fixed at `10.77.20.10`, and Account Center trusts only that single address for `X-Forwarded-For`. The network gateway `10.77.20.1` is the only source Nginx trusts to supply an upstream forwarding chain, matching the loopback-published host ingress path. Check for subnet conflicts before first deployment; do not widen either trust entry to an RFC1918 range. If the surrounding ingress topology differs, update the subnet, both exact trust addresses, and the corresponding tests/configuration together.
+The private `account-center` network intentionally uses `10.77.20.0/24`: the frontend proxy is fixed at `10.77.20.10`, and Account Center trusts only that single address for `X-Forwarded-For`. The network gateway `10.77.20.1` is the only source Nginx trusts to supply an upstream forwarding chain, matching the loopback-published host ingress path. This topology treats the host OS and every process allowed to reach the loopback-published port as part of the trusted computing base; it is not suitable for a multi-tenant host. On a shared host, remove the loopback publication and attach a dedicated ingress workload directly to a private network instead. Check for subnet conflicts and confirm the observed gateway source address in Nginx access logs before first deployment; do not widen either trust entry to an RFC1918 range. If the ingress topology or Podman network backend differs, update the subnet, both exact trust addresses, and the corresponding real-IP test together.
 
 Nginx emits the same CSP, MIME-sniffing, clickjacking, and referrer protections for static user/admin assets and proxied responses. Public TLS ingress remains responsible for preserving these headers and enforcing HSTS at the public HTTPS boundary.
 

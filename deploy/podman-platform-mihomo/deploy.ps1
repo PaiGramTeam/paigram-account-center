@@ -20,6 +20,14 @@ function Get-EnvValue {
     return $line.Substring($prefix.Length)
 }
 
+$composeEnvironmentKeys = @(
+    "PAI_PLATFORM_INSTANCE", "PAI_PLATFORM_NETWORK", "PAI_PLATFORM_IMAGE", "PAI_RUNTIME_BIND",
+    "PAI_RUNTIME_PORT", "PAI_RUNTIME_SERVER_NAME", "PAI_MIHOMO_UPSTREAM_BASE_URL"
+)
+foreach ($name in $composeEnvironmentKeys) {
+    [Environment]::SetEnvironmentVariable($name, (Get-EnvValue -Name $name), "Process")
+}
+
 $instance = Get-EnvValue -Name "PAI_PLATFORM_INSTANCE"
 if (-not $instance) { $instance = "paigram-platform-mihomo" }
 if ($instance -notmatch '^[a-z0-9][a-z0-9-]*$') {

@@ -23,6 +23,15 @@ function Get-EnvValue {
     return $line.Substring($prefix.Length)
 }
 
+$composeEnvironmentKeys = @(
+    "PAI_INSTANCE", "PAI_PLATFORM_NETWORK", "PAI_ACCOUNT_IMAGE", "PAI_FRONTEND_IMAGE",
+    "PAI_HTTP_BIND", "PAI_HTTP_PORT", "PAI_ACCOUNT_GRPC_BIND", "PAI_ACCOUNT_GRPC_PORT",
+    "PAI_FRONTEND_BASE_URL", "PAI_REQUIRE_EMAIL_VERIFICATION", "PAI_ADMIN_EMAIL", "PAI_ADMIN_NAME"
+)
+foreach ($name in $composeEnvironmentKeys) {
+    [Environment]::SetEnvironmentVariable($name, (Get-EnvValue -Name $name), "Process")
+}
+
 $instance = Get-EnvValue -Name "PAI_INSTANCE"
 if (-not $instance) {
     $instance = "paigram-account-center"
