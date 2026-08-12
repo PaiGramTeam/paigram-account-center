@@ -2,10 +2,7 @@ package botaccess
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/x509"
 	"database/sql"
-	"encoding/pem"
 	"strings"
 	"testing"
 	"time"
@@ -18,14 +15,14 @@ import (
 	"paigram/internal/config"
 	"paigram/internal/model"
 	internalticket "paigram/internal/serviceticket"
+	"paigram/internal/testutil"
 )
 
 func TestNewTicketServiceRejectsInvalidPrivateKey(t *testing.T) {
 	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketTTLSeconds:    300,
-		ServiceTicketIssuer:        "issuer",
-		ServiceTicketKeyID:         "test-key",
-		ServiceTicketPrivateKeyPEM: "invalid",
+		ServiceTicketTTLSeconds:     300,
+		ServiceTicketIssuer:         "issuer",
+		ServiceTicketSigningKeyFile: testutil.WriteServiceTicketSigningKey(t, "test-key", "invalid"),
 	})
 	require.ErrorIs(t, err, ErrInvalidTicketConfig)
 	assert.Nil(t, service)
@@ -161,16 +158,15 @@ func TestTicketServiceRejectsExpiredTicket(t *testing.T) {
 
 func newTestTicketAuthConfig(t *testing.T, ttlSeconds int) (config.AuthConfig, ed25519.PublicKey) {
 	t.Helper()
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	privateKeyPEM, publicKeyPEM, err := contractticket.GenerateKeyPairPEM()
 	require.NoError(t, err)
-	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	publicKey, err := contractticket.ParsePublicKeyPEM(publicKeyPEM)
 	require.NoError(t, err)
 
 	return config.AuthConfig{
-		ServiceTicketTTLSeconds:    ttlSeconds,
-		ServiceTicketIssuer:        "issuer",
-		ServiceTicketKeyID:         "test-key",
-		ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
+		ServiceTicketTTLSeconds:     ttlSeconds,
+		ServiceTicketIssuer:         "issuer",
+		ServiceTicketSigningKeyFile: testutil.WriteServiceTicketSigningKey(t, "test-key", privateKeyPEM),
 	}, publicKey
 }
 

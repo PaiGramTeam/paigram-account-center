@@ -26,7 +26,7 @@ type AuthkeyUsecase struct {
 	artifactRepo   biz.ArtifactRepository
 	artifacts      *ArtifactLifecycle
 	client         platformmihomo.Client
-	encryptionKey  []byte
+	encryptionKey  internalcrypto.KeyProvider
 }
 
 func NewAuthkeyUsecase(
@@ -34,7 +34,7 @@ func NewAuthkeyUsecase(
 	artifactRepo biz.ArtifactRepository,
 	artifacts *ArtifactLifecycle,
 	client platformmihomo.Client,
-	encryptionKey []byte,
+	encryptionKey internalcrypto.KeyProvider,
 ) *AuthkeyUsecase {
 	return &AuthkeyUsecase{
 		credentialRepo: credentialRepo,
@@ -104,6 +104,20 @@ func (uc *AuthkeyUsecase) getAuthKeyLocked(ctx context.Context, credential *biz.
 	if err != nil {
 		return nil, nil, err
 	}
+	credentialNeedsReencryption, err := internalcrypto.EnvelopeNeedsReencryption(uc.encryptionKey, credential.CredentialBlob)
+	if err != nil {
+		return nil, nil, err
+	}
+	if credentialNeedsReencryption {
+		credential.CredentialBlob, err = internalcrypto.EncryptString(uc.encryptionKey, cookieBundleJSON)
+		if err != nil {
+			return nil, nil, err
+		}
+		credential.CredentialVersion = "v2"
+		if err := uc.credentialRepo.Save(ctx, credential); err != nil {
+			return nil, nil, err
+		}
+	}
 	pending, err := uc.artifactRepo.HasRevocationPending(ctx, credential.BindingRef)
 	if err != nil {
 		return nil, nil, err
@@ -128,6 +142,19 @@ func (uc *AuthkeyUsecase) getAuthKeyLocked(ctx context.Context, credential *biz.
 		authKey, err := internalcrypto.DecryptArtifact(uc.encryptionKey, artifact.ArtifactValue, artifact.BindingRef, artifact.AccountKey, artifact.ArtifactType, artifact.ScopeKey)
 		if err != nil {
 			return nil, nil, err
+		}
+		artifactNeedsReencryption, err := internalcrypto.EnvelopeNeedsReencryption(uc.encryptionKey, artifact.ArtifactValue)
+		if err != nil {
+			return nil, nil, err
+		}
+		if artifactNeedsReencryption {
+			artifact.ArtifactValue, err = internalcrypto.EncryptArtifact(uc.encryptionKey, authKey, artifact.BindingRef, artifact.AccountKey, artifact.ArtifactType, artifact.ScopeKey)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := uc.artifactRepo.PutIfCredentialCurrent(ctx, artifact, credential.Generation); err != nil {
+				return nil, nil, err
+			}
 		}
 		return &GetAuthKeyOutput{AuthKey: authKey, ExpiresAt: artifact.ExpiresAt}, nil, nil
 	}

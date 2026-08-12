@@ -61,6 +61,7 @@ func newTokenHandlerFixture(t *testing.T) *tokenHandlerFixture {
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE service_credentials (
 		client_id TEXT PRIMARY KEY,
+		consumer_epoch INTEGER NOT NULL DEFAULT 1,
 		bot_id TEXT NOT NULL,
 		display_name TEXT NOT NULL,
 		secret_hash TEXT NOT NULL,

@@ -14,7 +14,7 @@ type ServiceGroup struct {
 // NewServiceGroup creates the platform service group.
 func NewServiceGroup(db *gorm.DB) *ServiceGroup {
 	service := PlatformService{db: db}
-	service.SetHealthChecker(newGRPCHealthChecker(2 * time.Second))
+	service.SetHealthChecker(newGRPCHealthChecker(2*time.Second, nil))
 
 	return &ServiceGroup{PlatformService: service}
 }

@@ -303,7 +303,7 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 		return nil, err
 	}
 
-	summary, err := s.gateway.RefreshCredential(ctx, platformRow.Endpoint, ticket, operationID, binding)
+	summary, err := s.gateway.RefreshCredential(ctx, platformRow.ControlEndpoint, ticket, operationID, binding)
 	if err != nil {
 		return nil, s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
 	}
@@ -362,7 +362,7 @@ func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
 
-	if err := s.gateway.DeleteCredential(ctx, platformRow.Endpoint, ticket, operationID, binding); err != nil {
+	if err := s.gateway.DeleteCredential(ctx, platformRow.ControlEndpoint, ticket, operationID, binding); err != nil {
 		if s.operationIntents != nil {
 			return s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
 		}
@@ -436,9 +436,9 @@ func (s *OrchestrationService) putCredentialWithOperation(ctx context.Context, b
 
 	var summary map[string]any
 	if hasResolvedAccount {
-		summary, err = s.gateway.ReplaceCredential(ctx, platformRow.Endpoint, ticket, operationID, binding, input.CredentialPayload)
+		summary, err = s.gateway.ReplaceCredential(ctx, platformRow.ControlEndpoint, ticket, operationID, binding, input.CredentialPayload)
 	} else {
-		summary, err = s.gateway.BindCredential(ctx, platformRow.Endpoint, ticket, operationID, binding, input.CredentialPayload)
+		summary, err = s.gateway.BindCredential(ctx, platformRow.ControlEndpoint, ticket, operationID, binding, input.CredentialPayload)
 	}
 	if err != nil {
 		return nil, nil, s.handleCredentialDeliveryError(ctx, binding, reference, err)
@@ -455,7 +455,7 @@ func (s *OrchestrationService) putCredentialWithOperation(ctx context.Context, b
 	updatedBinding, err := s.bindingReader.PersistRuntimeSummary(binding.ID, *runtimeSummary)
 	if err != nil {
 		if errors.Is(err, ErrBindingAlreadyOwned) {
-			cleanupErr := s.compensateDeleteCredential(ctx, binding, runtimeSummary.PlatformAccountID, runtimeSummary.Generation, input.ActorType, input.ActorID, platformRow.Endpoint)
+			cleanupErr := s.compensateDeleteCredential(ctx, binding, runtimeSummary.PlatformAccountID, runtimeSummary.Generation, input.ActorType, input.ActorID, platformRow.ControlEndpoint)
 			if cleanupErr != nil {
 				s.markCredentialInvariantViolation(ctx, reference.OperationID, "compensation_delete_failed")
 				_, _ = s.bindingReader.UpdateBindingFailure(binding.ID, model.PlatformAccountBindingStatusDeleteFailed, "compensation_delete_failed", cleanupErr.Error())

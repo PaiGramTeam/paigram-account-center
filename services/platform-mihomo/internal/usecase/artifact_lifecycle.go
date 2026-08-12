@@ -23,12 +23,12 @@ const artifactIntentReady = "ready"
 type ArtifactLifecycle struct {
 	repository biz.ArtifactRepository
 	revoker    platformmihomo.AuthKeyRevoker
-	key        []byte
+	key        internalcrypto.KeyProvider
 }
 
 type ArtifactLifecycleConfig struct {
 	Revoker       platformmihomo.AuthKeyRevoker
-	EncryptionKey []byte
+	EncryptionKey internalcrypto.KeyProvider
 }
 
 func NewArtifactLifecycle(repository biz.ArtifactRepository, configs ...ArtifactLifecycleConfig) *ArtifactLifecycle {

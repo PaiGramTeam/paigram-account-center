@@ -1452,15 +1452,9 @@ export interface components {
             /** Format: int64 */
             binding_id: number;
             consumer: string;
-            created_at?: unknown;
-            granted_at?: unknown;
-            granted_by?: unknown;
-            /** Format: int64 */
-            id?: number;
             propagation_state?: string;
             revoked_at: unknown;
             status: string;
-            updated_at?: unknown;
         };
         CreateResult: {
             client_id: string;
@@ -1737,6 +1731,9 @@ export interface components {
         PlatformListView: {
             display_name: string;
             platform: string;
+            runtime_endpoint: string;
+            runtime_server_name: string;
+            service_audience: string;
             supported_actions: string[] | null;
         };
         PlatformSchemaView: {
@@ -1751,6 +1748,7 @@ export interface components {
             /** Format: date-time */
             checked_at?: string;
             config_state: string;
+            control_endpoint: string;
             /** Format: date-time */
             created_at: string;
             credential_schema: {
@@ -1759,11 +1757,12 @@ export interface components {
             discovery_type: string;
             display_name: string;
             enabled: boolean;
-            endpoint: string;
             error?: string;
             /** Format: int64 */
             id: number;
             platform_key: string;
+            runtime_endpoint: string;
+            runtime_server_name: string;
             runtime_state: string;
             service_audience: string;
             service_key: string;
@@ -6186,14 +6185,16 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    control_endpoint: string;
                     credential_schema: {
                         [key: string]: unknown;
                     };
                     discovery_type: string;
                     display_name: string;
                     enabled: boolean;
-                    endpoint: string;
                     platform_key: string;
+                    runtime_endpoint: string;
+                    runtime_server_name: string;
                     service_audience: string;
                     service_key: string;
                     supported_actions: string[] | null;
@@ -6580,14 +6581,16 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    control_endpoint?: string;
                     credential_schema?: {
                         [key: string]: unknown;
                     };
                     discovery_type?: string;
                     display_name?: string;
                     enabled?: boolean;
-                    endpoint?: string;
                     platform_key?: string;
+                    runtime_endpoint?: string;
+                    runtime_server_name?: string;
                     service_audience?: string;
                     service_key?: string;
                     supported_actions?: string[];

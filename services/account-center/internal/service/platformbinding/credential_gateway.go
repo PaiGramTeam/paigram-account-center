@@ -9,12 +9,12 @@ import (
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"paigram/internal/grpc/clientauth"
 	"paigram/internal/model"
+	"paigram/internal/platformtransport"
 )
 
 var errGenericCredentialSummaryRequired = errors.New("credential operation result is required")
@@ -27,11 +27,13 @@ type GRPCGenericCredentialGateway struct {
 	dial CredentialGatewayDialFunc
 }
 
-func NewGRPCGenericCredentialGateway(dial CredentialGatewayDialFunc) *GRPCGenericCredentialGateway {
+func NewGRPCGenericCredentialGateway(dial func(context.Context, string) (*grpc.ClientConn, error)) *GRPCGenericCredentialGateway {
 	if dial == nil {
-		dial = dialGenericPlatform
+		dial = func(context.Context, string) (*grpc.ClientConn, error) {
+			return nil, platformtransport.ErrControlTransportNotConfigured
+		}
 	}
-	return &GRPCGenericCredentialGateway{dial: dial}
+	return &GRPCGenericCredentialGateway{dial: CredentialGatewayDialFunc(dial)}
 }
 
 func (g *GRPCGenericCredentialGateway) BindCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error) {
@@ -178,12 +180,6 @@ func newPrimaryProfileOperationRef(binding *model.PlatformAccountBinding, operat
 func credentialGatewayCallContext(ctx context.Context, ticket string) (context.Context, context.CancelFunc) {
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	return clientauth.WithServiceTicket(callCtx, ticket), cancel
-}
-
-func dialGenericPlatform(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	return grpc.DialContext(dialCtx, endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 }
 
 func bindingExternalAccountKey(binding *model.PlatformAccountBinding) string {

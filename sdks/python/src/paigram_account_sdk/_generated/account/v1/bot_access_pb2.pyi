@@ -75,6 +75,28 @@ class ListAccessibleBindingsResponse(_message.Message):
     bindings: _containers.RepeatedCompositeFieldContainer[PlatformAccountBinding]
     def __init__(self, bindings: _Optional[_Iterable[_Union[PlatformAccountBinding, _Mapping]]] = ...) -> None: ...
 
+class GetPlatformRuntimeRouteRequest(_message.Message):
+    __slots__ = ("platform_service_key",)
+    PLATFORM_SERVICE_KEY_FIELD_NUMBER: _ClassVar[int]
+    platform_service_key: str
+    def __init__(self, platform_service_key: _Optional[str] = ...) -> None: ...
+
+class GetPlatformRuntimeRouteResponse(_message.Message):
+    __slots__ = ("platform_key", "platform_service_key", "runtime_endpoint", "runtime_server_name", "service_audience", "supported_actions")
+    PLATFORM_KEY_FIELD_NUMBER: _ClassVar[int]
+    PLATFORM_SERVICE_KEY_FIELD_NUMBER: _ClassVar[int]
+    RUNTIME_ENDPOINT_FIELD_NUMBER: _ClassVar[int]
+    RUNTIME_SERVER_NAME_FIELD_NUMBER: _ClassVar[int]
+    SERVICE_AUDIENCE_FIELD_NUMBER: _ClassVar[int]
+    SUPPORTED_ACTIONS_FIELD_NUMBER: _ClassVar[int]
+    platform_key: str
+    platform_service_key: str
+    runtime_endpoint: str
+    runtime_server_name: str
+    service_audience: str
+    supported_actions: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, platform_key: _Optional[str] = ..., platform_service_key: _Optional[str] = ..., runtime_endpoint: _Optional[str] = ..., runtime_server_name: _Optional[str] = ..., service_audience: _Optional[str] = ..., supported_actions: _Optional[_Iterable[str]] = ...) -> None: ...
+
 class IssueServiceTicketRequest(_message.Message):
     __slots__ = ("external_user_id", "binding_ref", "requested_action", "profile_ref")
     EXTERNAL_USER_ID_FIELD_NUMBER: _ClassVar[int]

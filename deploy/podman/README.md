@@ -1,59 +1,52 @@
-# Podman 单机部署
+# Account Center Podman deployment
 
-该部署配置包含用户端、管理端、Account Center、Platform Mihomo，以及两套独立的 PostgreSQL/Redis。默认发布 Nginx 的统一 HTTP 入口和仅绑定回环地址的 Platform gRPC 端口；数据库、Redis 与 Account Center 后端端口只在 Podman 内部网络可达。
+This project deploys Account Center, its PostgreSQL and Redis stores, and the user/admin frontend. Platform Mihomo has an independent project under `deploy/podman-platform-mihomo` and must be deployed first so the shared private network exists.
 
-## 准备环境
+Run `init-env.ps1` to create only non-secret settings. Provision every external secret named by `compose.yaml` with `podman secret create`; do not place database credentials, Redis credentials, signing/encryption keys, TLS private keys, or the bootstrap administrator password in `.env`, Compose environment entries, shell arguments, or logs.
 
-需要 Podman 以及 `podman compose` 可用的 Compose provider。在 PowerShell 7 中生成本地配置：
+The Account Center control client trusts `platform_control_ca.pem` and presents its dedicated mTLS client certificate to `platform-mihomo:9000`. The certificate must be valid for client authentication. The Platform control certificate must contain `platform-control.internal`, which is the exact configured SNI name.
+
+## Secret formats
+
+Generate one Ed25519 key pair, JSON-escape the PEM values, and provision the private and public halves under the same non-secret key ID. The Account signing secret has this shape:
+
+```json
+{"kid":"ticket-2026-08","private_key_pem":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"}
+```
+
+The matching Platform secret `paigram-account-center-service-ticket-public-keyring` has this shape. Keep both old and new entries during rotation:
+
+```json
+{"keys":[{"kid":"ticket-2026-08","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"}]}
+```
+
+Generate the key pair with `openssl genpkey -algorithm ED25519` and derive the public key with `openssl pkey -pubout`. Build JSON with a JSON serializer so PEM newlines are escaped correctly. The OAuth signing key must contain at least 32 random bytes. The independent Account encryption secret must be either exactly 32 raw ASCII bytes or the padded standard-Base64 encoding of exactly 32 random bytes. Do not reuse either value as the ticket key or database password.
+
+For Redis, generate one random password. Store its raw value in `account_redis_password`, and create `account_redis_config` from a file containing `requirepass <the same password>`. A mismatch makes both the health check and Account Center fail authentication. Supply Podman secrets from files or standard input, not literal command arguments.
+
+The remaining Account secrets use these formats and pairings:
+
+| Secret | Required content |
+| --- | --- |
+| `account_postgres_password` | Raw PostgreSQL password. |
+| `account_database_dsn` | One PostgreSQL DSN for user/database `paigram` at `postgres:5432`; its URL-escaped password must represent the same raw value as `account_postgres_password`. |
+| `account_oauth_signing_key` | Raw random OAuth HMAC key of at least 32 bytes. |
+| `account_encryption_key` | Exactly 32 raw ASCII bytes, or padded standard Base64 for exactly 32 random bytes. |
+| `account_admin_password` | Raw bootstrap administrator password. |
+| `platform_control_ca` | PEM CA bundle that validates the Platform control server certificate. |
+| `account_control_client_cert` / `account_control_client_key` | Matching PEM certificate and PKCS#8 private key; the certificate must have client-auth usage and chain to the CA trusted by Platform. |
+| `account_grpc_cert` / `account_grpc_key` | Matching PEM server certificate and PKCS#8 private key; the certificate must have server-auth usage and a SAN equal to the SDK-facing Account gRPC server name. |
+
+Encode reserved DSN password characters using PostgreSQL URI percent-encoding. Do not copy a percent-encoded DSN password into the raw PostgreSQL password secret.
 
 ```powershell
 cd deploy/podman
 ./init-env.ps1 -FrontendBaseUrl https://account.example.com
-```
-
-脚本要求显式提供无路径的外部 HTTPS origin，并生成被 Git 忽略的 `.env`，其中包含两套数据库/Redis 凭据、匹配的 Ed25519 票据密钥对、两套数据加密密钥和初始管理员凭据。浏览器 refresh cookie 带 `Secure`、`HttpOnly` 和 `SameSite=Lax`，因此必须由外部 TLS 反向代理把该 origin 转发到回环入口；不要把 `127.0.0.1:18080` 作为面向用户的 HTTP 地址。部署前还必须把 `PAI_MIHOMO_UPSTREAM_BASE_URL` 改成真实 HTTPS 上游，并检查 `PAI_HTTP_BIND`、`PAI_HTTP_PORT` 和管理员信息。默认 HTTP 与 Platform gRPC 分别只监听 `127.0.0.1:18080` 和 `127.0.0.1:19000`。
-
-Platform 启动后，管理员需在“服务注册”中幂等创建 `mihomo` registry 项，内部端点填写 `platform-mihomo:9000`，service audience 填写 `platform-mihomo-service`，支持动作以 Platform `DescribePlatform` 返回值为准。当前单机 Compose 仅用于预发布联调；在向不可信网络开放 gRPC 前，仍必须完成计划中的 control/runtime 双入口 TLS/mTLS 切分。
-
-预发布模板默认 `PAI_REQUIRE_EMAIL_VERIFICATION=false`，避免在未配置 SMTP 时创建无法登录的待验证账号。要启用强制验证，必须同时把它改为 `true`、将 `PAI_FRONTEND_BASE_URL` 设为外部 HTTPS 地址，并在 Account Center 配置中启用有效的邮件服务；release 模式会对这组不变量 fail closed。
-
-默认 Podman 网段为 `10.90.0.0/24`。运行前使用 `podman network ls` 和本机路由表确认它未与其他容器网络、VPN 或局域网重叠；多个实例必须使用不同的 `PAI_INSTANCE`、端口和网段。
-
-## 构建与启动
-
-```powershell
 ./deploy.ps1
 ```
 
-部署脚本会构建全部镜像、启动服务、等待 Account Center/Platform 健康检查，并确认数据库、Redis 与 Account Center 没有发布宿主机端口。用户端位于 `/`，管理端位于 `/admin/`，API 与 OpenAPI 文档由同一入口反向代理。服务就绪后可检查：
+The frontend and Account Center Bot gRPC listener publish only their configured loopback ports. PostgreSQL, Redis, Account Center HTTP, and the Platform control listener remain private. Terminate public HTTPS and gRPC TLS routing at trusted ingress where required, and preserve the configured secure-cookie and trusted-proxy policy.
 
-已有同名、同标签镜像时，可使用 `./deploy.ps1 -NoBuild` 跳过构建，仅更新并验证运行容器。
+Podman injects secrets only when it creates a container. After every `podman secret create --replace`, recreate each consumer with `podman compose up -d --force-recreate`; restarting an existing container does not load the replacement.
 
-```powershell
-$settings = Get-Content .env -Raw | ConvertFrom-StringData
-$instance = $settings.PAI_INSTANCE
-$healthHost = if ($settings.PAI_HTTP_BIND -eq "0.0.0.0") { "127.0.0.1" } else { $settings.PAI_HTTP_BIND }
-
-Invoke-RestMethod "http://${healthHost}:$($settings.PAI_HTTP_PORT)/healthz"
-podman ps --filter "label=com.docker.compose.project=$instance"
-Invoke-WebRequest "http://${healthHost}:$($settings.PAI_HTTP_PORT)/"
-Invoke-WebRequest "http://${healthHost}:$($settings.PAI_HTTP_PORT)/admin/"
-podman port "$instance-frontend"
-podman port $instance
-podman port "$instance-postgres"
-podman port "$instance-redis"
-podman port "$instance-platform-mihomo"
-podman port "$instance-platform-postgres"
-podman port "$instance-platform-redis"
-```
-
-Account Center、两套数据库与两套 Redis 的 `podman port` 应无输出。前端 Nginx 和 Platform Mihomo 只应显示各自显式配置的回环地址映射。
-
-停止服务但保留数据卷：
-
-```powershell
-$settings = Get-Content .env -Raw | ConvertFrom-StringData
-podman compose --env-file .env -p $settings.PAI_INSTANCE -f compose.yaml down
-```
-
-数据保存在以 `PAI_INSTANCE` 为前缀的命名卷中。删除这些卷会永久删除数据库和 Redis 数据，因此常规停止或升级不应附加 `--volumes`。
+Rotate service-ticket keys by adding the new public key and recreating Platform first, replacing the Account signing secret and recreating Account Center, waiting the ticket TTL plus clock skew, and only then retiring the old public key and recreating Platform again. For TLS CA rotation, first publish an old+new trust bundle and recreate every verifier; next replace leaf certificates and recreate servers and clients; finally remove the old CA and recreate verifiers. New handshakes reload mounted files without a plaintext fallback, but external-secret replacement still requires container recreation.

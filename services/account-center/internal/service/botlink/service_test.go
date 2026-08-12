@@ -66,6 +66,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS bot_identities (
 			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			entry_identity_ref TEXT    NOT NULL,
+			entry_epoch        INTEGER NOT NULL DEFAULT 1,
 			user_id           INTEGER NOT NULL,
 			bot_id            TEXT    NOT NULL,
 			external_user_id  TEXT    NOT NULL,
@@ -75,6 +77,9 @@ func newTestDB(t *testing.T) *gorm.DB {
 			updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			deleted_at        DATETIME
 		)`).Error)
+	require.NoError(t, db.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_ref ON bot_identities(entry_identity_ref)`,
+	).Error)
 	require.NoError(t, db.Exec(
 		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_bot ON bot_identities(user_id, bot_id)`,
 	).Error)

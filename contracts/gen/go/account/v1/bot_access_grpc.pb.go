@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BotAccessService_ResolveBotUser_FullMethodName         = "/paigram.v1.BotAccessService/ResolveBotUser"
-	BotAccessService_ListAccessibleBindings_FullMethodName = "/paigram.v1.BotAccessService/ListAccessibleBindings"
-	BotAccessService_IssueServiceTicket_FullMethodName     = "/paigram.v1.BotAccessService/IssueServiceTicket"
+	BotAccessService_ResolveBotUser_FullMethodName          = "/paigram.v1.BotAccessService/ResolveBotUser"
+	BotAccessService_ListAccessibleBindings_FullMethodName  = "/paigram.v1.BotAccessService/ListAccessibleBindings"
+	BotAccessService_GetPlatformRuntimeRoute_FullMethodName = "/paigram.v1.BotAccessService/GetPlatformRuntimeRoute"
+	BotAccessService_IssueServiceTicket_FullMethodName      = "/paigram.v1.BotAccessService/IssueServiceTicket"
 )
 
 // BotAccessServiceClient is the client API for BotAccessService service.
@@ -30,6 +31,7 @@ const (
 type BotAccessServiceClient interface {
 	ResolveBotUser(ctx context.Context, in *ResolveBotUserRequest, opts ...grpc.CallOption) (*ResolveBotUserResponse, error)
 	ListAccessibleBindings(ctx context.Context, in *ListAccessibleBindingsRequest, opts ...grpc.CallOption) (*ListAccessibleBindingsResponse, error)
+	GetPlatformRuntimeRoute(ctx context.Context, in *GetPlatformRuntimeRouteRequest, opts ...grpc.CallOption) (*GetPlatformRuntimeRouteResponse, error)
 	IssueServiceTicket(ctx context.Context, in *IssueServiceTicketRequest, opts ...grpc.CallOption) (*IssueServiceTicketResponse, error)
 }
 
@@ -61,6 +63,16 @@ func (c *botAccessServiceClient) ListAccessibleBindings(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *botAccessServiceClient) GetPlatformRuntimeRoute(ctx context.Context, in *GetPlatformRuntimeRouteRequest, opts ...grpc.CallOption) (*GetPlatformRuntimeRouteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPlatformRuntimeRouteResponse)
+	err := c.cc.Invoke(ctx, BotAccessService_GetPlatformRuntimeRoute_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *botAccessServiceClient) IssueServiceTicket(ctx context.Context, in *IssueServiceTicketRequest, opts ...grpc.CallOption) (*IssueServiceTicketResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IssueServiceTicketResponse)
@@ -77,6 +89,7 @@ func (c *botAccessServiceClient) IssueServiceTicket(ctx context.Context, in *Iss
 type BotAccessServiceServer interface {
 	ResolveBotUser(context.Context, *ResolveBotUserRequest) (*ResolveBotUserResponse, error)
 	ListAccessibleBindings(context.Context, *ListAccessibleBindingsRequest) (*ListAccessibleBindingsResponse, error)
+	GetPlatformRuntimeRoute(context.Context, *GetPlatformRuntimeRouteRequest) (*GetPlatformRuntimeRouteResponse, error)
 	IssueServiceTicket(context.Context, *IssueServiceTicketRequest) (*IssueServiceTicketResponse, error)
 	mustEmbedUnimplementedBotAccessServiceServer()
 }
@@ -93,6 +106,9 @@ func (UnimplementedBotAccessServiceServer) ResolveBotUser(context.Context, *Reso
 }
 func (UnimplementedBotAccessServiceServer) ListAccessibleBindings(context.Context, *ListAccessibleBindingsRequest) (*ListAccessibleBindingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAccessibleBindings not implemented")
+}
+func (UnimplementedBotAccessServiceServer) GetPlatformRuntimeRoute(context.Context, *GetPlatformRuntimeRouteRequest) (*GetPlatformRuntimeRouteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPlatformRuntimeRoute not implemented")
 }
 func (UnimplementedBotAccessServiceServer) IssueServiceTicket(context.Context, *IssueServiceTicketRequest) (*IssueServiceTicketResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IssueServiceTicket not implemented")
@@ -154,6 +170,24 @@ func _BotAccessService_ListAccessibleBindings_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BotAccessService_GetPlatformRuntimeRoute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlatformRuntimeRouteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotAccessServiceServer).GetPlatformRuntimeRoute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotAccessService_GetPlatformRuntimeRoute_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotAccessServiceServer).GetPlatformRuntimeRoute(ctx, req.(*GetPlatformRuntimeRouteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _BotAccessService_IssueServiceTicket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IssueServiceTicketRequest)
 	if err := dec(in); err != nil {
@@ -186,6 +220,10 @@ var BotAccessService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListAccessibleBindings",
 			Handler:    _BotAccessService_ListAccessibleBindings_Handler,
+		},
+		{
+			MethodName: "GetPlatformRuntimeRoute",
+			Handler:    _BotAccessService_GetPlatformRuntimeRoute_Handler,
 		},
 		{
 			MethodName: "IssueServiceTicket",

@@ -8,8 +8,11 @@
       <div class="text-xs text-gray-500">{{ record.platform_key }} / {{ record.service_key }}</div>
     </template>
     <template #endpoint="{ record }">
-      <div class="max-w-80 truncate" :title="record.endpoint">{{ record.endpoint }}</div>
-      <div class="text-xs text-gray-500">{{ record.service_audience }}</div>
+      <div class="max-w-80 truncate" :title="record.control_endpoint">控制：{{ record.control_endpoint }}</div>
+      <div class="max-w-80 truncate text-xs text-gray-500" :title="record.runtime_endpoint">
+        运行：{{ record.runtime_endpoint }} · {{ record.runtime_server_name }}
+      </div>
+      <div class="text-xs text-gray-500">受众：{{ record.service_audience }}</div>
     </template>
     <template #state="{ record }">
       <a-space direction="vertical" size="mini">
@@ -67,8 +70,14 @@
       <a-form-item label="发现方式" required>
         <a-input v-model="form.discovery_type" placeholder="static" />
       </a-form-item>
-      <a-form-item label="gRPC 地址" required>
-        <a-input v-model="form.endpoint" placeholder="platform-mihomo:9001" />
+      <a-form-item label="控制端点（mTLS）" required>
+        <a-input v-model="form.control_endpoint" placeholder="platform-mihomo:9000" />
+      </a-form-item>
+      <a-form-item label="运行端点（TLS）" required>
+        <a-input v-model="form.runtime_endpoint" placeholder="runtime.example.com:443" />
+      </a-form-item>
+      <a-form-item label="运行端点 SNI" required>
+        <a-input v-model="form.runtime_server_name" placeholder="runtime.example.com" />
       </a-form-item>
       <a-form-item label="支持动作" required>
         <a-textarea v-model="form.actionsText" :auto-size="{ minRows: 3, maxRows: 7 }" placeholder="每行一个动作" />
@@ -107,7 +116,9 @@ const form = reactive({
   service_key: '',
   service_audience: '',
   discovery_type: 'static',
-  endpoint: '',
+  control_endpoint: '',
+  runtime_endpoint: '',
+  runtime_server_name: '',
   enabled: true,
   actionsText: '',
   schemaText: '{}',
@@ -144,7 +155,9 @@ const openEdit = (service: PlatformService): void => {
     service_key: service.service_key,
     service_audience: service.service_audience,
     discovery_type: service.discovery_type,
-    endpoint: service.endpoint,
+    control_endpoint: service.control_endpoint,
+    runtime_endpoint: service.runtime_endpoint,
+    runtime_server_name: service.runtime_server_name,
     enabled: service.enabled,
     actionsText: (service.supported_actions ?? []).join('\n'),
     schemaText: JSON.stringify(service.credential_schema, null, 2),
@@ -159,7 +172,9 @@ const toInput = (): PlatformServiceInput | null => {
     form.service_key,
     form.service_audience,
     form.discovery_type,
-    form.endpoint,
+    form.control_endpoint,
+    form.runtime_endpoint,
+    form.runtime_server_name,
   ]
   if (required.some((value) => !value.trim())) {
     Message.warning('请填写所有必填字段')
@@ -176,7 +191,9 @@ const toInput = (): PlatformServiceInput | null => {
       service_key: form.service_key.trim(),
       service_audience: form.service_audience.trim(),
       discovery_type: form.discovery_type.trim(),
-      endpoint: form.endpoint.trim(),
+      control_endpoint: form.control_endpoint.trim(),
+      runtime_endpoint: form.runtime_endpoint.trim(),
+      runtime_server_name: form.runtime_server_name.trim(),
       enabled: form.enabled,
       supported_actions: splitLines(form.actionsText),
       credential_schema: schema as Record<string, unknown>,
@@ -230,7 +247,9 @@ const resetForm = (): void => {
     service_key: '',
     service_audience: '',
     discovery_type: 'static',
-    endpoint: '',
+    control_endpoint: '',
+    runtime_endpoint: '',
+    runtime_server_name: '',
     enabled: true,
     actionsText: '',
     schemaText: '{}',

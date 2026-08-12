@@ -102,7 +102,7 @@ func runAllSeeds(cmd *cobra.Command) {
 		}
 		fmt.Println("✓ Default admin processed successfully")
 		fmt.Println("Email and password for the seeded admin came from")
-		fmt.Println("ADMIN_EMAIL / ADMIN_PASSWORD environment variables.")
+		fmt.Println("ADMIN_EMAIL and ADMIN_PASSWORD_FILE / ADMIN_PASSWORD settings.")
 		fmt.Println("Rotate the password via the admin UI as soon as possible.")
 	}
 
@@ -146,7 +146,7 @@ func runAdminSeed() {
 	fmt.Println()
 	fmt.Println("Default admin account created.")
 	fmt.Println("- Email: ADMIN_EMAIL (defaults to admin@paigram.local)")
-	fmt.Println("- Password: ADMIN_PASSWORD (the value you supplied via env)")
+	fmt.Println("- Password: the value supplied through ADMIN_PASSWORD_FILE or ADMIN_PASSWORD")
 	fmt.Println()
 	fmt.Println("⚠️  Rotate the password via the admin UI immediately.")
 }

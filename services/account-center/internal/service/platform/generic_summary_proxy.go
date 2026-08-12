@@ -6,24 +6,22 @@ import (
 
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"paigram/internal/grpc/clientauth"
+	"paigram/internal/platformtransport"
 )
 
 type GRPCGenericSummaryProxy struct {
 	dial dialFunc
 }
 
-func NewGRPCGenericSummaryProxy(dial dialFunc) *GRPCGenericSummaryProxy {
+func NewGRPCGenericSummaryProxy(dial func(context.Context, string) (*grpc.ClientConn, error)) *GRPCGenericSummaryProxy {
 	if dial == nil {
-		dial = func(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			return grpc.DialContext(ctx, endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		dial = func(context.Context, string) (*grpc.ClientConn, error) {
+			return nil, platformtransport.ErrControlTransportNotConfigured
 		}
 	}
-	return &GRPCGenericSummaryProxy{dial: dial}
+	return &GRPCGenericSummaryProxy{dial: dialFunc(dial)}
 }
 
 func (p *GRPCGenericSummaryProxy) GetCredentialSummary(ctx context.Context, endpoint, ticket, bindingRef, accountKey string) (map[string]any, error) {

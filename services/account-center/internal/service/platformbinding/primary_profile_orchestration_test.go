@@ -23,7 +23,7 @@ type primaryProfilePlatformStub struct {
 }
 
 func (s *primaryProfilePlatformStub) GetEnabledPlatform(string) (*model.PlatformService, error) {
-	return &model.PlatformService{Endpoint: "127.0.0.1:9000"}, nil
+	return &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, nil
 }
 
 func (s *primaryProfilePlatformStub) IssueBindingScopedTicket(_, _ string, _ *model.PlatformAccountBinding, scopes []string) (string, time.Time, error) {

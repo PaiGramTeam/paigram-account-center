@@ -180,7 +180,7 @@ func TestAdminHandlerUpdatePlatformServiceMergesOmittedFields(t *testing.T) {
 		ServiceKey:       "platform-mihomo-service",
 		ServiceAudience:  "mihomo.platform",
 		DiscoveryType:    "static",
-		Endpoint:         "127.0.0.1:50051",
+		ControlEndpoint:  "127.0.0.1:50051",
 		Enabled:          true,
 		SupportedActions: []string{"bind_credential"},
 		CredentialSchema: map[string]any{"type": "object"},
@@ -210,7 +210,7 @@ func TestAdminHandlerUpdatePlatformServiceMergesOmittedFields(t *testing.T) {
 	require.Equal(t, "platform-mihomo-service", fake.lastUpdate.ServiceKey)
 	require.Equal(t, "mihomo.platform", fake.lastUpdate.ServiceAudience)
 	require.Equal(t, "static", fake.lastUpdate.DiscoveryType)
-	require.Equal(t, "127.0.0.1:50051", fake.lastUpdate.Endpoint)
+	require.Equal(t, "127.0.0.1:50051", fake.lastUpdate.ControlEndpoint)
 	require.True(t, fake.lastUpdate.Enabled)
 	require.Equal(t, []string{"bind_credential"}, fake.lastUpdate.SupportedActions)
 	require.Equal(t, map[string]any{"type": "object"}, fake.lastUpdate.CredentialSchema)
@@ -225,7 +225,7 @@ func TestAdminHandlerUpdatePlatformServiceMergesZeroValues(t *testing.T) {
 		ServiceKey:       "platform-mihomo-service",
 		ServiceAudience:  "mihomo.platform",
 		DiscoveryType:    "static",
-		Endpoint:         "127.0.0.1:50051",
+		ControlEndpoint:  "127.0.0.1:50051",
 		Enabled:          true,
 		SupportedActions: []string{"bind_credential"},
 		CredentialSchema: map[string]any{"type": "object", "required": []any{"token"}},

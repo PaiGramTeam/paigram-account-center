@@ -206,18 +206,18 @@ type fakeRuntimeSummaryPlatformService struct {
 }
 
 type fakeCredentialGateway struct {
-	summary          map[string]any
-	err              error
-	called           bool
-	lastMutation     string
-	deleteCalled     bool
-	deleteCallCount  int
-	deleteErr        error
-	deleteEndpoint   string
-	deleteTicket     string
-	deleteBindingID  uint64
-	deleteAccountKey sql.NullString
-	deleteGeneration uint64
+	summary               map[string]any
+	err                   error
+	called                bool
+	lastMutation          string
+	deleteCalled          bool
+	deleteCallCount       int
+	deleteErr             error
+	deleteControlEndpoint string
+	deleteTicket          string
+	deleteBindingID       uint64
+	deleteAccountKey      sql.NullString
+	deleteGeneration      uint64
 }
 
 type fakeProfileSyncer struct {
@@ -316,7 +316,7 @@ func (f *fakeCredentialGateway) RefreshCredential(context.Context, string, strin
 func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ticket, _ string, binding *model.PlatformAccountBinding) error {
 	f.deleteCalled = true
 	f.deleteCallCount++
-	f.deleteEndpoint = endpoint
+	f.deleteControlEndpoint = endpoint
 	f.deleteTicket = ticket
 	if binding != nil {
 		f.deleteBindingID = binding.ID
@@ -461,7 +461,7 @@ func TestRefreshBindingForOwnerDelegatesToRefreshGateway(t *testing.T) {
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeRefreshGateway{err: errors.New("downstream unavailable")}
@@ -488,7 +488,7 @@ func TestRefreshBindingAsAdminRecordsAdminActorUserID(t *testing.T) {
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeRefreshGateway{summary: &RuntimeSummary{
@@ -520,7 +520,7 @@ func TestDeleteBindingForOwnerDeletesProviderCredentialAndControlPlaneState(t *t
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{}
@@ -532,7 +532,7 @@ func TestDeleteBindingForOwnerDeletesProviderCredentialAndControlPlaneState(t *t
 	require.NoError(t, err)
 	assert.Equal(t, model.PlatformAccountBindingStatusDeleting, reader.updatedStatus)
 	assert.True(t, gateway.deleteCalled)
-	assert.Equal(t, "127.0.0.1:9000", gateway.deleteEndpoint)
+	assert.Equal(t, "127.0.0.1:9000", gateway.deleteControlEndpoint)
 	assert.Equal(t, "service-ticket", gateway.deleteTicket)
 	assert.Equal(t, uint64(101), gateway.deleteBindingID)
 	assert.False(t, profileCleaner.deleteCalled)
@@ -550,7 +550,7 @@ func TestDeleteBindingAsAdminMarksBindingDeleteFailedWhenProviderDeleteFails(t *
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{deleteErr: errors.New("downstream unavailable")}
@@ -662,7 +662,7 @@ func TestDeleteBindingForOwnerRetriesControlPlaneCleanupWithoutRepeatingProvider
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding, deleteErr: errors.New("cleanup delete failed")}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{}
@@ -690,7 +690,7 @@ func TestPutCredentialForOwnerPersistsResolvedRuntimeState(t *testing.T) {
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
@@ -729,7 +729,7 @@ func TestPutCredentialForOwnerCompensatesOnResolvedBindingConflict(t *testing.T)
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	reader.err = nil
@@ -754,7 +754,7 @@ func TestPutCredentialForOwnerCompensatesOnResolvedBindingConflict(t *testing.T)
 	assert.Equal(t, uint64(101), gateway.deleteBindingID)
 	assert.Equal(t, sql.NullString{String: "cn:resolved-account", Valid: true}, gateway.deleteAccountKey)
 	assert.Equal(t, uint64(1), gateway.deleteGeneration)
-	assert.Equal(t, "127.0.0.1:9000", gateway.deleteEndpoint)
+	assert.Equal(t, "127.0.0.1:9000", gateway.deleteControlEndpoint)
 	assert.Equal(t, []string{"mihomo.credential.delete"}, platformSvc.lastScope)
 	assert.Equal(t, uint64(101), reader.deletedID)
 	assert.Empty(t, reader.updatedReason)
@@ -769,7 +769,7 @@ func TestPutCredentialForOwnerMarksDeleteFailedWhenCompensationFails(t *testing.
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{
@@ -805,7 +805,7 @@ func TestPutCredentialForOwnerMarksDraftCredentialInvalidOnValidationFailure(t *
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{err: grpcstatus.Error(codes.InvalidArgument, "credential rejected")}
@@ -827,7 +827,7 @@ func TestPutCredentialForOwnerMarksDraftCredentialInvalidOnValidationFailure(t *
 func TestCreateBindingForOwnerCreatesDraftBindsAndSyncsProfiles(t *testing.T) {
 	reader := &fakeRuntimeSummaryBindingReader{}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000", ServiceKey: "platform-mihomo-service"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000", ServiceKey: "platform-mihomo-service"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
@@ -937,7 +937,7 @@ func TestGenericOperationResultMapRejectsMissingResult(t *testing.T) {
 func TestCreateBindingForOwnerReturnsCommittedBindingWhenProfileSyncFails(t *testing.T) {
 	reader := &fakeRuntimeSummaryBindingReader{}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000", ServiceKey: "platform-mihomo-service"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000", ServiceKey: "platform-mihomo-service"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
@@ -989,7 +989,7 @@ func TestPutCredentialForOwnerReturnsExistingBindingForSameOwnerDuplicate(t *tes
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
@@ -1026,7 +1026,7 @@ func TestCreateBindingForOwnerReturnsExistingBindingForSameOwnerDuplicate(t *tes
 	}
 	reader := &fakeRuntimeSummaryBindingReader{ownerBinding: existing}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000", ServiceKey: "platform-mihomo-service"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000", ServiceKey: "platform-mihomo-service"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
@@ -1064,7 +1064,7 @@ func TestPutCredentialProjectionFailureKeepsIntentPendingForRepair(t *testing.T)
 		PlatformServiceKey: "platform-mihomo-service", Status: model.PlatformAccountBindingStatusPendingBind,
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformSvc := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
+	platformSvc := &fakeOrchestrationPlatformService{platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
 		"platform_account_id": "cn:resolved-account", "generation": uint64(1), "status": "active",
 	}}
@@ -1089,7 +1089,7 @@ func TestBindTicketFailureAndDraftDeleteFailureKeepsInvariantReservation(t *test
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding, deleteErr: errors.New("database unavailable")}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticketErr: errors.New("ticket signing failed"),
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticketErr: errors.New("ticket signing failed"),
 	}
 	service := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{}, store)
 

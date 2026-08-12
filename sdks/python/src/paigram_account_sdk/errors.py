@@ -33,6 +33,10 @@ class DeadlineExceededError(AccountSDKError):
     """The remote operation exceeded the configured timeout."""
 
 
+class RateLimitError(AccountSDKError):
+    """The remote service rejected the request because a rate limit was exceeded."""
+
+
 class ServiceUnavailableError(AccountSDKError):
     """The remote service is temporarily unavailable."""
 

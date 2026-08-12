@@ -33,6 +33,7 @@ import (
 	"paigram/internal/service"
 	"paigram/internal/service/geolocation"
 	"paigram/internal/service/loginrisk"
+	"paigram/internal/serviceticket"
 	"paigram/internal/sessioncache"
 	"paigram/internal/worker"
 )
@@ -126,18 +127,22 @@ func runServer() {
 	defer stop()
 
 	cfg := config.MustLoad("config")
+	ticketSigner, err := serviceticket.NewFileSigner(
+		cfg.Auth.ServiceTicketIssuer,
+		time.Duration(cfg.Auth.ServiceTicketTTLSeconds)*time.Second,
+		cfg.Auth.ServiceTicketSigningKeyFile,
+	)
+	if err != nil {
+		log.Fatalf("service ticket signer initialization failed: %v", err)
+	}
 	if err := observability.Init(cfg.Sentry); err != nil {
 		log.Fatalf("sentry initialization failed: %v", err)
 	}
 	defer logging.Sync()
 
-	// Initialize encryption for 2FA secrets. The key is sourced from
-	// `security.encryption_key` (which Viper auto-binds to
-	// PAI_SECURITY_ENCRYPTION_KEY); InitEncryption itself falls back to
-	// the legacy ENCRYPTION_KEY env var for backwards compatibility.
+	// Initialize encryption for 2FA secrets from resolved configuration.
 	if err := crypto.InitEncryption(cfg.Security.EncryptionKey); err != nil {
-		log.Printf("WARNING: Encryption initialization failed: %v", err)
-		log.Printf("2FA will not work properly. Please set security.encryption_key in config (or PAI_SECURITY_ENCRYPTION_KEY env).")
+		fatalStartup(cfg.Sentry, "encryption initialization failed: %v", err)
 	}
 
 	db, err := database.Connect(cfg.Database, cfg.Security)
@@ -230,7 +235,7 @@ func runServer() {
 
 	// Start gRPC server if enabled
 	if cfg.GRPC.Enabled {
-		grpcServer, err = server.NewGRPCServer(cfg.GRPC.Port, db, redisClient, cfg)
+		grpcServer, err = server.NewGRPCServerWithTicketSigner(cfg.GRPC.Port, db, redisClient, cfg, ticketSigner)
 		if err != nil {
 			fatalStartup(cfg.Sentry, "gRPC server initialization failed: %v", err)
 		}
@@ -268,7 +273,7 @@ func runServer() {
 			&service.ServiceGroupApp.LoginRiskServiceGroup,
 		)
 
-		asynqServer, asynqScheduler, err = worker.StartAsynqServer(cfg, redisClient, db, authHandler)
+		asynqServer, asynqScheduler, err = worker.StartAsynqServer(cfg, redisClient, db, authHandler, ticketSigner)
 		if err != nil {
 			log.Printf("WARNING: Failed to start Asynq worker: %v", err)
 			log.Println("Background tasks (OAuth token refresh) will not run")
@@ -276,7 +281,7 @@ func runServer() {
 	}
 
 	// Start HTTP server
-	engine, err := router.New(cfg, sessionStore, db, rateLimitStore, emailService)
+	engine, err := router.NewWithTicketSigner(cfg, sessionStore, db, rateLimitStore, emailService, ticketSigner)
 	if err != nil {
 		fatalStartup(cfg.Sentry, "http router initialization failed: %v", err)
 	}

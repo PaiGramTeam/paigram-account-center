@@ -12,6 +12,7 @@ from .errors import (
     AuthorizationError,
     DeadlineExceededError,
     InvalidRequestError,
+    RateLimitError,
     ServiceUnavailableError,
     TransportError,
 )
@@ -101,7 +102,10 @@ class _ClientCredentialsTokenProvider:
             code = ""
             description = ""
         message = description or code or f"Account Center token request failed with HTTP {response.status_code}"
-        if response.status_code == 429 or response.status_code >= 500:
+        if response.status_code == 429:
+            logger.warning("Account Center token endpoint rate limit was exceeded")
+            raise RateLimitError(message)
+        if response.status_code >= 500:
             logger.warning("Account Center token endpoint is unavailable with HTTP %s", response.status_code)
             raise ServiceUnavailableError(message)
         if code == "invalid_client" or response.status_code == 401:

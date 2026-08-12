@@ -25,27 +25,31 @@ type platformAdminService interface {
 }
 
 type CreatePlatformServiceRequest struct {
-	PlatformKey      string         `json:"platform_key"`
-	DisplayName      string         `json:"display_name"`
-	ServiceKey       string         `json:"service_key"`
-	ServiceAudience  string         `json:"service_audience"`
-	DiscoveryType    string         `json:"discovery_type"`
-	Endpoint         string         `json:"endpoint"`
-	Enabled          bool           `json:"enabled"`
-	SupportedActions []string       `json:"supported_actions"`
-	CredentialSchema map[string]any `json:"credential_schema"`
+	PlatformKey       string         `json:"platform_key"`
+	DisplayName       string         `json:"display_name"`
+	ServiceKey        string         `json:"service_key"`
+	ServiceAudience   string         `json:"service_audience"`
+	DiscoveryType     string         `json:"discovery_type"`
+	ControlEndpoint   string         `json:"control_endpoint"`
+	RuntimeEndpoint   string         `json:"runtime_endpoint"`
+	RuntimeServerName string         `json:"runtime_server_name"`
+	Enabled           bool           `json:"enabled"`
+	SupportedActions  []string       `json:"supported_actions"`
+	CredentialSchema  map[string]any `json:"credential_schema"`
 }
 
 type UpdatePlatformServiceRequest struct {
-	PlatformKey      *string         `json:"platform_key,omitempty"`
-	DisplayName      *string         `json:"display_name,omitempty"`
-	ServiceKey       *string         `json:"service_key,omitempty"`
-	ServiceAudience  *string         `json:"service_audience,omitempty"`
-	DiscoveryType    *string         `json:"discovery_type,omitempty"`
-	Endpoint         *string         `json:"endpoint,omitempty"`
-	Enabled          *bool           `json:"enabled,omitempty"`
-	SupportedActions *[]string       `json:"supported_actions,omitempty"`
-	CredentialSchema *map[string]any `json:"credential_schema,omitempty"`
+	PlatformKey       *string         `json:"platform_key,omitempty"`
+	DisplayName       *string         `json:"display_name,omitempty"`
+	ServiceKey        *string         `json:"service_key,omitempty"`
+	ServiceAudience   *string         `json:"service_audience,omitempty"`
+	DiscoveryType     *string         `json:"discovery_type,omitempty"`
+	ControlEndpoint   *string         `json:"control_endpoint,omitempty"`
+	RuntimeEndpoint   *string         `json:"runtime_endpoint,omitempty"`
+	RuntimeServerName *string         `json:"runtime_server_name,omitempty"`
+	Enabled           *bool           `json:"enabled,omitempty"`
+	SupportedActions  *[]string       `json:"supported_actions,omitempty"`
+	CredentialSchema  *map[string]any `json:"credential_schema,omitempty"`
 }
 
 // AdminHandler manages admin platform registry endpoints.
@@ -94,15 +98,17 @@ func (h *AdminHandler) CreatePlatformService(c *gin.Context) {
 	}
 
 	item, err := h.platformService.CreatePlatformService(c.Request.Context(), serviceplatform.CreatePlatformServiceInput{
-		PlatformKey:      req.PlatformKey,
-		DisplayName:      req.DisplayName,
-		ServiceKey:       req.ServiceKey,
-		ServiceAudience:  req.ServiceAudience,
-		DiscoveryType:    req.DiscoveryType,
-		Endpoint:         req.Endpoint,
-		Enabled:          req.Enabled,
-		SupportedActions: req.SupportedActions,
-		CredentialSchema: req.CredentialSchema,
+		PlatformKey:       req.PlatformKey,
+		DisplayName:       req.DisplayName,
+		ServiceKey:        req.ServiceKey,
+		ServiceAudience:   req.ServiceAudience,
+		DiscoveryType:     req.DiscoveryType,
+		ControlEndpoint:   req.ControlEndpoint,
+		RuntimeEndpoint:   req.RuntimeEndpoint,
+		RuntimeServerName: req.RuntimeServerName,
+		Enabled:           req.Enabled,
+		SupportedActions:  req.SupportedActions,
+		CredentialSchema:  req.CredentialSchema,
 	})
 	if err != nil {
 		writePlatformServiceError(c, err, "failed to create platform service")
@@ -220,8 +226,14 @@ func mergePlatformServiceUpdate(input *serviceplatform.UpdatePlatformServiceInpu
 	if req.DiscoveryType != nil {
 		input.DiscoveryType = *req.DiscoveryType
 	}
-	if req.Endpoint != nil {
-		input.Endpoint = *req.Endpoint
+	if req.ControlEndpoint != nil {
+		input.ControlEndpoint = *req.ControlEndpoint
+	}
+	if req.RuntimeEndpoint != nil {
+		input.RuntimeEndpoint = *req.RuntimeEndpoint
+	}
+	if req.RuntimeServerName != nil {
+		input.RuntimeServerName = *req.RuntimeServerName
 	}
 	if req.Enabled != nil {
 		input.Enabled = *req.Enabled

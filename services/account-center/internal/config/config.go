@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/secretfile"
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
@@ -17,18 +19,19 @@ import (
 
 // Config aggregates application configuration sections.
 type Config struct {
-	App          AppConfig          `mapstructure:"app"`
-	Database     DatabaseConfig     `mapstructure:"database"`
-	OpenAPI      OpenAPIConfig      `mapstructure:"openapi"`
-	Auth         AuthConfig         `mapstructure:"auth"`
-	Frontend     FrontendConfig     `mapstructure:"frontend"`
-	Redis        RedisConfig        `mapstructure:"redis"`
-	GRPC         GRPCConfig         `mapstructure:"grpc"`
-	RateLimit    RateLimitConfig    `mapstructure:"rate_limit"`
-	Email        EmailConfig        `mapstructure:"email"`
-	Security     SecurityConfig     `mapstructure:"security"`
-	Sentry       SentryConfig       `mapstructure:"sentry"`
-	TelegramOIDC TelegramOIDCConfig `mapstructure:"telegram_oidc"`
+	App             AppConfig             `mapstructure:"app"`
+	Database        DatabaseConfig        `mapstructure:"database"`
+	OpenAPI         OpenAPIConfig         `mapstructure:"openapi"`
+	Auth            AuthConfig            `mapstructure:"auth"`
+	Frontend        FrontendConfig        `mapstructure:"frontend"`
+	Redis           RedisConfig           `mapstructure:"redis"`
+	GRPC            GRPCConfig            `mapstructure:"grpc"`
+	PlatformControl PlatformControlConfig `mapstructure:"platform_control"`
+	RateLimit       RateLimitConfig       `mapstructure:"rate_limit"`
+	Email           EmailConfig           `mapstructure:"email"`
+	Security        SecurityConfig        `mapstructure:"security"`
+	Sentry          SentryConfig          `mapstructure:"sentry"`
+	TelegramOIDC    TelegramOIDCConfig    `mapstructure:"telegram_oidc"`
 }
 
 // TelegramOIDCConfig holds the Telegram OIDC client credentials consumed
@@ -112,6 +115,7 @@ type CORSConfig struct {
 // DatabaseConfig holds PostgreSQL connection and pool configuration.
 type DatabaseConfig struct {
 	DSN             string        `mapstructure:"dsn"`
+	DSNFile         string        `mapstructure:"dsn_file"`
 	MigrationsDir   string        `mapstructure:"migrations_dir"`
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	MaxOpenConns    int           `mapstructure:"max_open_conns"`
@@ -147,9 +151,9 @@ type AuthConfig struct {
 	RequireEmailVerificationLogin bool                           `mapstructure:"require_verified_email_login"`
 	ServiceTicketTTLSeconds       int                            `mapstructure:"service_ticket_ttl"`
 	ServiceTicketIssuer           string                         `mapstructure:"service_ticket_issuer"`
-	ServiceTicketKeyID            string                         `mapstructure:"service_ticket_key_id"`
-	ServiceTicketPrivateKeyPEM    string                         `mapstructure:"service_ticket_private_key_pem"`
+	ServiceTicketSigningKeyFile   string                         `mapstructure:"service_ticket_signing_key_file"`
 	OAuthSigningKey               string                         `mapstructure:"oauth_signing_key"`
+	OAuthSigningKeyFile           string                         `mapstructure:"oauth_signing_key_file"`
 	// OAuthIssuer is the `iss` claim stamped onto every OAuth access
 	// token issued by /oauth/token. Defaults to "account-center" — the
 	// same string the gRPC interceptor's audience check expects.
@@ -206,6 +210,7 @@ type RedisConfig struct {
 	Addr         string `mapstructure:"addr"`
 	Username     string `mapstructure:"username"`
 	Password     string `mapstructure:"password"`
+	PasswordFile string `mapstructure:"password_file"`
 	DB           int    `mapstructure:"db"`
 	Prefix       string `mapstructure:"prefix"`
 	DialTimeout  int    `mapstructure:"dial_timeout"`
@@ -218,13 +223,23 @@ type RedisConfig struct {
 
 // GRPCConfig holds gRPC server configuration.
 type GRPCConfig struct {
-	Enabled               bool `mapstructure:"enabled"`
-	Port                  int  `mapstructure:"port"`
-	MaxConnectionIdle     int  `mapstructure:"max_connection_idle"`
-	MaxConnectionAge      int  `mapstructure:"max_connection_age"`
-	MaxConnectionAgeGrace int  `mapstructure:"max_connection_age_grace"`
-	KeepAliveTime         int  `mapstructure:"keepalive_time"`
-	KeepAliveTimeout      int  `mapstructure:"keepalive_timeout"`
+	Enabled               bool   `mapstructure:"enabled"`
+	Port                  int    `mapstructure:"port"`
+	MaxConnectionIdle     int    `mapstructure:"max_connection_idle"`
+	MaxConnectionAge      int    `mapstructure:"max_connection_age"`
+	MaxConnectionAgeGrace int    `mapstructure:"max_connection_age_grace"`
+	KeepAliveTime         int    `mapstructure:"keepalive_time"`
+	KeepAliveTimeout      int    `mapstructure:"keepalive_timeout"`
+	CertificateFile       string `mapstructure:"certificate_file"`
+	PrivateKeyFile        string `mapstructure:"private_key_file"`
+}
+
+type PlatformControlConfig struct {
+	RootCAFile      string        `mapstructure:"root_ca_file"`
+	CertificateFile string        `mapstructure:"certificate_file"`
+	PrivateKeyFile  string        `mapstructure:"private_key_file"`
+	ServerName      string        `mapstructure:"server_name"`
+	DialTimeout     time.Duration `mapstructure:"dial_timeout"`
 }
 
 // RateLimitConfig holds rate limiting configuration.
@@ -278,12 +293,9 @@ type SecurityConfig struct {
 	RequireRedisFor2FA        bool                  `mapstructure:"require_redis_for_2fa"`        // V22: when true, 2FA rate limiting fails closed if Redis is unavailable
 	TwoFAFailClosedTTL        time.Duration         `mapstructure:"twofa_fail_closed_ttl"`        // V22: lock duration applied when failing closed; defaults to 1m
 	SecurityHeaders           SecurityHeadersConfig `mapstructure:"security_headers"`             // V10: HTTP response security headers
-	// EncryptionKey is the AES-256 master key (32 bytes raw or base64) used to
-	// encrypt 2FA TOTP secrets at rest. Prefer setting this via the
-	// PAI_SECURITY_ENCRYPTION_KEY environment variable rather than committing
-	// it to config.yaml. If empty at startup, the legacy ENCRYPTION_KEY
-	// environment variable is consulted as a backwards-compatible fallback.
-	EncryptionKey string `mapstructure:"encryption_key"`
+	// EncryptionKey is the resolved AES-256 master key used for 2FA secrets.
+	EncryptionKey     string `mapstructure:"encryption_key"`
+	EncryptionKeyFile string `mapstructure:"encryption_key_file"`
 }
 
 // SecurityHeadersConfig configures HTTP response security headers
@@ -349,6 +361,10 @@ func Load(paths ...string) (*Config, error) {
 			err = fmt.Errorf("unmarshal config: %w", unmarshalErr)
 			return
 		}
+		if secretErr := resolveSecretFiles(localCfg); secretErr != nil {
+			err = secretErr
+			return
+		}
 		if validateErr := validateServiceTicketConfig(localCfg); validateErr != nil {
 			err = validateErr
 			return
@@ -362,6 +378,14 @@ func Load(paths ...string) (*Config, error) {
 			return
 		}
 		if validateErr := validateBrowserSessionConfig(localCfg); validateErr != nil {
+			err = validateErr
+			return
+		}
+		if validateErr := validatePlatformControlConfig(localCfg); validateErr != nil {
+			err = validateErr
+			return
+		}
+		if validateErr := validateGRPCServerConfig(localCfg); validateErr != nil {
 			err = validateErr
 			return
 		}
@@ -381,6 +405,72 @@ func Load(paths ...string) (*Config, error) {
 	return cfg, nil
 }
 
+func resolveSecretFiles(localCfg *Config) error {
+	if localCfg == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	secretTargets := []struct {
+		name string
+		path string
+		set  func(string)
+	}{
+		{name: "database.dsn_file", path: localCfg.Database.DSNFile, set: func(value string) { localCfg.Database.DSN = value }},
+		{name: "redis.password_file", path: localCfg.Redis.PasswordFile, set: func(value string) { localCfg.Redis.Password = value }},
+		{name: "auth.oauth_signing_key_file", path: localCfg.Auth.OAuthSigningKeyFile, set: func(value string) { localCfg.Auth.OAuthSigningKey = value }},
+		{name: "security.encryption_key_file", path: localCfg.Security.EncryptionKeyFile, set: func(value string) { localCfg.Security.EncryptionKey = value }},
+	}
+	for _, target := range secretTargets {
+		if target.path == "" {
+			continue
+		}
+		value, err := secretfile.Read(target.path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", target.name, err)
+		}
+		target.set(value)
+	}
+	return nil
+}
+
+func validatePlatformControlConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	platform := cfg.PlatformControl
+	if strings.TrimSpace(platform.ServerName) == "" {
+		return fmt.Errorf("platform_control.server_name must not be empty")
+	}
+	if platform.DialTimeout <= 0 {
+		return fmt.Errorf("platform_control.dial_timeout must be greater than zero")
+	}
+	if err := transporttls.ValidateClientFiles(transporttls.ClientFiles{
+		RootCAFile:      platform.RootCAFile,
+		CertificateFile: platform.CertificateFile,
+		PrivateKeyFile:  platform.PrivateKeyFile,
+		ServerName:      platform.ServerName,
+	}, true); err != nil {
+		return fmt.Errorf("platform_control TLS: %w", err)
+	}
+	return nil
+}
+
+func validateGRPCServerConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	if !cfg.GRPC.Enabled {
+		return nil
+	}
+	_, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+		CertificateFile: cfg.GRPC.CertificateFile,
+		PrivateKeyFile:  cfg.GRPC.PrivateKeyFile,
+	}, transporttls.ServerAuthOnly)
+	if err != nil {
+		return fmt.Errorf("grpc TLS: %w", err)
+	}
+	return nil
+}
+
 func validateServiceTicketConfig(cfg *Config) error {
 	if cfg == nil {
 		return fmt.Errorf("configuration not loaded")
@@ -395,11 +485,11 @@ func validateServiceTicketConfig(cfg *Config) error {
 	if auth.ServiceTicketTTLSeconds > 300 {
 		return fmt.Errorf("auth.service_ticket_ttl must not exceed 300 seconds")
 	}
-	if auth.ServiceTicketKeyID == "" {
-		return fmt.Errorf("auth.service_ticket_key_id must not be empty")
-	}
-	if _, err := contractticket.ParsePrivateKeyPEM(auth.ServiceTicketPrivateKeyPEM); err != nil {
-		return fmt.Errorf("auth.service_ticket_private_key_pem: %w", err)
+	if _, err := contractticket.NewFileIssuer(contractticket.FileIssuerConfig{
+		Issuer: auth.ServiceTicketIssuer, TTL: time.Duration(auth.ServiceTicketTTLSeconds) * time.Second,
+		SigningKeyFile: auth.ServiceTicketSigningKeyFile,
+	}); err != nil {
+		return fmt.Errorf("auth.service_ticket_signing_key_file: %w", err)
 	}
 	if len(auth.OAuthSigningKey) < 32 {
 		return fmt.Errorf("auth.oauth_signing_key must be at least 32 bytes")
@@ -530,6 +620,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.cors.max_age", 43200)
 
 	v.SetDefault("database.dsn", "")
+	v.SetDefault("database.dsn_file", "")
 	v.SetDefault("database.migrations_dir", "initialize/migrate/sql")
 	v.SetDefault("database.max_idle_conns", 10)
 	v.SetDefault("database.max_open_conns", 100)
@@ -556,9 +647,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.require_verified_email_login", true)
 	v.SetDefault("auth.service_ticket_ttl", 300)
 	v.SetDefault("auth.service_ticket_issuer", "paigram-account-center")
-	v.SetDefault("auth.service_ticket_key_id", "")
-	v.SetDefault("auth.service_ticket_private_key_pem", "")
+	v.SetDefault("auth.service_ticket_signing_key_file", "")
 	v.SetDefault("auth.oauth_signing_key", "")
+	v.SetDefault("auth.oauth_signing_key_file", "")
 	// Path D §3.2 + §1.6: OAuth 2.0 client_credentials defaults. Issuer
 	// matches the gRPC interceptor's audience-check constant
 	// (machineTokenAudience = "account-center"). 3600-second TTL is the
@@ -581,6 +672,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("redis.enabled", false)
 	v.SetDefault("redis.addr", "127.0.0.1:6379")
+	v.SetDefault("redis.password_file", "")
 	v.SetDefault("redis.db", 0)
 	v.SetDefault("redis.prefix", "paigram")
 	v.SetDefault("redis.dial_timeout", 5)
@@ -589,6 +681,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("redis.pool_size", 20)
 	v.SetDefault("redis.min_idle_conns", 5)
 	v.SetDefault("redis.max_retries", 2)
+	v.SetDefault("platform_control.root_ca_file", "")
+	v.SetDefault("platform_control.certificate_file", "")
+	v.SetDefault("platform_control.private_key_file", "")
+	v.SetDefault("platform_control.server_name", "")
+	v.SetDefault("platform_control.dial_timeout", "5s")
+	v.SetDefault("grpc.certificate_file", "")
+	v.SetDefault("grpc.private_key_file", "")
 
 	v.SetDefault("rate_limit.enabled", true)
 	v.SetDefault("rate_limit.auth.login", "5-M")
@@ -616,6 +715,7 @@ func setDefaults(v *viper.Viper) {
 	// V22: fail closed by default. Operators who run a single instance
 	// without Redis can opt out by setting require_redis_for_2fa: false.
 	v.SetDefault("security.require_redis_for_2fa", true)
+	v.SetDefault("security.encryption_key_file", "")
 	v.SetDefault("security.twofa_fail_closed_ttl", "1m")
 	// V10: response security headers. HSTS subdomain inclusion stays off
 	// by default — turning it on is irrecoverable for the parent domain

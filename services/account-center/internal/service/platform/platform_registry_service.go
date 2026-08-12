@@ -3,6 +3,8 @@ package platform
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"strconv"
 	"strings"
 
 	"paigram/internal/dberror"
@@ -55,15 +57,17 @@ func (s *PlatformService) GetPlatformServiceConfig(ctx context.Context, id uint6
 	}
 
 	return &UpdatePlatformServiceInput{
-		PlatformKey:      row.PlatformKey,
-		DisplayName:      row.DisplayName,
-		ServiceKey:       row.ServiceKey,
-		ServiceAudience:  row.ServiceAudience,
-		DiscoveryType:    row.DiscoveryType,
-		Endpoint:         row.Endpoint,
-		Enabled:          row.Enabled,
-		SupportedActions: supportedActions,
-		CredentialSchema: credentialSchema,
+		PlatformKey:       row.PlatformKey,
+		DisplayName:       row.DisplayName,
+		ServiceKey:        row.ServiceKey,
+		ServiceAudience:   row.ServiceAudience,
+		DiscoveryType:     row.DiscoveryType,
+		ControlEndpoint:   row.ControlEndpoint,
+		RuntimeEndpoint:   row.RuntimeEndpoint,
+		RuntimeServerName: row.RuntimeServerName,
+		Enabled:           row.Enabled,
+		SupportedActions:  supportedActions,
+		CredentialSchema:  credentialSchema,
 	}, nil
 }
 
@@ -151,7 +155,9 @@ func buildPlatformServiceModel(input CreatePlatformServiceInput) (*model.Platfor
 		ServiceKey:           input.ServiceKey,
 		ServiceAudience:      input.ServiceAudience,
 		DiscoveryType:        input.DiscoveryType,
-		Endpoint:             input.Endpoint,
+		ControlEndpoint:      input.ControlEndpoint,
+		RuntimeEndpoint:      input.RuntimeEndpoint,
+		RuntimeServerName:    input.RuntimeServerName,
 		Enabled:              input.Enabled,
 		SupportedActionsJSON: supportedActionsJSON,
 		CredentialSchemaJSON: credentialSchemaJSON,
@@ -177,7 +183,9 @@ func applyPlatformServiceUpdate(row *model.PlatformService, input UpdatePlatform
 	row.ServiceKey = input.ServiceKey
 	row.ServiceAudience = input.ServiceAudience
 	row.DiscoveryType = input.DiscoveryType
-	row.Endpoint = input.Endpoint
+	row.ControlEndpoint = input.ControlEndpoint
+	row.RuntimeEndpoint = input.RuntimeEndpoint
+	row.RuntimeServerName = input.RuntimeServerName
 	row.Enabled = input.Enabled
 	row.SupportedActionsJSON = supportedActionsJSON
 	row.CredentialSchemaJSON = credentialSchemaJSON
@@ -199,21 +207,43 @@ func normalizePlatformServiceRow(row *model.PlatformService) {
 	row.ServiceKey = strings.TrimSpace(row.ServiceKey)
 	row.ServiceAudience = strings.TrimSpace(row.ServiceAudience)
 	row.DiscoveryType = strings.TrimSpace(row.DiscoveryType)
-	row.Endpoint = strings.TrimSpace(row.Endpoint)
+	row.ControlEndpoint = strings.TrimSpace(row.ControlEndpoint)
+	row.RuntimeEndpoint = strings.TrimSpace(row.RuntimeEndpoint)
+	row.RuntimeServerName = strings.TrimSpace(row.RuntimeServerName)
 }
 
 func validatePlatformServiceRow(row *model.PlatformService) error {
 	if row == nil {
 		return ErrInvalidPlatformServiceConfig
 	}
-	if strings.TrimSpace(row.PlatformKey) == "" || strings.TrimSpace(row.DisplayName) == "" || strings.TrimSpace(row.ServiceKey) == "" || strings.TrimSpace(row.ServiceAudience) == "" || strings.TrimSpace(row.Endpoint) == "" {
+	if strings.TrimSpace(row.PlatformKey) == "" || strings.TrimSpace(row.DisplayName) == "" || strings.TrimSpace(row.ServiceKey) == "" || strings.TrimSpace(row.ServiceAudience) == "" || strings.TrimSpace(row.ControlEndpoint) == "" || strings.TrimSpace(row.RuntimeEndpoint) == "" || strings.TrimSpace(row.RuntimeServerName) == "" {
 		return ErrInvalidPlatformServiceConfig
 	}
 	if row.DiscoveryType != staticPlatformDiscoveryType {
 		return ErrInvalidPlatformServiceConfig
 	}
+	if !validGRPCEndpoint(row.ControlEndpoint) || !validGRPCEndpoint(row.RuntimeEndpoint) || !validTLSServerName(row.RuntimeServerName) {
+		return ErrInvalidPlatformServiceConfig
+	}
 
 	return nil
+}
+
+func validGRPCEndpoint(endpoint string) bool {
+	if endpoint == "" || strings.Contains(endpoint, "://") || strings.ContainsAny(endpoint, "/?#") {
+		return false
+	}
+	host, port, err := net.SplitHostPort(endpoint)
+	if err != nil || strings.TrimSpace(host) == "" || strings.ContainsAny(host, " \t\r\n") {
+		return false
+	}
+	numericPort, err := strconv.ParseUint(port, 10, 16)
+	return err == nil && numericPort > 0
+}
+
+func validTLSServerName(serverName string) bool {
+	return serverName != "" && strings.TrimSpace(serverName) == serverName &&
+		!strings.Contains(serverName, "://") && !strings.ContainsAny(serverName, "/?#: \t\r\n")
 }
 
 func marshalPlatformServiceConfig(supportedActions []string, credentialSchema map[string]any) (string, string, error) {
@@ -247,18 +277,20 @@ func (s *PlatformService) buildPlatformServiceAdminView(ctx context.Context, row
 	}
 
 	view := &PlatformServiceAdminView{
-		ID:               row.ID,
-		PlatformKey:      row.PlatformKey,
-		DisplayName:      row.DisplayName,
-		ServiceKey:       row.ServiceKey,
-		ServiceAudience:  row.ServiceAudience,
-		DiscoveryType:    row.DiscoveryType,
-		Endpoint:         row.Endpoint,
-		Enabled:          row.Enabled,
-		SupportedActions: supportedActions,
-		CredentialSchema: credentialSchema,
-		CreatedAt:        row.CreatedAt,
-		UpdatedAt:        row.UpdatedAt,
+		ID:                row.ID,
+		PlatformKey:       row.PlatformKey,
+		DisplayName:       row.DisplayName,
+		ServiceKey:        row.ServiceKey,
+		ServiceAudience:   row.ServiceAudience,
+		DiscoveryType:     row.DiscoveryType,
+		ControlEndpoint:   row.ControlEndpoint,
+		RuntimeEndpoint:   row.RuntimeEndpoint,
+		RuntimeServerName: row.RuntimeServerName,
+		Enabled:           row.Enabled,
+		SupportedActions:  supportedActions,
+		CredentialSchema:  credentialSchema,
+		CreatedAt:         row.CreatedAt,
+		UpdatedAt:         row.UpdatedAt,
 	}
 
 	s.decorateRuntimeState(ctx, row, view)
@@ -275,14 +307,14 @@ func (s *PlatformService) decorateRuntimeState(ctx context.Context, row model.Pl
 	}
 
 	view.ConfigState = ConfigStateEnabled
-	if s.healthChecker == nil || row.DiscoveryType != staticPlatformDiscoveryType || strings.TrimSpace(row.Endpoint) == "" || strings.TrimSpace(row.ServiceAudience) == "" {
+	if s.healthChecker == nil || row.DiscoveryType != staticPlatformDiscoveryType || strings.TrimSpace(row.ControlEndpoint) == "" || strings.TrimSpace(row.ServiceAudience) == "" {
 		view.RuntimeState = RuntimeStateMisconfigured
 		view.CheckedAt = nil
 		view.Error = "platform service is misconfigured"
 		return
 	}
 
-	result := s.healthChecker.Check(ctx, row.Endpoint)
+	result := s.healthChecker.Check(ctx, row.ControlEndpoint)
 	view.RuntimeState = result.State
 	view.CheckedAt = &result.CheckedAt
 	view.Error = result.Error

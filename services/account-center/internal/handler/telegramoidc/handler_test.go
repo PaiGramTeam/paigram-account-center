@@ -113,6 +113,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS users (
 			id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_ref           TEXT    NOT NULL,
+			owner_epoch        INTEGER NOT NULL DEFAULT 1,
 			primary_login_type TEXT    NOT NULL,
 			status             TEXT    NOT NULL DEFAULT 'pending',
 			primary_role_id    INTEGER,
@@ -121,6 +123,9 @@ func newTestDB(t *testing.T) *gorm.DB {
 			updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			deleted_at         DATETIME
 		)`).Error)
+	require.NoError(t, db.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_users_ref ON users(user_ref)`,
+	).Error)
 
 	// user_profiles.
 	require.NoError(t, db.Exec(`
@@ -168,6 +173,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS bot_identities (
 			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			entry_identity_ref TEXT    NOT NULL,
+			entry_epoch        INTEGER NOT NULL DEFAULT 1,
 			user_id           INTEGER NOT NULL,
 			bot_id            TEXT    NOT NULL,
 			external_user_id  TEXT    NOT NULL,
@@ -177,6 +184,9 @@ func newTestDB(t *testing.T) *gorm.DB {
 			updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			deleted_at        DATETIME
 		)`).Error)
+	require.NoError(t, db.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_ref ON bot_identities(entry_identity_ref)`,
+	).Error)
 	require.NoError(t, db.Exec(
 		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_bot ON bot_identities(user_id, bot_id)`,
 	).Error)
@@ -479,12 +489,12 @@ func TestCallback_AlreadyLinkedOther(t *testing.T) {
 
 	// Pre-seed: user 99 already owns (paigrambot, 987654321).
 	require.NoError(t, rig.db.Exec(
-		`INSERT INTO users (id, primary_login_type, status) VALUES (?, ?, ?)`,
-		99, model.LoginTypeTelegram, model.UserStatusActive,
+		`INSERT INTO users (id, user_ref, owner_epoch, primary_login_type, status) VALUES (?, ?, ?, ?, ?)`,
+		99, "usr_already_linked", 1, model.LoginTypeTelegram, model.UserStatusActive,
 	).Error)
 	require.NoError(t, rig.db.Exec(
-		`INSERT INTO bot_identities (user_id, bot_id, external_user_id) VALUES (?, ?, ?)`,
-		99, "paigrambot", "987654321",
+		`INSERT INTO bot_identities (entry_identity_ref, entry_epoch, user_id, bot_id, external_user_id) VALUES (?, ?, ?, ?, ?)`,
+		"entry_already_linked", 1, 99, "paigrambot", "987654321",
 	).Error)
 
 	startW := httptest.NewRecorder()

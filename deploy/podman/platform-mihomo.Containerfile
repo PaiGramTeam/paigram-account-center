@@ -26,6 +26,6 @@ COPY --chown=platform:platform deploy/podman/platform-mihomo.config.yaml /opt/pl
 USER platform
 WORKDIR /opt/platform-mihomo
 
-EXPOSE 9000
+EXPOSE 9000 9001
 ENTRYPOINT ["/usr/local/bin/platform-mihomo"]
 CMD ["-conf", "/opt/platform-mihomo/config/config.yaml"]

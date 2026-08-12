@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: paigram
       POSTGRES_USER: paigram
-      POSTGRES_PASSWORD: "${PAI_POSTGRES_PASSWORD:?set PAI_POSTGRES_PASSWORD in .env}"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+      POSTGRES_PASSWORD_FILE: /run/secrets/account_postgres_password
+    secrets: [account_postgres_password]
+    volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U paigram -d paigram"]
       interval: 5s
@@ -20,95 +20,14 @@ services:
     image: public.ecr.aws/docker/library/redis:7-alpine
     container_name: "${PAI_INSTANCE:-paigram-account-center}-redis"
     restart: unless-stopped
-    environment:
-      REDIS_PASSWORD: "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
-    volumes:
-      - redis-data:/data
+    command: ["redis-server", "/run/secrets/account_redis_config", "--appendonly", "yes"]
+    secrets: [account_redis_config, account_redis_password]
+    volumes: [redis-data:/data]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$(cat /run/secrets/account_redis_password) redis-cli --no-auth-warning ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 20
-    networks: [account-center]
-
-  platform-postgres:
-    image: public.ecr.aws/docker/library/postgres:16-alpine
-    container_name: "${PAI_INSTANCE:-paigram-account-center}-platform-postgres"
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: platform_mihomo
-      POSTGRES_USER: platform_mihomo
-      POSTGRES_PASSWORD: "${PAI_PLATFORM_POSTGRES_PASSWORD:?set PAI_PLATFORM_POSTGRES_PASSWORD in .env}"
-    volumes:
-      - platform-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U platform_mihomo -d platform_mihomo"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    networks: [account-center]
-
-  platform-redis:
-    image: public.ecr.aws/docker/library/redis:7-alpine
-    container_name: "${PAI_INSTANCE:-paigram-account-center}-platform-redis"
-    restart: unless-stopped
-    environment:
-      REDIS_PASSWORD: "${PAI_PLATFORM_REDIS_PASSWORD:?set PAI_PLATFORM_REDIS_PASSWORD in .env}"
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "${PAI_PLATFORM_REDIS_PASSWORD:?set PAI_PLATFORM_REDIS_PASSWORD in .env}"
-    volumes:
-      - platform-redis-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [account-center]
-
-  platform-mihomo:
-    build:
-      context: ../..
-      dockerfile: deploy/podman/platform-mihomo.Containerfile
-    image: "localhost/${PAI_INSTANCE:-paigram-account-center}-platform-mihomo:${PAI_IMAGE_TAG:-latest}"
-    container_name: "${PAI_INSTANCE:-paigram-account-center}-platform-mihomo"
-    restart: unless-stopped
-    depends_on:
-      platform-postgres:
-        condition: service_healthy
-      platform-redis:
-        condition: service_healthy
-    environment:
-      PAI_PLATFORM_DATABASE_DSN: "postgres://platform_mihomo:${PAI_PLATFORM_POSTGRES_PASSWORD:?set PAI_PLATFORM_POSTGRES_PASSWORD in .env}@platform-postgres:5432/platform_mihomo?sslmode=disable"
-      PAI_PLATFORM_REDIS_ADDR: "platform-redis:6379"
-      PAI_PLATFORM_REDIS_PASSWORD: "${PAI_PLATFORM_REDIS_PASSWORD:?set PAI_PLATFORM_REDIS_PASSWORD in .env}"
-      PAI_PLATFORM_CREDENTIAL_ENCRYPTION_KEY: "${PAI_PLATFORM_CREDENTIAL_ENCRYPTION_KEY:?set PAI_PLATFORM_CREDENTIAL_ENCRYPTION_KEY in .env}"
-      PAI_SERVICE_TICKET_PUBLIC_KEY_PEM: "${PAI_SERVICE_TICKET_PUBLIC_KEY_PEM:?set PAI_SERVICE_TICKET_PUBLIC_KEY_PEM in .env}"
-      PAI_MIHOMO_UPSTREAM_BASE_URL: "${PAI_MIHOMO_UPSTREAM_BASE_URL:?set PAI_MIHOMO_UPSTREAM_BASE_URL in .env}"
-      PAI_MIHOMO_UPSTREAM_BEARER_TOKEN_FILE: "${PAI_MIHOMO_UPSTREAM_BEARER_TOKEN_FILE:-}"
-    ports:
-      - "${PAI_PLATFORM_GRPC_BIND:-127.0.0.1}:${PAI_PLATFORM_GRPC_PORT:-19000}:9000"
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-      start_period: 10s
-    read_only: true
-    tmpfs:
-      - /tmp:size=32m,mode=1777
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges
     networks: [account-center]
 
   account-center:
@@ -119,21 +38,34 @@ services:
     container_name: "${PAI_INSTANCE:-paigram-account-center}"
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
     environment:
-      PAI_DATABASE_DSN: "postgres://paigram:${PAI_POSTGRES_PASSWORD:?set PAI_POSTGRES_PASSWORD in .env}@postgres:5432/paigram?sslmode=disable"
-      PAI_REDIS_PASSWORD: "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
-      PAI_AUTH_SERVICE_TICKET_PRIVATE_KEY_PEM: "${PAI_SERVICE_TICKET_PRIVATE_KEY_PEM:?set PAI_SERVICE_TICKET_PRIVATE_KEY_PEM in .env}"
-      PAI_AUTH_OAUTH_SIGNING_KEY: "${PAI_OAUTH_SIGNING_KEY:?set PAI_OAUTH_SIGNING_KEY in .env}"
       PAI_AUTH_REQUIRE_VERIFIED_EMAIL_LOGIN: "${PAI_REQUIRE_EMAIL_VERIFICATION:-false}"
-      PAI_SECURITY_ENCRYPTION_KEY: "${PAI_SECURITY_ENCRYPTION_KEY:?set PAI_SECURITY_ENCRYPTION_KEY in .env}"
       PAI_FRONTEND_BASE_URL: "${PAI_FRONTEND_BASE_URL:?set PAI_FRONTEND_BASE_URL to the public HTTPS origin}"
       ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
-      ADMIN_PASSWORD: "${PAI_ADMIN_PASSWORD:?set PAI_ADMIN_PASSWORD in .env}"
+      ADMIN_PASSWORD_FILE: /run/secrets/account_admin_password
       ADMIN_NAME: "${PAI_ADMIN_NAME:-Administrator}"
+    secrets:
+      - account_database_dsn
+      - account_redis_password
+      - source: account_service_ticket_signing_key
+        target: account_service_ticket_signing_key.json
+      - account_oauth_signing_key
+      - account_encryption_key
+      - account_admin_password
+      - source: platform_control_ca
+        target: platform_control_ca.pem
+      - source: account_control_client_cert
+        target: account_control_client_cert.pem
+      - source: account_control_client_key
+        target: account_control_client_key.pem
+      - source: account_grpc_cert
+        target: account_grpc_cert.pem
+      - source: account_grpc_key
+        target: account_grpc_key.pem
+    ports:
+      - "${PAI_ACCOUNT_GRPC_BIND:-127.0.0.1}:${PAI_ACCOUNT_GRPC_PORT:-15051}:50051"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 5s
@@ -141,12 +73,10 @@ services:
       retries: 30
       start_period: 10s
     read_only: true
-    tmpfs:
-      - /tmp:size=64m,mode=1777
+    tmpfs: ["/tmp:size=64m,mode=1777"]
     cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges
-    networks: [account-center]
+    security_opt: [no-new-privileges]
+    networks: [account-center, platform-backplane]
 
   frontend:
     build:
@@ -156,36 +86,41 @@ services:
     container_name: "${PAI_INSTANCE:-paigram-account-center}-frontend"
     restart: unless-stopped
     depends_on:
-      account-center:
-        condition: service_healthy
-    ports:
-      - "${PAI_HTTP_BIND:-127.0.0.1}:${PAI_HTTP_PORT:-18080}:8080"
+      account-center: {condition: service_healthy}
+    ports: ["${PAI_HTTP_BIND:-127.0.0.1}:${PAI_HTTP_PORT:-18080}:8080"]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/nginx-health"]
       interval: 5s
       timeout: 3s
       retries: 20
     read_only: true
-    tmpfs:
-      - /tmp:size=32m,mode=1777
+    tmpfs: ["/tmp:size=32m,mode=1777"]
     cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges
+    security_opt: [no-new-privileges]
     networks: [account-center]
 
 networks:
   account-center:
     name: "${PAI_INSTANCE:-paigram-account-center}"
-    ipam:
-      config:
-        - subnet: "${PAI_NETWORK_SUBNET:-10.90.0.0/24}"
+  platform-backplane:
+    name: "${PAI_PLATFORM_NETWORK:-paigram-platform-backplane}"
+    external: true
 
 volumes:
-  postgres-data:
-    name: "${PAI_INSTANCE:-paigram-account-center}-postgres-data"
-  redis-data:
-    name: "${PAI_INSTANCE:-paigram-account-center}-redis-data"
-  platform-postgres-data:
-    name: "${PAI_INSTANCE:-paigram-account-center}-platform-postgres-data"
-  platform-redis-data:
-    name: "${PAI_INSTANCE:-paigram-account-center}-platform-redis-data"
+  postgres-data: {name: "${PAI_INSTANCE:-paigram-account-center}-postgres-data"}
+  redis-data: {name: "${PAI_INSTANCE:-paigram-account-center}-redis-data"}
+
+secrets:
+  account_postgres_password: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-postgres-password"}
+  account_redis_config: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-redis-config"}
+  account_redis_password: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-redis-password"}
+  account_database_dsn: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-database-dsn"}
+  account_service_ticket_signing_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"}
+  account_oauth_signing_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"}
+  account_encryption_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-encryption-key"}
+  account_admin_password: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-admin-password"}
+  platform_control_ca: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"}
+  account_control_client_cert: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-control-client-cert"}
+  account_control_client_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-control-client-key"}
+  account_grpc_cert: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-grpc-cert"}
+  account_grpc_key: {external: true, name: "${PAI_INSTANCE:-paigram-account-center}-grpc-key"}

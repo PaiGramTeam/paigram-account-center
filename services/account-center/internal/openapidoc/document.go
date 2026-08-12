@@ -1,6 +1,7 @@
 package openapidoc
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/json"
@@ -9,13 +10,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/glebarez/sqlite"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"paigram/internal/config"
+	"paigram/internal/platformtransport"
 	"paigram/internal/router"
+	"paigram/internal/serviceticket"
 	"paigram/internal/sessioncache"
 )
 
@@ -35,11 +40,14 @@ func Generate() (contents []byte, returnErr error) {
 		returnErr = errors.Join(returnErr, sqlDB.Close())
 	}()
 
-	documentationConfig, err := newDocumentationConfig()
+	documentationConfig, ticketSigner, err := newDocumentationConfig()
 	if err != nil {
 		return nil, err
 	}
-	engine, err := router.New(documentationConfig, sessioncache.NewNoopStore(), db, nil, nil)
+	controlDialer := platformtransport.DialFunc(func(context.Context, string) (*grpc.ClientConn, error) {
+		return nil, errors.New("OpenAPI generation has no platform control endpoint")
+	})
+	engine, err := router.NewWithRuntimeDependencies(documentationConfig, sessioncache.NewNoopStore(), db, nil, nil, ticketSigner, controlDialer)
 	if err != nil {
 		return nil, fmt.Errorf("build OpenAPI route catalog: %w", err)
 	}
@@ -76,11 +84,18 @@ func normalize(raw []byte) ([]byte, error) {
 	return append(contents, '\n'), nil
 }
 
-func newDocumentationConfig() (*config.Config, error) {
+func newDocumentationConfig() (*config.Config, serviceticket.Signer, error) {
 	privateKey := ed25519.NewKeyFromSeed([]byte("0123456789abcdef0123456789abcdef"))
 	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
-		return nil, fmt.Errorf("encode OpenAPI service ticket key: %w", err)
+		return nil, nil, fmt.Errorf("encode OpenAPI service ticket key: %w", err)
+	}
+	ticketSigner, err := serviceticket.NewSigner(serviceticket.Config{
+		Issuer: "paigram-account-center", KeyID: "openapi-test-key", TTL: 5 * time.Minute,
+		PrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("initialize OpenAPI service ticket signer: %w", err)
 	}
 
 	return &config.Config{
@@ -95,12 +110,10 @@ func newDocumentationConfig() (*config.Config, error) {
 			RefreshTokenTTLSeconds:     604800,
 			ServiceTicketTTLSeconds:    300,
 			ServiceTicketIssuer:        "paigram-account-center",
-			ServiceTicketKeyID:         "openapi-test-key",
-			ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
 			OAuthIssuer:                "account-center",
 			OAuthAccessTokenTTLSeconds: 3600,
 			OAuthSigningKey:            documentationSigningKey,
 		},
 		Security: config.SecurityConfig{BcryptCost: 10},
-	}, nil
+	}, ticketSigner, nil
 }

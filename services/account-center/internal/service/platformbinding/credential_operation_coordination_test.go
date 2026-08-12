@@ -25,7 +25,7 @@ func newCoordinatedCredentialService(t *testing.T, gateway *fakeCredentialGatewa
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformService := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket",
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticket: "service-ticket",
 	}
 	return NewOrchestrationService(reader, platformService, gateway, store), store, reader
 }
@@ -147,7 +147,7 @@ func newDurableNonSensitiveService(t *testing.T, gateway credentialGateway) (*Or
 		Generation: 4, ExternalAccountKey: sql.NullString{String: "account-101", Valid: true}, Status: model.PlatformAccountBindingStatusActive,
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
+	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
 	return NewOrchestrationService(reader, platformService, gateway, store), store, reader
 }
 

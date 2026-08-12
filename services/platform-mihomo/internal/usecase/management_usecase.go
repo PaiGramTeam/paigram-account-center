@@ -11,13 +11,13 @@ import (
 var ErrPlatformAccountMismatch = errors.New("platform account does not match requested credential")
 
 type CredentialSummaryOutput struct {
-	AccountKey      string
-	Generation      uint64
-	Status          CredentialStatus
-	LastValidatedAt *time.Time
-	LastRefreshedAt *time.Time
-	Devices         []*biz.Device
-	Profiles        []*ProfileSummary
+	AccountKey              string
+	Generation              uint64
+	Status                  CredentialStatus
+	LastValidatedAt         *time.Time
+	LastRefreshedAt         *time.Time
+	Devices                 []*biz.Device
+	Profiles                []*ProfileSummary
 	ProfileSnapshotComplete bool
 	ProfileRevision         uint64
 	ProfileObservedRevision uint64
@@ -73,13 +73,13 @@ func (uc *ManagementUsecase) GetCredentialSummary(ctx context.Context, accountKe
 	}
 
 	return &CredentialSummaryOutput{
-		AccountKey:      credential.AccountKey,
-		Generation:      credential.Generation,
-		Status:          credentialStatusFromStorage(credential.Status),
-		LastValidatedAt: credential.LastValidatedAt,
-		LastRefreshedAt: credential.LastRefreshedAt,
-		Devices:         devices,
-		Profiles:        profiles,
+		AccountKey:              credential.AccountKey,
+		Generation:              credential.Generation,
+		Status:                  credentialStatusFromStorage(credential.Status),
+		LastValidatedAt:         credential.LastValidatedAt,
+		LastRefreshedAt:         credential.LastRefreshedAt,
+		Devices:                 devices,
+		Profiles:                profiles,
 		ProfileSnapshotComplete: credential.ProfileSnapshotComplete,
 		ProfileRevision:         credential.ProfileRevision,
 		ProfileObservedRevision: credential.ProfileObservedRevision,
@@ -116,13 +116,13 @@ func (uc *ManagementUsecase) GetCredentialSummaryWithScope(ctx context.Context, 
 		summaries = append(summaries, toProfileSummary(profile))
 	}
 	return &CredentialSummaryOutput{
-		AccountKey:      credential.AccountKey,
-		Generation:      credential.Generation,
-		Status:          credentialStatusFromStorage(credential.Status),
-		LastValidatedAt: credential.LastValidatedAt,
-		LastRefreshedAt: credential.LastRefreshedAt,
-		Devices:         devices,
-		Profiles:        summaries,
+		AccountKey:              credential.AccountKey,
+		Generation:              credential.Generation,
+		Status:                  credentialStatusFromStorage(credential.Status),
+		LastValidatedAt:         credential.LastValidatedAt,
+		LastRefreshedAt:         credential.LastRefreshedAt,
+		Devices:                 devices,
+		Profiles:                summaries,
 		ProfileSnapshotComplete: credential.ProfileSnapshotComplete,
 		ProfileRevision:         credential.ProfileRevision,
 		ProfileObservedRevision: credential.ProfileObservedRevision,

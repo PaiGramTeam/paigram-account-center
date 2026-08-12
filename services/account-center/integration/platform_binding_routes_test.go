@@ -178,7 +178,7 @@ func TestPlatformBindingRoutes(t *testing.T) {
 			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, createStub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, createStub))
 
 	t.Run("me routes support list create get profiles grants put grant and delete", func(t *testing.T) {
 		listResp := performJSONRequest(t, stack.Router, http.MethodGet, "/api/v1/me/platform-accounts", nil, authHeaders(ownerAccessToken))
@@ -354,7 +354,7 @@ func TestPlatformBindingRoutes(t *testing.T) {
 
 func TestPlatformBindingConsumerGrantRoutesSupportRegistryConsumersAndIdempotentDisable(t *testing.T) {
 	stack := newIntegrationStack(t)
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, &platformBindingRouteStub{}))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, &platformBindingRouteStub{}))
 
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-consumer-owner-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 	adminID, adminAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-consumer-admin-%d@example.com", time.Now().UnixNano()), "AdminPass123!")
@@ -413,7 +413,7 @@ func TestPlatformBindingConsumerGrantRoutesSupportRegistryConsumersAndIdempotent
 
 func TestPlatformBindingConsumerGrantDisableIsIdempotentWhenGrantIsMissing(t *testing.T) {
 	stack := newIntegrationStack(t)
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, &platformBindingRouteStub{}))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, &platformBindingRouteStub{}))
 
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-grant-missing-owner-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 	adminID, adminAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-grant-missing-admin-%d@example.com", time.Now().UnixNano()), "AdminPass123!")
@@ -473,7 +473,7 @@ func TestCreatePlatformBindingRouteBindsImmediately(t *testing.T) {
 			}},
 		},
 	}
-	endpoint := startPlatformBindingRouteServer(t, stub)
+	endpoint := startPlatformBindingRouteServer(t, stack, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
@@ -527,7 +527,7 @@ func TestCreatePlatformBindingRouteHandlesDuplicateOwnerConflict(t *testing.T) {
 			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
-	endpoint := startPlatformBindingRouteServer(t, stub)
+	endpoint := startPlatformBindingRouteServer(t, stack, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
@@ -552,7 +552,7 @@ func TestCreatePlatformBindingRouteMapsProviderOwnershipConflictAndDeletesDraft(
 	stack := newIntegrationStack(t)
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-provider-conflict-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 	stub := &platformBindingRouteStub{credentialMutationErr: grpcstatus.Error(codes.AlreadyExists, "account already bound")}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
 		"platform": "mihomo", "display_name": "Provider Conflict Draft",
@@ -572,7 +572,7 @@ func TestCreatePlatformBindingRouteMarksDraftInvalidOnProviderValidationFailure(
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-invalid-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 
 	stub := &platformBindingRouteStub{credentialMutationErr: grpcstatus.Error(codes.InvalidArgument, "credential rejected")}
-	endpoint := startPlatformBindingRouteServer(t, stub)
+	endpoint := startPlatformBindingRouteServer(t, stack, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
@@ -613,7 +613,7 @@ func TestCreatePlatformBindingRouteMarksDeleteFailedWhenCleanupFails(t *testing.
 		},
 		deleteErr: grpcstatus.Error(codes.Unavailable, "cleanup down"),
 	}
-	endpoint := startPlatformBindingRouteServer(t, stub)
+	endpoint := startPlatformBindingRouteServer(t, stack, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
@@ -651,7 +651,7 @@ func TestCreatePlatformBindingRouteReturnsExistingBindingForSameOwnerRetry(t *te
 			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
-	endpoint := startPlatformBindingRouteServer(t, stub)
+	endpoint := startPlatformBindingRouteServer(t, stack, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	resp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/me/platform-accounts", map[string]any{
@@ -691,7 +691,7 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
-	endpoint := startPlatformBindingRouteServer(t, stub)
+	endpoint := startPlatformBindingRouteServer(t, stack, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	meResp := performJSONRequest(t, stack.Router, http.MethodPut, fmt.Sprintf("/api/v1/me/platform-accounts/%d/credential", binding.ID), map[string]any{
@@ -744,7 +744,7 @@ func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneSta
 	})
 	require.NoError(t, err)
 	stub := &platformBindingRouteStub{}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	resp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/me/platform-accounts/%d", binding.ID), nil, authHeaders(ownerAccessToken))
 	require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
@@ -777,7 +777,7 @@ func TestAdminDeletePlatformBindingRouteDeletesProviderCredential(t *testing.T) 
 	}
 	require.NoError(t, stack.DB.Create(&binding).Error)
 	stub := &platformBindingRouteStub{}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	resp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/admin/platform-accounts/%d", binding.ID), nil, authHeaders(adminAccessToken))
 	require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
@@ -798,7 +798,7 @@ func TestDeletePlatformBindingRouteKeepsUncertainOperationWhenResponseIsLost(t *
 	}
 	require.NoError(t, stack.DB.Create(&binding).Error)
 	stub := &platformBindingRouteStub{deleteErr: grpcstatus.Error(codes.Unavailable, "delete downstream unavailable")}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	resp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/me/platform-accounts/%d", binding.ID), nil, authHeaders(ownerAccessToken))
 	require.Equal(t, http.StatusAccepted, resp.Code, resp.Body.String())
@@ -828,7 +828,7 @@ func TestDeletePlatformBindingRouteReturnsNotFoundOnRepeatDelete(t *testing.T) {
 	}
 	require.NoError(t, stack.DB.Create(&binding).Error)
 	stub := &platformBindingRouteStub{}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	firstResp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/me/platform-accounts/%d", binding.ID), nil, authHeaders(ownerAccessToken))
 	require.Equal(t, http.StatusNoContent, firstResp.Code, firstResp.Body.String())
@@ -849,7 +849,9 @@ func seedEnabledPlatformServiceWithKey(t *testing.T, stack *integrationStack, se
 		ServiceKey:           serviceKey,
 		ServiceAudience:      serviceKey,
 		DiscoveryType:        "static",
-		Endpoint:             endpoint,
+		ControlEndpoint:      endpoint,
+		RuntimeEndpoint:      "runtime.internal:9001",
+		RuntimeServerName:    "runtime.internal",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential"]`,
 		CredentialSchemaJSON: `{"type":"object"}`,

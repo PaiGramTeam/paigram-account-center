@@ -35,7 +35,7 @@ type StatusUsecase struct {
 	credentials   biz.CredentialRepository
 	profiles      biz.ProfileRepository
 	hoyoClient    platformmihomo.Client
-	encryptionKey []byte
+	encryptionKey internalcrypto.KeyProvider
 	artifacts     *ArtifactLifecycle
 }
 
@@ -43,7 +43,7 @@ func NewStatusUsecase(
 	credentials biz.CredentialRepository,
 	profiles biz.ProfileRepository,
 	hoyoClient platformmihomo.Client,
-	encryptionKey []byte,
+	encryptionKey internalcrypto.KeyProvider,
 	artifacts *ArtifactLifecycle,
 ) *StatusUsecase {
 	return &StatusUsecase{
@@ -86,8 +86,12 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 	if err != nil {
 		return nil, err
 	}
+	expectedCredentialBlob := credential.CredentialBlob
 	cookieBundleJSON, err := internalcrypto.DecryptString(uc.encryptionKey, credential.CredentialBlob)
 	if err != nil {
+		return nil, err
+	}
+	if err := uc.prepareCredentialReencryption(credential, cookieBundleJSON); err != nil {
 		return nil, err
 	}
 	existingProfiles, err := uc.profiles.ListByAccountKey(ctx, accountKey)
@@ -107,7 +111,7 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 		}
 		credential.Status = classifyCredentialStatus(validationErr)
 		credential.ProfileSnapshotComplete = false
-		if err := uc.saveAttentionAndInvalidateArtifacts(ctx, credential); err != nil {
+		if err := uc.saveAttentionAndInvalidateArtifacts(ctx, credential, expectedCredentialBlob, cookieBundleJSON); err != nil {
 			return nil, err
 		}
 		return &RefreshCredentialOutput{
@@ -234,9 +238,13 @@ func (uc *StatusUsecase) getCredential(ctx context.Context, accountKey string) (
 }
 
 func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credential, markRefreshed bool) (CredentialStatus, string, error) {
+	expectedCredentialBlob := credential.CredentialBlob
 	cookieBundleJSON, err := internalcrypto.DecryptString(uc.encryptionKey, credential.CredentialBlob)
 	if err != nil {
 		return CredentialStatusUnspecified, "decrypt_failed", err
+	}
+	if err := uc.prepareCredentialReencryption(credential, cookieBundleJSON); err != nil {
+		return CredentialStatusUnspecified, "reencrypt_failed", err
 	}
 
 	_, _, _, err = uc.hoyoClient.ValidateAndDiscover(ctx, cookieBundleJSON, credential.Region)
@@ -248,7 +256,7 @@ func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credent
 			return CredentialStatusUnspecified, "", err
 		}
 		credential.Status = classifyCredentialStatus(err)
-		if saveErr := uc.saveAttentionAndInvalidateArtifacts(ctx, credential); saveErr != nil {
+		if saveErr := uc.saveAttentionAndInvalidateArtifacts(ctx, credential, expectedCredentialBlob, cookieBundleJSON); saveErr != nil {
 			return CredentialStatusUnspecified, "save_failed", saveErr
 		}
 		return credentialStatusFromStorage(credential.Status), classifyErrorCode(err), nil
@@ -263,6 +271,23 @@ func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credent
 	}
 
 	return CredentialStatusActive, "", nil
+}
+
+func (uc *StatusUsecase) prepareCredentialReencryption(credential *biz.Credential, plaintext string) error {
+	needsReencryption, err := internalcrypto.EnvelopeNeedsReencryption(uc.encryptionKey, credential.CredentialBlob)
+	if err != nil {
+		return err
+	}
+	if !needsReencryption {
+		return nil
+	}
+	reencrypted, err := internalcrypto.EncryptString(uc.encryptionKey, plaintext)
+	if err != nil {
+		return err
+	}
+	credential.CredentialBlob = reencrypted
+	credential.CredentialVersion = "v2"
+	return nil
 }
 
 func (uc *StatusUsecase) saveAndInvalidateArtifacts(ctx context.Context, credential *biz.Credential) error {
@@ -282,7 +307,7 @@ func (uc *StatusUsecase) saveAndInvalidateArtifacts(ctx context.Context, credent
 	return write(ctx)
 }
 
-func (uc *StatusUsecase) saveAttentionAndInvalidateArtifacts(ctx context.Context, credential *biz.Credential) error {
+func (uc *StatusUsecase) saveAttentionAndInvalidateArtifacts(ctx context.Context, credential *biz.Credential, expectedCredentialBlob, validatedPlaintext string) error {
 	var invalidationErr error
 	write := func(txCtx context.Context) error {
 		current, err := uc.credentials.GetByBindingRefForUpdate(txCtx, credential.BindingRef)
@@ -292,8 +317,17 @@ func (uc *StatusUsecase) saveAttentionAndInvalidateArtifacts(ctx context.Context
 		if current == nil {
 			return ErrCredentialNotFound
 		}
-		if current.Generation != credential.Generation || current.CredentialBlob != credential.CredentialBlob {
+		if current.Generation != credential.Generation {
 			return biz.ErrCredentialGenerationConflict
+		}
+		if current.CredentialBlob == expectedCredentialBlob {
+			current.CredentialBlob = credential.CredentialBlob
+			current.CredentialVersion = credential.CredentialVersion
+		} else {
+			currentPlaintext, decryptErr := internalcrypto.DecryptString(uc.encryptionKey, current.CredentialBlob)
+			if decryptErr != nil || currentPlaintext != validatedPlaintext {
+				return biz.ErrCredentialGenerationConflict
+			}
 		}
 		current.Status = credential.Status
 		current.LastValidatedAt = credential.LastValidatedAt

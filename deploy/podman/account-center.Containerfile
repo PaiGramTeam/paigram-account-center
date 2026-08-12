@@ -27,6 +27,6 @@ COPY --chown=paigram:paigram deploy/podman/config.yaml /opt/paigram/config/confi
 USER paigram
 WORKDIR /opt/paigram
 
-EXPOSE 8080
+EXPOSE 8080 50051
 ENTRYPOINT ["/usr/local/bin/paigram"]
 CMD ["serve"]

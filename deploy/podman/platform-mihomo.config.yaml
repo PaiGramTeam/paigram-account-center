@@ -1,23 +1,33 @@
 server:
-  grpc:
+  control:
     network: tcp
     addr: "0.0.0.0:9000"
     timeout_seconds: 5
+    tls:
+      certificate_file: "/run/secrets/platform_control_cert.pem"
+      private_key_file: "/run/secrets/platform_control_key.pem"
+      client_ca_file: "/run/secrets/account_control_client_ca.pem"
+  runtime:
+    network: tcp
+    addr: "0.0.0.0:9001"
+    timeout_seconds: 5
+    tls:
+      certificate_file: "/run/secrets/platform_runtime_cert.pem"
+      private_key_file: "/run/secrets/platform_runtime_key.pem"
 data:
   database:
-    dsn: "${PLATFORM_DATABASE_DSN}"
+    dsn_file: "/run/secrets/platform_database_dsn"
   redis:
-    addr: "${PLATFORM_REDIS_ADDR:platform-redis:6379}"
-    password: "${PLATFORM_REDIS_PASSWORD}"
+    addr: "redis:6379"
+    password_file: "/run/secrets/platform_redis_password"
     db: 0
     prefix: "platform-mihomo:"
 security:
-  credential_encryption_key: "${PLATFORM_CREDENTIAL_ENCRYPTION_KEY}"
+  credential_encryption_keyring_file: "/run/secrets/platform_encryption_keyring.json"
   service_ticket_issuer: paigram-account-center
-  service_ticket_key_id: account-center-ed25519-2026-01
-  service_ticket_public_key_pem: "${SERVICE_TICKET_PUBLIC_KEY_PEM}"
+  service_ticket_public_keyring_file: "/run/secrets/account_service_ticket_public_keyring.json"
 upstream:
-  base_url: "${MIHOMO_UPSTREAM_BASE_URL}"
+  base_url: "${UPSTREAM_BASE_URL}"
   timeout_seconds: 10
-  bearer_token_file: "${MIHOMO_UPSTREAM_BEARER_TOKEN_FILE:}"
+  bearer_token_file: "/run/secrets/mihomo_upstream_bearer_token"
   allow_insecure_http: false

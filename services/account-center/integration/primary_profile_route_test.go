@@ -38,7 +38,7 @@ func TestPrimaryProfileRouteReturnsAuthoritativeAssignment(t *testing.T) {
 			{Id: 10002, PlatformAccountId: "cn:owner-main", GameBiz: "hk4e_global", Region: "os_asia", PlayerId: "10002", Nickname: "Lumine"},
 		},
 	}}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	response := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 		"profile_id": profiles[1].ID,

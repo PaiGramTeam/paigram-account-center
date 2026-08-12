@@ -2,6 +2,7 @@ package botaccess
 
 import (
 	"paigram/internal/config"
+	"paigram/internal/serviceticket"
 
 	"gorm.io/gorm"
 )
@@ -19,6 +20,17 @@ func NewServiceGroup(db *gorm.DB, authCfg config.AuthConfig) (*ServiceGroup, err
 		return nil, err
 	}
 
+	return &ServiceGroup{
+		BindingAccessService: BindingAccessService{db: db},
+		TicketService:        *ticketService,
+	}, nil
+}
+
+func NewServiceGroupWithSigner(db *gorm.DB, signer serviceticket.Signer) (*ServiceGroup, error) {
+	ticketService, err := NewTicketServiceWithSigner(signer)
+	if err != nil {
+		return nil, err
+	}
 	return &ServiceGroup{
 		BindingAccessService: BindingAccessService{db: db},
 		TicketService:        *ticketService,

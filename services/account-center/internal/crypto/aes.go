@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -18,7 +17,7 @@ var (
 	// ErrInvalidCiphertext is returned when the ciphertext is too short or malformed
 	ErrInvalidCiphertext = errors.New("invalid ciphertext")
 	// ErrKeyNotSet is returned when encryption key is not configured
-	ErrKeyNotSet = errors.New("encryption key not configured (set security.encryption_key in config or PAI_SECURITY_ENCRYPTION_KEY / ENCRYPTION_KEY environment variable)")
+	ErrKeyNotSet = errors.New("encryption key not configured")
 )
 
 // encryptionKey holds the global encryption key loaded at startup.
@@ -30,20 +29,8 @@ var encryptionKey []byte
 //   - a raw 32-byte ASCII string, or
 //   - a base64-encoded 32-byte key (auto-detected when standard-base64 padding/special
 //     characters are present, or when the decoded length is exactly 32 bytes).
-//
-// If keyStr is empty, InitEncryption falls back to the legacy ENCRYPTION_KEY
-// environment variable for backwards compatibility with deployments that
-// predate the config-driven flow. Operators should migrate to either
-// `security.encryption_key` in config.yaml or PAI_SECURITY_ENCRYPTION_KEY.
 func InitEncryption(keyStr string) error {
 	keyStr = strings.TrimSpace(keyStr)
-
-	// Backwards-compatible fallback to the legacy bare env var. Kept
-	// intentionally so existing CI / local setups keep working while
-	// teams migrate to the config-driven approach.
-	if keyStr == "" {
-		keyStr = strings.TrimSpace(os.Getenv("ENCRYPTION_KEY"))
-	}
 	if keyStr == "" {
 		return ErrKeyNotSet
 	}

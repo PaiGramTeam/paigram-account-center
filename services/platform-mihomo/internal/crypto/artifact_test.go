@@ -7,11 +7,11 @@ import (
 )
 
 func TestArtifactCipherUsesVersionedResourceBoundAEAD(t *testing.T) {
-	key := []byte("0123456789abcdef0123456789abcdef")
+	key := NewStaticKeyProvider([]byte("0123456789abcdef0123456789abcdef"))
 	ciphertext, err := EncryptArtifact(key, "secret-authkey", "binding-1", "account-1", "authkey", "profile-1")
 	require.NoError(t, err)
 	require.NotContains(t, ciphertext, "secret-authkey")
-	require.Contains(t, ciphertext, "v1.")
+	require.Contains(t, ciphertext, "v2.static.")
 
 	plaintext, err := DecryptArtifact(key, ciphertext, "binding-1", "account-1", "authkey", "profile-1")
 	require.NoError(t, err)

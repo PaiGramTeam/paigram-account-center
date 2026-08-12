@@ -443,22 +443,13 @@
           "consumer": {
             "type": "string"
           },
-          "created_at": {},
-          "granted_at": {},
-          "granted_by": {},
-          "id": {
-            "format": "int64",
-            "minimum": 0,
-            "type": "integer"
-          },
           "propagation_state": {
             "type": "string"
           },
           "revoked_at": {},
           "status": {
             "type": "string"
-          },
-          "updated_at": {}
+          }
         },
         "required": [
           "binding_id",
@@ -1509,6 +1500,15 @@
           "platform": {
             "type": "string"
           },
+          "runtime_endpoint": {
+            "type": "string"
+          },
+          "runtime_server_name": {
+            "type": "string"
+          },
+          "service_audience": {
+            "type": "string"
+          },
           "supported_actions": {
             "items": {
               "type": "string"
@@ -1522,6 +1522,9 @@
         "required": [
           "platform",
           "display_name",
+          "runtime_endpoint",
+          "runtime_server_name",
+          "service_audience",
           "supported_actions"
         ],
         "type": "object"
@@ -1567,6 +1570,9 @@
           "config_state": {
             "type": "string"
           },
+          "control_endpoint": {
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -1584,9 +1590,6 @@
           "enabled": {
             "type": "boolean"
           },
-          "endpoint": {
-            "type": "string"
-          },
           "error": {
             "type": "string"
           },
@@ -1596,6 +1599,12 @@
             "type": "integer"
           },
           "platform_key": {
+            "type": "string"
+          },
+          "runtime_endpoint": {
+            "type": "string"
+          },
+          "runtime_server_name": {
             "type": "string"
           },
           "runtime_state": {
@@ -1628,7 +1637,9 @@
           "service_key",
           "service_audience",
           "discovery_type",
-          "endpoint",
+          "control_endpoint",
+          "runtime_endpoint",
+          "runtime_server_name",
           "enabled",
           "supported_actions",
           "credential_schema",
@@ -13322,6 +13333,9 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "control_endpoint": {
+                    "type": "string"
+                  },
                   "credential_schema": {
                     "additionalProperties": {},
                     "type": "object"
@@ -13335,10 +13349,13 @@
                   "enabled": {
                     "type": "boolean"
                   },
-                  "endpoint": {
+                  "platform_key": {
                     "type": "string"
                   },
-                  "platform_key": {
+                  "runtime_endpoint": {
+                    "type": "string"
+                  },
+                  "runtime_server_name": {
                     "type": "string"
                   },
                   "service_audience": {
@@ -13363,7 +13380,9 @@
                   "service_key",
                   "service_audience",
                   "discovery_type",
-                  "endpoint",
+                  "control_endpoint",
+                  "runtime_endpoint",
+                  "runtime_server_name",
                   "enabled",
                   "supported_actions",
                   "credential_schema"
@@ -14344,6 +14363,9 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "control_endpoint": {
+                    "type": "string"
+                  },
                   "credential_schema": {
                     "additionalProperties": {},
                     "type": "object"
@@ -14357,10 +14379,13 @@
                   "enabled": {
                     "type": "boolean"
                   },
-                  "endpoint": {
+                  "platform_key": {
                     "type": "string"
                   },
-                  "platform_key": {
+                  "runtime_endpoint": {
+                    "type": "string"
+                  },
+                  "runtime_server_name": {
                     "type": "string"
                   },
                   "service_audience": {

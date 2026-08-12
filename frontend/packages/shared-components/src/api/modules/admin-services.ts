@@ -11,7 +11,9 @@ export interface PlatformServiceInput {
   service_key: string
   service_audience: string
   discovery_type: string
-  endpoint: string
+  control_endpoint: string
+  runtime_endpoint: string
+  runtime_server_name: string
   enabled: boolean
   supported_actions: string[]
   credential_schema: Record<string, unknown>

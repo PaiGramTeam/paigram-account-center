@@ -26,7 +26,7 @@ func TestConsumerGrantMutationReturnsAcceptedWhileFencePropagationIsPending(t *t
 	}
 	require.NoError(t, stack.DB.Create(&binding).Error)
 	stub := &platformBindingRouteStub{}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 	path := fmt.Sprintf("/api/v1/me/platform-accounts/%d/consumer-grants/paigram-bot", binding.ID)
 
 	created := performJSONRequest(t, stack.Router, http.MethodPut, path, map[string]any{"enabled": true}, authHeaders(accessToken))

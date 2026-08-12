@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"platform-mihomo-service/internal/conf"
+	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
 	"platform-mihomo-service/internal/server"
 	"platform-mihomo-service/internal/service"
@@ -14,9 +15,10 @@ import (
 )
 
 type productionComponents struct {
-	controlService        *service.PlatformControlService
-	runtimeService        *service.MihomoRuntimeService
-	artifactCleanupServer *server.ArtifactCleanupServer
+	controlService               *service.PlatformControlService
+	runtimeService               *service.MihomoRuntimeService
+	artifactCleanupServer        *server.ArtifactCleanupServer
+	credentialReencryptionServer *server.CredentialReencryptionServer
 }
 
 func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClient *redis.Client) (*productionComponents, error) {
@@ -25,7 +27,10 @@ func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClien
 	profileRepo := data.NewProfileRepo(database)
 	redisPrefix := bc.GetData().GetRedis().GetPrefix()
 	artifactRepo := data.NewArtifactRepo(database, redisClient, redisPrefix)
-	encryptionKey := []byte(bc.GetSecurity().GetCredentialEncryptionKey())
+	encryptionKey, err := internalcrypto.NewFileKeyring(bc.GetSecurity().GetCredentialEncryptionKeyringFile())
+	if err != nil {
+		return nil, err
+	}
 	managementRepo := data.NewManagementRepo(database, redisClient, redisPrefix)
 	grantInvalidationRepo := data.NewGrantInvalidationRepo(database)
 	operationRepo := data.NewOperationRepo(database)
@@ -67,5 +72,8 @@ func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClien
 		controlService:        controlService,
 		runtimeService:        service.NewMihomoRuntimeService(ticketVerifier, statusUC, profileUC, authkeyUC, managementUC, deviceRepo),
 		artifactCleanupServer: server.NewArtifactCleanupServer(artifactLifecycle, 5*time.Minute),
+		credentialReencryptionServer: server.NewCredentialReencryptionServer(
+			usecase.NewCredentialReencryptionUsecase(credentialRepo, encryptionKey), 5*time.Minute,
+		),
 	}, nil
 }

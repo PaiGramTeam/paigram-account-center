@@ -10,7 +10,9 @@ type PlatformService struct {
 	ServiceKey           string `gorm:"size:128;not null;uniqueIndex"`
 	ServiceAudience      string `gorm:"size:128;not null"`
 	DiscoveryType        string `gorm:"size:32;not null"`
-	Endpoint             string `gorm:"size:255;not null"`
+	ControlEndpoint      string `gorm:"size:255;not null"`
+	RuntimeEndpoint      string `gorm:"size:255;not null"`
+	RuntimeServerName    string `gorm:"size:255;not null"`
 	Enabled              bool   `gorm:"not null;default:true"`
 	SupportedActionsJSON string `gorm:"type:jsonb;not null"`
 	CredentialSchemaJSON string `gorm:"type:jsonb;not null"`

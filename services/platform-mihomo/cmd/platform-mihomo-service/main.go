@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/secretfile"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/env"
@@ -14,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"platform-mihomo-service/internal/conf"
+	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
 	internaldatabase "platform-mihomo-service/internal/database"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
@@ -34,6 +37,9 @@ func main() {
 
 	var bc conf.Bootstrap
 	if err := c.Scan(&bc); err != nil {
+		log.Fatal(err)
+	}
+	if err := loadBootstrapSecretFiles(&bc); err != nil {
 		log.Fatal(err)
 	}
 	if err := validateBootstrap(&bc); err != nil {
@@ -57,10 +63,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	grpcSrv := server.NewGRPCServer(&bc, components.controlService, components.runtimeService)
+	grpcServers, err := server.NewGRPCServers(&bc, components.controlService, components.runtimeService)
+	if err != nil {
+		log.Fatal(err)
+	}
 	app := kratos.New(
 		kratos.Name("platform-mihomo-service"),
-		kratos.Server(grpcSrv, components.artifactCleanupServer),
+		kratos.Server(grpcServers.Control, grpcServers.Runtime, components.artifactCleanupServer, components.credentialReencryptionServer),
 	)
 
 	if err := app.Run(); err != nil {
@@ -68,16 +77,37 @@ func main() {
 	}
 }
 
+func loadBootstrapSecretFiles(bc *conf.Bootstrap) error {
+	if bc == nil || bc.GetData() == nil {
+		return errors.New("data configuration is required")
+	}
+	targets := []struct {
+		name string
+		path string
+		set  func(string)
+	}{
+		{name: "data.database.dsn_file", path: bc.GetData().GetDatabase().GetDsnFile(), set: func(value string) { bc.Data.Database.Dsn = value }},
+		{name: "data.redis.password_file", path: bc.GetData().GetRedis().GetPasswordFile(), set: func(value string) { bc.Data.Redis.Password = value }},
+	}
+	for _, target := range targets {
+		if target.path == "" {
+			continue
+		}
+		value, err := secretfile.Read(target.path)
+		if err != nil {
+			return errors.Join(errors.New(target.name), err)
+		}
+		target.set(value)
+	}
+	return nil
+}
+
 func validateBootstrap(bc *conf.Bootstrap) error {
-	grpcConf := bc.GetServer().GetGrpc()
-	if grpcConf.GetNetwork() == "" {
-		return errors.New("server.grpc.network is required")
+	if err := validateGRPCBootstrap("server.control", bc.GetServer().GetControl(), transporttls.MutualTLS); err != nil {
+		return err
 	}
-	if grpcConf.GetAddr() == "" {
-		return errors.New("server.grpc.addr is required")
-	}
-	if grpcConf.GetTimeoutSeconds() <= 0 {
-		return errors.New("server.grpc.timeout_seconds must be greater than zero")
+	if err := validateGRPCBootstrap("server.runtime", bc.GetServer().GetRuntime(), transporttls.ServerAuthOnly); err != nil {
+		return err
 	}
 	databaseConf := bc.GetData().GetDatabase()
 	if databaseConf.GetDsn() == "" {
@@ -95,20 +125,39 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	if security.GetServiceTicketIssuer() == "" {
 		return errors.New("security.service_ticket_issuer is required")
 	}
-	if len(security.GetCredentialEncryptionKey()) != 32 {
-		return errors.New("security.credential_encryption_key must be 32 bytes")
+	if security.GetCredentialEncryptionKeyringFile() == "" {
+		return errors.New("security.credential_encryption_keyring_file is required")
 	}
-	if security.GetServiceTicketKeyId() == "" {
-		return errors.New("security.service_ticket_key_id is required")
+	if _, err := internalcrypto.NewFileKeyring(security.GetCredentialEncryptionKeyringFile()); err != nil {
+		return err
 	}
-	if security.GetServiceTicketPublicKeyPem() == "" {
-		return errors.New("security.service_ticket_public_key_pem is required")
+	if security.GetServiceTicketPublicKeyringFile() == "" {
+		return errors.New("security.service_ticket_public_keyring_file is required")
 	}
-	if _, err := data.ParseEd25519PublicKeyPEM(security.GetServiceTicketPublicKeyPem()); err != nil {
+	if _, err := data.NewFilePublicKeyResolver(security.GetServiceTicketPublicKeyringFile()); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func validateGRPCBootstrap(name string, grpcConf *conf.Server_GRPC, mode transporttls.ServerMode) error {
+	if grpcConf.GetNetwork() == "" {
+		return errors.New(name + ".network is required")
+	}
+	if grpcConf.GetAddr() == "" {
+		return errors.New(name + ".addr is required")
+	}
+	if grpcConf.GetTimeoutSeconds() <= 0 {
+		return errors.New(name + ".timeout_seconds must be greater than zero")
+	}
+	tlsFiles := grpcConf.GetTls()
+	_, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+		CertificateFile: tlsFiles.GetCertificateFile(),
+		PrivateKeyFile:  tlsFiles.GetPrivateKeyFile(),
+		ClientCAFile:    tlsFiles.GetClientCaFile(),
+	}, mode)
+	return err
 }
 
 func newMihomoUpstreamClient(upstream *conf.Upstream) (*platformmihomo.HTTPClient, error) {
@@ -121,9 +170,9 @@ func newMihomoUpstreamClient(upstream *conf.Upstream) (*platformmihomo.HTTPClien
 }
 
 func newTicketVerifierFromSecurity(security *conf.Security) (*data.TicketVerifier, error) {
-	publicKey, err := data.ParseEd25519PublicKeyPEM(security.GetServiceTicketPublicKeyPem())
+	resolver, err := data.NewFilePublicKeyResolver(security.GetServiceTicketPublicKeyringFile())
 	if err != nil {
 		return nil, err
 	}
-	return data.NewStaticKeyTicketVerifier(security.GetServiceTicketIssuer(), security.GetServiceTicketKeyId(), publicKey), nil
+	return data.NewTicketVerifierWithResolver(security.GetServiceTicketIssuer(), resolver), nil
 }

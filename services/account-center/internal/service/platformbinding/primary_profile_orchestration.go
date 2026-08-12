@@ -68,7 +68,7 @@ func (s *OrchestrationService) SetPrimaryProfileForOwner(ctx context.Context, ow
 		}
 		return nil, err
 	}
-	summary, err := s.gateway.SetPrimaryProfile(ctx, platformRow.Endpoint, ticket, operationID, binding, profile.ProfileRef)
+	summary, err := s.gateway.SetPrimaryProfile(ctx, platformRow.ControlEndpoint, ticket, operationID, binding, profile.ProfileRef)
 	if err != nil {
 		deliveryErr := s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
 		var pending *CredentialOperationPendingError

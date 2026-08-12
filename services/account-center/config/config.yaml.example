@@ -32,7 +32,8 @@ app:
     max_age: 43200 # seconds
 
 database:
-  dsn: "postgres://paigram:password@localhost:5432/paigram?sslmode=disable"
+  dsn: ""
+  dsn_file: "/run/secrets/account_database_dsn"
   migrations_dir: "initialize/migrate/sql"
   max_idle_conns: 10
   max_open_conns: 100
@@ -58,9 +59,9 @@ auth:
   oauth_state_ttl: 600           # 10 minutes
   service_ticket_ttl: 300        # 5 minutes
   service_ticket_issuer: "paigram-account-center"
-  service_ticket_key_id: ""
-  service_ticket_private_key_pem: ""
+  service_ticket_signing_key_file: "/run/secrets/account_service_ticket_signing_key.json"
   oauth_signing_key: ""
+  oauth_signing_key_file: "/run/secrets/account_oauth_signing_key"
   captcha:
     turnstile:
       enabled: false
@@ -113,6 +114,7 @@ redis:
   addr: "localhost:6379"
   username: ""
   password: ""
+  password_file: "/run/secrets/account_redis_password"
   db: 0
   prefix: "paigram:"
   dial_timeout: 5
@@ -122,9 +124,18 @@ redis:
   min_idle_conns: 5
   max_retries: 3
 
+platform_control:
+  root_ca_file: "/run/secrets/platform_control_ca.pem"
+  certificate_file: "/run/secrets/account_control_client_cert.pem"
+  private_key_file: "/run/secrets/account_control_client_key.pem"
+  server_name: "platform-control.internal"
+  dial_timeout: 5s
+
 grpc:
   enabled: true
   port: 50051
+  certificate_file: "/run/secrets/account_grpc_cert.pem"
+  private_key_file: "/run/secrets/account_grpc_key.pem"
   max_connection_idle: 300       # seconds
   max_connection_age: 3600       # seconds
   max_connection_age_grace: 30   # seconds
@@ -196,11 +207,10 @@ security:
 
   # AES-256 master key used to encrypt 2FA TOTP secrets at rest.
   # Accepts either a raw 32-byte ASCII string or a base64-encoded 32-byte key.
-  # SECURITY: do NOT commit a real production key to this file. Prefer the
-  # environment variable PAI_SECURITY_ENCRYPTION_KEY (preferred) or the legacy
-  # ENCRYPTION_KEY (kept for backwards compatibility) in production.
+  # SECURITY: do not commit a real production key to this file.
   # Generate one with: `openssl rand -base64 32`
   encryption_key: ""
+  encryption_key_file: "/run/secrets/account_encryption_key"
 
   # Suspicious Login Detection
   suspicious_login_detection: true      # Enable analyzing logins for suspicious patterns

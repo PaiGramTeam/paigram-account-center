@@ -67,7 +67,7 @@ func newCredentialReconcileService(t *testing.T, resolver *fakeCredentialOperati
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformService := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket",
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticket: "service-ticket",
 	}
 	return NewOrchestrationService(reader, platformService, resolver, store), store, reader
 }
@@ -185,7 +185,7 @@ func newNonSensitiveReconcileService(t *testing.T, resolver *fakeCredentialOpera
 		Generation: 4, ExternalAccountKey: sql.NullString{String: "account-101", Valid: true}, Status: model.PlatformAccountBindingStatusActive,
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
+	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
 	return NewOrchestrationService(reader, platformService, resolver, store), store, reader
 }
 
@@ -230,7 +230,7 @@ func TestReconcilePrimaryReplayUsesIntentProfileRevision(t *testing.T) {
 			Profiles: []map[string]any{{"profile_ref": "profile-stable", "is_default": true}},
 		},
 	}
-	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
+	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
 	service := NewOrchestrationService(reader, platformService, resolver, store)
 
 	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), input.OperationID))

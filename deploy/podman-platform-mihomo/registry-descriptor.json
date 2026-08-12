@@ -1,0 +1,37 @@
+{
+  "platform_key": "mihomo",
+  "display_name": "Mihomo",
+  "service_key": "platform-mihomo-service",
+  "service_audience": "platform-mihomo-service",
+  "discovery_type": "static",
+  "control_endpoint": "platform-mihomo:9000",
+  "runtime_endpoint": "runtime.example.com:443",
+  "runtime_server_name": "runtime.example.com",
+  "enabled": true,
+  "supported_actions": [
+    "mihomo.binding.read",
+    "mihomo.authorization.fence.apply",
+    "mihomo.credential.bind",
+    "mihomo.credential.update",
+    "mihomo.credential.refresh",
+    "mihomo.credential.delete",
+    "mihomo.credential.validate",
+    "mihomo.status.read",
+    "mihomo.profile.read",
+    "mihomo.profile.write",
+    "mihomo.authkey.issue",
+    "mihomo.device.read",
+    "mihomo.operation.read",
+    "mihomo.operation.resolve"
+  ],
+  "credential_schema": {
+    "type": "object",
+    "properties": {
+      "cookie_bundle": {"type": "string"},
+      "device_id": {"type": "string"},
+      "device_fp": {"type": "string"},
+      "device_name": {"type": "string"}
+    },
+    "required": ["cookie_bundle", "device_id", "device_fp"]
+  }
+}

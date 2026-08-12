@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
@@ -16,13 +17,39 @@ import (
 	"paigram/internal/httpserver"
 	"paigram/internal/middleware"
 	"paigram/internal/observability"
+	"paigram/internal/platformtransport"
 	"paigram/internal/response"
 	"paigram/internal/service"
+	"paigram/internal/serviceticket"
 	"paigram/internal/sessioncache"
 )
 
 // New initialises the Gin router with application routes.
 func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service) (*gin.Engine, error) {
+	ticketSigner, err := serviceticket.NewFileSigner(
+		cfg.Auth.ServiceTicketIssuer,
+		time.Duration(cfg.Auth.ServiceTicketTTLSeconds)*time.Second,
+		cfg.Auth.ServiceTicketSigningKeyFile,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("initialize service ticket signer: %w", err)
+	}
+	return NewWithTicketSigner(cfg, cache, db, rateLimitStore, emailService, ticketSigner)
+}
+
+func NewWithTicketSigner(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service, ticketSigner serviceticket.Signer) (*gin.Engine, error) {
+	controlDialer, err := platformtransport.NewControlDialer(platformtransport.ControlConfig{
+		RootCAFile: cfg.PlatformControl.RootCAFile, CertificateFile: cfg.PlatformControl.CertificateFile,
+		PrivateKeyFile: cfg.PlatformControl.PrivateKeyFile, ServerName: cfg.PlatformControl.ServerName,
+		Timeout: cfg.PlatformControl.DialTimeout,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return NewWithRuntimeDependencies(cfg, cache, db, rateLimitStore, emailService, ticketSigner, controlDialer)
+}
+
+func NewWithRuntimeDependencies(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitStore limiter.Store, emailService *email.Service, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) (*gin.Engine, error) {
 	appCfg := cfg.App
 	authCfg := cfg.Auth
 	rateLimitCfg := cfg.RateLimit
@@ -116,7 +143,7 @@ func New(cfg *config.Config, cache sessioncache.Store, db *gorm.DB, rateLimitSto
 	v1 := runtime.V1
 
 	// Initialize handler groups with dependencies (also seeds loginrisk + geolocation subgroups).
-	if err := handler.InitializeApiGroups(db, cache, authCfg, cfg.Security, cfg.TelegramOIDC); err != nil {
+	if err := handler.InitializeApiGroupsWithTransport(db, cache, authCfg, cfg.Security, cfg.TelegramOIDC, ticketSigner, controlDialer); err != nil {
 		return nil, fmt.Errorf("initialize api groups: %w", err)
 	}
 	handler.ApiGroupApp.AuthApiGroup = *authhandler.NewApiGroup(

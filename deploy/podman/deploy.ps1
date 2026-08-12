@@ -33,6 +33,15 @@ if ($instance -notmatch '^[a-z0-9][a-z0-9-]*$') {
     throw "PAI_INSTANCE must contain only lowercase letters, digits, and hyphens"
 }
 
+$platformNetwork = Get-EnvValue -Name "PAI_PLATFORM_NETWORK"
+if (-not $platformNetwork) {
+    $platformNetwork = "paigram-platform-backplane"
+}
+& podman network inspect $platformNetwork *> $null
+if ($LASTEXITCODE -ne 0) {
+    throw "Missing shared Platform network $platformNetwork; deploy Platform Mihomo first"
+}
+
 $composeArguments = @("compose", "--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
 $upArguments = if ($NoBuild) { @("--no-build", "-d") } else { @("--build", "-d") }
 & podman @composeArguments up @upArguments
@@ -40,7 +49,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Podman Compose deployment failed"
 }
 
-foreach ($container in @("$instance-frontend", "$instance-platform-mihomo")) {
+foreach ($container in @("$instance-frontend")) {
     for ($attempt = 1; $attempt -le 60; $attempt++) {
         $status = & podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $container 2>$null
         if ($status -eq "healthy") {
@@ -58,7 +67,7 @@ foreach ($container in @("$instance-frontend", "$instance-platform-mihomo")) {
     }
 }
 
-foreach ($privateContainer in @($instance, "$instance-postgres", "$instance-redis", "$instance-platform-postgres", "$instance-platform-redis")) {
+foreach ($privateContainer in @("$instance-postgres", "$instance-redis")) {
     $publishedPorts = & podman port $privateContainer
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to inspect $privateContainer ports"
@@ -68,9 +77,9 @@ foreach ($privateContainer in @($instance, "$instance-postgres", "$instance-redi
     }
 }
 
-$platformPorts = & podman port "$instance-platform-mihomo"
-if ($LASTEXITCODE -ne 0 -or -not $platformPorts) {
-    throw "Platform Mihomo does not publish its configured loopback gRPC port"
+$grpcPorts = & podman port $instance
+if ($LASTEXITCODE -ne 0 -or -not $grpcPorts) {
+    throw "Account Center does not publish its configured loopback TLS gRPC port"
 }
 
 $httpPort = Get-EnvValue -Name "PAI_HTTP_PORT"

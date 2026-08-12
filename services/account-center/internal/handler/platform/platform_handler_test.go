@@ -40,9 +40,12 @@ func TestListPlatforms(t *testing.T) {
 
 	g := gin.New()
 	h := NewHandler(&fakePlatformService{platforms: []serviceplatform.PlatformListView{{
-		Platform:         "hoyoverse",
-		DisplayName:      "Hoyoverse",
-		SupportedActions: []string{"bind_credential", "delete_credential"},
+		Platform:          "hoyoverse",
+		DisplayName:       "Hoyoverse",
+		RuntimeEndpoint:   "runtime.internal:9001",
+		RuntimeServerName: "runtime.internal",
+		ServiceAudience:   "platform-mihomo-service",
+		SupportedActions:  []string{"bind_credential", "delete_credential"},
 	}}})
 	g.GET("/api/v1/me/platforms", h.ListPlatforms)
 
@@ -59,6 +62,9 @@ func TestListPlatforms(t *testing.T) {
 	require.Len(t, body.Data, 1)
 	require.Equal(t, "hoyoverse", body.Data[0]["platform"])
 	require.Equal(t, "Hoyoverse", body.Data[0]["display_name"])
+	require.Equal(t, "runtime.internal:9001", body.Data[0]["runtime_endpoint"])
+	require.Equal(t, "runtime.internal", body.Data[0]["runtime_server_name"])
+	require.Equal(t, "platform-mihomo-service", body.Data[0]["service_audience"])
 	require.Equal(t, []any{"bind_credential", "delete_credential"}, body.Data[0]["supported_actions"])
 }
 

@@ -38,7 +38,7 @@ func TestBindCredentialPersistsCredentialDeviceAndProfiles(t *testing.T) {
 	require.Equal(t, "mihomo", credential.Platform)
 	require.Equal(t, "10001", credential.AccountID)
 	require.Equal(t, "cn_gf01", credential.Region)
-	require.Equal(t, "v1", credential.CredentialVersion)
+	require.Equal(t, "v2", credential.CredentialVersion)
 	require.Equal(t, "active", credential.Status)
 	require.NotEmpty(t, credential.CredentialBlob)
 	require.NotNil(t, credential.LastValidatedAt)
@@ -568,7 +568,7 @@ func TestBindCredentialValidatesBeforeTransaction(t *testing.T) {
 	require.False(t, client.calledDuringTransaction)
 }
 
-var testEncryptionKey = []byte("0123456789abcdef0123456789abcdef")
+var testEncryptionKey = internalcrypto.NewStaticKeyProvider([]byte("0123456789abcdef0123456789abcdef"))
 
 type bindUsecaseTestHarness struct {
 	*BindUsecase

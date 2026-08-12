@@ -8,6 +8,7 @@ from .errors import (
     DeadlineExceededError,
     InvalidRequestError,
     NotFoundError,
+    RateLimitError,
     ServiceUnavailableError,
     TransportError,
 )
@@ -20,7 +21,6 @@ from .models import (
     PlatformAccountStatus,
     PlatformBinding,
     PlatformDescriptor,
-    PlatformEndpoint,
     ProfileSummary,
     ValidationResult,
 )
@@ -43,8 +43,8 @@ __all__ = [
     "PlatformAccountStatus",
     "PlatformBinding",
     "PlatformDescriptor",
-    "PlatformEndpoint",
     "ProfileSummary",
+    "RateLimitError",
     "ServiceUnavailableError",
     "TransportError",
     "ValidationResult",

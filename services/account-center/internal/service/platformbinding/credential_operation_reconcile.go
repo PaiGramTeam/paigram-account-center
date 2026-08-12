@@ -63,14 +63,14 @@ func (s *OrchestrationService) ReconcileCredentialOperation(ctx context.Context,
 	}
 	operationBinding := bindingAtGeneration(binding, intent.PreGeneration)
 	if intent.State == model.PlatformOperationIntentStatePendingDelivery && isNonSensitiveCredentialOperation(intent.Kind) {
-		return s.deliverNonSensitiveCredentialOperation(ctx, intent, operationBinding, platformRow.Endpoint)
+		return s.deliverNonSensitiveCredentialOperation(ctx, intent, operationBinding, platformRow.ControlEndpoint)
 	}
 	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(intent.ActorType, intent.ActorID, operationBinding, intent.OperationID, []string{platformaction.MihomoOperationResolve})
 	if err != nil {
 		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "ticket_issue_failed", err)
 	}
 
-	resolution, err := resolver.ResolveCredentialOperation(ctx, platformRow.Endpoint, ticket, credentialOperationReferenceFromIntent(intent))
+	resolution, err := resolver.ResolveCredentialOperation(ctx, platformRow.ControlEndpoint, ticket, credentialOperationReferenceFromIntent(intent))
 	if err != nil {
 		if IsCredentialOperationOutcomeUnknown(err) {
 			_ = s.operationIntents.MarkUncertain(ctx, intent.OperationID, "resolve_outcome_unknown")
@@ -92,7 +92,7 @@ func (s *OrchestrationService) ReconcileCredentialOperation(ctx context.Context,
 		if intent.Kind == "OPERATION_KIND_DELETE_CREDENTIAL" {
 			return s.finalizeNonSensitiveCredentialOperation(ctx, intent, binding)
 		}
-		return s.applyResolvedCredentialOperation(ctx, intent, binding, resolution.Summary, platformRow.Endpoint)
+		return s.applyResolvedCredentialOperation(ctx, intent, binding, resolution.Summary, platformRow.ControlEndpoint)
 	case CredentialRemoteOperationFailed:
 		reason := nonemptyReason(resolution.ReasonCode, "remote_operation_failed")
 		if err := s.persistTerminalOperationFailure(intent, binding, reason); err != nil {
@@ -104,9 +104,9 @@ func (s *OrchestrationService) ReconcileCredentialOperation(ctx context.Context,
 		return nil
 	case CredentialRemoteOperationNotReceived, CredentialRemoteOperationFailedInputRequired:
 		if isNonSensitiveCredentialOperation(intent.Kind) {
-			return s.retryNonSensitiveCredentialOperationAfterProof(ctx, resolver, platformRow.Endpoint, intent, operationBinding)
+			return s.retryNonSensitiveCredentialOperationAfterProof(ctx, resolver, platformRow.ControlEndpoint, intent, operationBinding)
 		}
-		return s.confirmCredentialInputRequired(ctx, resolver, platformRow.Endpoint, intent, operationBinding, binding)
+		return s.confirmCredentialInputRequired(ctx, resolver, platformRow.ControlEndpoint, intent, operationBinding, binding)
 	default:
 		_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "unsupported_remote_operation_state")
 		return errGenericCredentialOperationFailed

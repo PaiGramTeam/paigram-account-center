@@ -6,13 +6,6 @@ from enum import Enum
 
 
 @dataclass(frozen=True, slots=True)
-class PlatformEndpoint:
-    target: str
-    secure: bool = True
-    root_certificates: bytes | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class BotUser:
     user_id: int
     bot_id: str

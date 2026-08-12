@@ -1,12 +1,14 @@
 package config
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/tlstest"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
@@ -33,9 +35,56 @@ func TestSetDefaultsIncludesServiceTicketSettings(t *testing.T) {
 
 	require.Equal(t, 300, v.GetInt("auth.service_ticket_ttl"))
 	require.Equal(t, "paigram-account-center", v.GetString("auth.service_ticket_issuer"))
-	require.Empty(t, v.GetString("auth.service_ticket_key_id"))
-	require.Empty(t, v.GetString("auth.service_ticket_private_key_pem"))
+	require.Empty(t, v.GetString("auth.service_ticket_signing_key_file"))
 	require.Empty(t, v.GetString("auth.oauth_signing_key"))
+}
+
+func TestValidatePlatformControlConfigRequiresCompleteMutualTLSIdentity(t *testing.T) {
+	bundle := tlstest.New(t, "control.internal")
+	valid := PlatformControlConfig{
+		RootCAFile:      bundle.CAFile,
+		CertificateFile: bundle.ClientCertFile,
+		PrivateKeyFile:  bundle.ClientKeyFile,
+		ServerName:      bundle.ServerName,
+		DialTimeout:     5 * time.Second,
+	}
+	require.NoError(t, validatePlatformControlConfig(&Config{PlatformControl: valid}))
+
+	missingCertificate := valid
+	missingCertificate.CertificateFile = ""
+	require.Error(t, validatePlatformControlConfig(&Config{PlatformControl: missingCertificate}))
+
+	missingServerName := valid
+	missingServerName.ServerName = ""
+	require.Error(t, validatePlatformControlConfig(&Config{PlatformControl: missingServerName}))
+}
+
+func TestValidateGRPCServerConfigRequiresTLSWhenEnabled(t *testing.T) {
+	require.Error(t, validateGRPCServerConfig(&Config{GRPC: GRPCConfig{Enabled: true}}))
+	bundle := tlstest.New(t, "account.internal")
+	require.NoError(t, validateGRPCServerConfig(&Config{GRPC: GRPCConfig{
+		Enabled: true, CertificateFile: bundle.ServerCertFile, PrivateKeyFile: bundle.ServerKeyFile,
+	}}))
+}
+
+func TestResolveSecretFilesOverridesInlineValues(t *testing.T) {
+	directory := t.TempDir()
+	writeSecret := func(name, value string) string {
+		path := filepath.Join(directory, name)
+		require.NoError(t, os.WriteFile(path, []byte(value+"\n"), 0o600))
+		return path
+	}
+	loaded := &Config{
+		Database: DatabaseConfig{DSN: "inline", DSNFile: writeSecret("database-dsn", "postgres://secure")},
+		Redis:    RedisConfig{Password: "inline", PasswordFile: writeSecret("redis-password", "redis-secret")},
+		Auth:     AuthConfig{OAuthSigningKey: "inline", OAuthSigningKeyFile: writeSecret("oauth-key", "oauth-secret")},
+		Security: SecurityConfig{EncryptionKey: "inline", EncryptionKeyFile: writeSecret("encryption-key", "encryption-secret")},
+	}
+	require.NoError(t, resolveSecretFiles(loaded))
+	require.Equal(t, "postgres://secure", loaded.Database.DSN)
+	require.Equal(t, "redis-secret", loaded.Redis.Password)
+	require.Equal(t, "oauth-secret", loaded.Auth.OAuthSigningKey)
+	require.Equal(t, "encryption-secret", loaded.Security.EncryptionKey)
 }
 
 // TestSetDefaultsIncludesOAuthSettings covers the Path D §3.2 +
@@ -53,32 +102,29 @@ func TestSetDefaultsIncludesOAuthSettings(t *testing.T) {
 
 func TestValidateServiceTicketConfigRejectsInvalidPrivateKey(t *testing.T) {
 	err := validateServiceTicketConfig(&Config{Auth: AuthConfig{
-		ServiceTicketTTLSeconds:    300,
-		ServiceTicketIssuer:        "paigram-account-center",
-		ServiceTicketKeyID:         "account-center-2026-08",
-		ServiceTicketPrivateKeyPEM: "not-a-private-key",
-		OAuthSigningKey:            "this-is-a-valid-32-byte-oauth-key!",
+		ServiceTicketTTLSeconds:     300,
+		ServiceTicketIssuer:         "paigram-account-center",
+		ServiceTicketSigningKeyFile: testServiceTicketSigningKeyFile(t, "not-a-private-key"),
+		OAuthSigningKey:             "this-is-a-valid-32-byte-oauth-key!",
 	}})
 	require.Error(t, err)
 }
 
 func TestValidateServiceTicketConfigRejectsEmptyOAuthSigningKey(t *testing.T) {
 	err := validateServiceTicketConfig(&Config{Auth: AuthConfig{
-		ServiceTicketTTLSeconds:    300,
-		ServiceTicketIssuer:        "paigram-account-center",
-		ServiceTicketKeyID:         "account-center-2026-08",
-		ServiceTicketPrivateKeyPEM: testServiceTicketPrivateKeyPEM(t),
+		ServiceTicketTTLSeconds:     300,
+		ServiceTicketIssuer:         "paigram-account-center",
+		ServiceTicketSigningKeyFile: testServiceTicketSigningKeyFile(t, testServiceTicketPrivateKeyPEM(t)),
 	}})
 	require.Error(t, err)
 }
 
 func TestValidateServiceTicketConfigAcceptsSeparatedKeys(t *testing.T) {
 	err := validateServiceTicketConfig(&Config{Auth: AuthConfig{
-		ServiceTicketTTLSeconds:    300,
-		ServiceTicketIssuer:        "paigram-account-center",
-		ServiceTicketKeyID:         "account-center-2026-08",
-		ServiceTicketPrivateKeyPEM: testServiceTicketPrivateKeyPEM(t),
-		OAuthSigningKey:            "this-is-a-valid-32-byte-oauth-key!",
+		ServiceTicketTTLSeconds:     300,
+		ServiceTicketIssuer:         "paigram-account-center",
+		ServiceTicketSigningKeyFile: testServiceTicketSigningKeyFile(t, testServiceTicketPrivateKeyPEM(t)),
+		OAuthSigningKey:             "this-is-a-valid-32-byte-oauth-key!",
 	}})
 	require.NoError(t, err)
 }
@@ -134,9 +180,16 @@ func TestValidateBrowserSessionConfigFailsClosedInRelease(t *testing.T) {
 
 func testServiceTicketPrivateKeyPEM(t *testing.T) string {
 	t.Helper()
-	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	privateKeyPEM, _, err := contractticket.GenerateKeyPairPEM()
 	require.NoError(t, err)
-	encoded, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	return privateKeyPEM
+}
+
+func testServiceTicketSigningKeyFile(t *testing.T, privateKeyPEM string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "service-ticket-signing-key.json")
+	raw, err := json.Marshal(contractticket.SigningKeyFile{KeyID: "account-center-2026-08", PrivateKeyPEM: privateKeyPEM})
 	require.NoError(t, err)
-	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: encoded}))
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	return path
 }

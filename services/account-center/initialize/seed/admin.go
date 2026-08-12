@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/secretfile"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
@@ -29,14 +30,13 @@ type AdminConfig struct {
 	DisplayName string
 }
 
-// resolveAdminConfig builds the admin config from environment variables.
+// resolveAdminConfig builds the admin config from an external secret file or
+// environment variables.
 //
-// V6: ADMIN_PASSWORD is mandatory. We deliberately refuse to auto-generate
-// a password — anything we did with a generated value (logging it,
-// writing it to a file, printing only to a TTY) would either leak via log
-// aggregators or break docker-exec / non-TTY scenarios. Failing closed
-// makes the operator decide once and the seed step never fingerprints
-// the value into rotated storage.
+// A supplied password is mandatory. We deliberately refuse to auto-generate
+// one because logging or writing the generated value would leak it, while
+// printing only to a TTY breaks unattended deployment. Failing closed makes
+// the operator choose the value without exposing it through process arguments.
 func resolveAdminConfig() (AdminConfig, error) {
 	email := os.Getenv("ADMIN_EMAIL")
 	if email == "" {
@@ -44,10 +44,17 @@ func resolveAdminConfig() (AdminConfig, error) {
 	}
 
 	password := os.Getenv("ADMIN_PASSWORD")
+	if passwordFile := os.Getenv("ADMIN_PASSWORD_FILE"); passwordFile != "" {
+		loadedPassword, err := secretfile.Read(passwordFile)
+		if err != nil {
+			return AdminConfig{}, fmt.Errorf("ADMIN_PASSWORD_FILE: %w", err)
+		}
+		password = loadedPassword
+	}
 	if password == "" {
 		return AdminConfig{}, errors.New(
-			"ADMIN_PASSWORD must be set; refusing to auto-generate a password " +
-				"(would leak via logs or files). Set ADMIN_PASSWORD to a strong " +
+			"ADMIN_PASSWORD_FILE or ADMIN_PASSWORD must be set; refusing to auto-generate a password " +
+				"(would leak via logs or files). Provide a strong " +
 				"value (>=8 chars) and re-run seed.")
 	}
 
@@ -65,10 +72,11 @@ func resolveAdminConfig() (AdminConfig, error) {
 
 // CreateDefaultAdmin creates a default admin user if it doesn't exist.
 //
-// Credentials come exclusively from environment variables:
+// Credentials come from an external secret file or environment variables:
 //
 //	ADMIN_EMAIL    - optional, defaults to admin@paigram.local
-//	ADMIN_PASSWORD - REQUIRED; the call fails closed if unset (V6)
+//	ADMIN_PASSWORD_FILE - preferred password secret file
+//	ADMIN_PASSWORD      - fallback; the call fails closed if both are unset
 //	ADMIN_NAME     - optional, defaults to "Administrator"
 //
 // bcryptCost should be the operator-configured cost (typically
@@ -111,7 +119,7 @@ func CreateDefaultAdmin(db *gorm.DB, bcryptCost int) error {
 	log.Println("================================================================")
 	log.Println("  Default admin user has been bootstrapped.")
 	log.Printf("  Email: %s", cfg.Email)
-	log.Println("  Password: (set via ADMIN_PASSWORD environment variable)")
+	log.Println("  Password: (loaded from configured bootstrap secret)")
 	log.Println("  Rotate the password via the admin UI as soon as possible.")
 	log.Println("================================================================")
 	return nil

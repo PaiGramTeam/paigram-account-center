@@ -99,7 +99,7 @@ func NewCredentialOperationReconcileHandler(db *gorm.DB, platformService *servic
 	bindingService := serviceplatformbinding.NewBindingService(db)
 	profileService := serviceplatformbinding.NewProfileProjectionService(db)
 	intentService := serviceplatformbinding.NewOperationIntentService(db)
-	gateway := serviceplatformbinding.NewGRPCGenericCredentialGateway(nil)
+	gateway := serviceplatformbinding.NewGRPCGenericCredentialGateway(platformService.ControlDialer())
 	orchestrationService := serviceplatformbinding.NewOrchestrationService(bindingService, platformService, gateway, profileService, intentService)
 	return &CredentialOperationReconcileHandler{reconciler: orchestrationService}
 }

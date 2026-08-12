@@ -9,6 +9,7 @@ import "google/protobuf/timestamp.proto";
 service BotAccessService {
   rpc ResolveBotUser(ResolveBotUserRequest) returns (ResolveBotUserResponse);
   rpc ListAccessibleBindings(ListAccessibleBindingsRequest) returns (ListAccessibleBindingsResponse);
+  rpc GetPlatformRuntimeRoute(GetPlatformRuntimeRouteRequest) returns (GetPlatformRuntimeRouteResponse);
   rpc IssueServiceTicket(IssueServiceTicketRequest) returns (IssueServiceTicketResponse);
 }
 
@@ -52,6 +53,19 @@ message ListAccessibleBindingsRequest {
 
 message ListAccessibleBindingsResponse {
   repeated PlatformAccountBinding bindings = 1;
+}
+
+message GetPlatformRuntimeRouteRequest {
+  string platform_service_key = 1;
+}
+
+message GetPlatformRuntimeRouteResponse {
+  string platform_key = 1;
+  string platform_service_key = 2;
+  string runtime_endpoint = 3;
+  string runtime_server_name = 4;
+  string service_audience = 5;
+  repeated string supported_actions = 6;
 }
 
 message IssueServiceTicketRequest {

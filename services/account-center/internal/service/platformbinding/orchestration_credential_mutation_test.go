@@ -22,7 +22,7 @@ func TestPutCredentialForOwnerReplacesResolvedCredential(t *testing.T) {
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{

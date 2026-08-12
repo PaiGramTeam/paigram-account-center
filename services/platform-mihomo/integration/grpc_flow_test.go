@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 
+	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/service"
@@ -39,7 +40,7 @@ const (
 	bufConnAddress            = "bufnet"
 )
 
-var integrationEncryptionKey = []byte("0123456789abcdef0123456789abcdef")
+var integrationEncryptionKey = internalcrypto.NewStaticKeyProvider([]byte("0123456789abcdef0123456789abcdef"))
 var integrationTicketPrivateKey = ed25519.NewKeyFromSeed([]byte("abcdef0123456789abcdef0123456789"))
 
 func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {

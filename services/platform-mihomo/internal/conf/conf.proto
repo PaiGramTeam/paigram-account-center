@@ -19,19 +19,28 @@ message Upstream {
 }
 
 message Server {
+  message TLS {
+    string certificate_file = 1;
+    string private_key_file = 2;
+    string client_ca_file = 3;
+  }
+
   message GRPC {
     string network = 1;
     string addr = 2;
     int32 timeout_seconds = 3;
+    TLS tls = 4;
   }
 
-  GRPC grpc = 1;
+  GRPC control = 1;
+  GRPC runtime = 2;
 }
 
 message Data {
   message Database {
     reserved 1;
     string dsn = 2;
+    string dsn_file = 3;
   }
 
   message Redis {
@@ -39,6 +48,7 @@ message Data {
     string password = 2;
     int32 db = 3;
     string prefix = 4;
+    string password_file = 5;
   }
 
   Database database = 1;
@@ -46,9 +56,9 @@ message Data {
 }
 
 message Security {
-  string credential_encryption_key = 1;
+  string credential_encryption_keyring_file = 1;
   reserved 2;
   string service_ticket_issuer = 3;
-  string service_ticket_public_key_pem = 4;
-  string service_ticket_key_id = 5;
+  string service_ticket_public_keyring_file = 4;
+  reserved 5;
 }

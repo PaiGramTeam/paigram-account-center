@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -5,15 +6,18 @@ import grpc
 import httpx
 import pytest
 
+import paigram_account_sdk.client as client_module
 from paigram_account_sdk import (
     AuthenticationError,
     CredentialError,
     CredentialStatus,
+    InvalidRequestError,
     NotFoundError,
     PaiGramAccountClient,
     PlatformAccountStatus,
-    PlatformEndpoint,
+    RateLimitError,
     ServiceUnavailableError,
+    TransportError,
 )
 from paigram_account_sdk._generated.account.v1 import bot_access_pb2, bot_access_pb2_grpc
 from paigram_account_sdk._generated.mihomo.v2 import runtime_pb2, runtime_pb2_grpc
@@ -21,6 +25,10 @@ from paigram_account_sdk._generated.platform.v2 import types_pb2
 
 
 class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
+    def __init__(self, runtime_target: str = "127.0.0.1:1", runtime_server_name: str = "runtime.internal") -> None:
+        self.runtime_target = runtime_target
+        self.runtime_server_name = runtime_server_name
+
     async def ResolveBotUser(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         metadata = dict(context.invocation_metadata())
         if metadata.get("authorization") != "Bearer machine-token":
@@ -41,6 +49,27 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
     async def ListAccessibleBindings(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         await require_account_metadata(context)
         return bot_access_pb2.ListAccessibleBindingsResponse(bindings=[binding_proto()])
+
+    async def GetPlatformRuntimeRoute(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_account_metadata(context)
+        if request.platform_service_key == "unconfigured":
+            await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "runtime route is not configured")
+        if request.platform_service_key != "platform-mihomo-service":
+            await context.abort(grpc.StatusCode.NOT_FOUND, "runtime route not found")
+        return bot_access_pb2.GetPlatformRuntimeRouteResponse(
+            platform_key="mihomo",
+            platform_service_key=request.platform_service_key,
+            runtime_endpoint=self.runtime_target,
+            runtime_server_name=self.runtime_server_name,
+            service_audience="platform-mihomo-service",
+            supported_actions=[
+                "mihomo.authkey.issue",
+                "mihomo.credential.validate",
+                "mihomo.device.read",
+                "mihomo.profile.read",
+                "mihomo.status.read",
+            ],
+        )
 
     async def IssueServiceTicket(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         await require_account_metadata(context)
@@ -118,6 +147,24 @@ class PreconditionMihomoRuntimeService(MihomoRuntimeService):
         await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "credential is inactive")
 
 
+class RateLimitedMihomoRuntimeService(MihomoRuntimeService):
+    async def GetStatus(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_platform_request(request.resource, context)
+        await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, "platform rate limit exceeded")
+
+
+class MismatchedDescriptorRuntimeService(MihomoRuntimeService):
+    async def DescribePlatform(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return runtime_pb2.DescribePlatformResponse(
+            platform_key="mihomo",
+            display_name="Mihomo",
+            service_audience="unexpected-audience",
+            supported_actions=["mihomo.status.read"],
+            contract_version="v2",
+        )
+
+
 async def require_request_id(context):  # type: ignore[no-untyped-def, no-untyped-call]
     metadata = dict(context.invocation_metadata())
     if metadata.get("x-request-id") != "request-123":
@@ -165,9 +212,13 @@ def profile_proto(account_key: str) -> types_pb2.ProfileSummary:
 
 
 @asynccontextmanager
-async def account_server() -> AsyncIterator[str]:
+async def account_server(
+    platform_target: str = "127.0.0.1:1", runtime_server_name: str = "runtime.internal"
+) -> AsyncIterator[str]:
     server = grpc.aio.server()
-    bot_access_pb2_grpc.add_BotAccessServiceServicer_to_server(BotAccessService(), server)
+    bot_access_pb2_grpc.add_BotAccessServiceServicer_to_server(
+        BotAccessService(platform_target, runtime_server_name), server
+    )
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
     try:
@@ -206,18 +257,97 @@ def token_transport() -> httpx.MockTransport:
     return httpx.MockTransport(issue_token)
 
 
-def client_for(account_target: str, platform_target: str = "127.0.0.1:1") -> PaiGramAccountClient:
+def client_for(account_target: str) -> PaiGramAccountClient:
     return PaiGramAccountClient(
         account_http_url="https://account.example.test",
         account_grpc_target=account_target,
-        account_grpc_secure=False,
         client_id="paigram",
         client_secret="secret",
-        platform_endpoints={
-            "platform-mihomo-service": PlatformEndpoint(target=platform_target, secure=False),
-        },
         http_transport=token_transport(),
     )
+
+
+@pytest.fixture(autouse=True)
+def use_insecure_unit_test_channels(monkeypatch: pytest.MonkeyPatch) -> None:
+    def create_channel(target: str, *, root_certificates: bytes | None, server_name: str | None) -> grpc.aio.Channel:
+        del root_certificates, server_name
+        return grpc.aio.insecure_channel(target)
+
+    monkeypatch.setattr(client_module, "_create_secure_channel", create_channel)
+
+
+@pytest.mark.asyncio
+async def test_platform_route_rejects_missing_server_name() -> None:
+    async with account_server(runtime_server_name="") as account_target, client_for(account_target) as client:
+        with pytest.raises(ServiceUnavailableError, match="invalid platform runtime route"):
+            await client.describe_platform("platform-mihomo-service", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_platform_route_precondition_is_service_configuration_failure() -> None:
+    async with account_server() as account_target, client_for(account_target) as client:
+        with pytest.raises(ServiceUnavailableError, match="runtime route is not configured"):
+            await client.describe_platform("unconfigured", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_close_waits_for_inflight_route_creation(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = PaiGramAccountClient(
+        account_http_url="https://account.example.test",
+        account_grpc_target="127.0.0.1:1",
+        client_id="paigram",
+        client_secret="secret",
+        http_transport=token_transport(),
+    )
+    route_started = asyncio.Event()
+    release_route = asyncio.Event()
+
+    async def delayed_route(*_args: object, **_kwargs: object) -> object:
+        route_started.set()
+        await release_route.wait()
+        return bot_access_pb2.GetPlatformRuntimeRouteResponse(
+            platform_key="mihomo",
+            platform_service_key="platform-mihomo-service",
+            runtime_endpoint="127.0.0.1:1",
+            runtime_server_name="runtime.internal",
+            service_audience="platform-mihomo-service",
+            supported_actions=["mihomo.status.read"],
+        )
+
+    monkeypatch.setattr(client, "_account_call", delayed_route)
+    route_task = asyncio.create_task(client._platform_stub("platform-mihomo-service", "request-123"))
+    await route_started.wait()
+    close_task = asyncio.create_task(client.close())
+    await asyncio.sleep(0)
+    assert not close_task.done()
+
+    release_route.set()
+    await route_task
+    await close_task
+    with pytest.raises(TransportError, match="client is closed"):
+        await client._platform_stub("platform-mihomo-service", "request-123")
+
+
+@pytest.mark.asyncio
+async def test_platform_descriptor_must_match_authenticated_route() -> None:
+    async with (
+        platform_server(MismatchedDescriptorRuntimeService()) as platform_target,
+        account_server(platform_target) as account_target,
+        client_for(account_target) as client,
+    ):
+        with pytest.raises(ServiceUnavailableError, match="descriptor does not match registered route"):
+            await client.describe_platform("platform-mihomo-service", request_id="request-123")
+
+
+def test_client_requires_account_grpc_target() -> None:
+    with pytest.raises(InvalidRequestError, match="gRPC target is required"):
+        PaiGramAccountClient(
+            account_http_url="https://account.example.test",
+            account_grpc_target="",
+            client_id="paigram",
+            client_secret="secret",
+            http_transport=token_transport(),
+        )
 
 
 @pytest.mark.asyncio
@@ -254,9 +384,9 @@ async def test_list_bindings_returns_stable_public_models() -> None:
 @pytest.mark.asyncio
 async def test_platform_runtime_methods_use_v2_resources_and_public_models() -> None:
     async with (
-        account_server() as account_target,
         platform_server() as platform_target,
-        client_for(account_target, platform_target) as client,
+        account_server(platform_target) as account_target,
+        client_for(account_target) as client,
     ):
         binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
         descriptor = await client.describe_platform(binding.platform_service_key, request_id="request-123")
@@ -307,10 +437,8 @@ async def test_invalid_client_maps_oauth_error() -> None:
     async with PaiGramAccountClient(
         account_http_url="https://account.example.test",
         account_grpc_target="127.0.0.1:1",
-        account_grpc_secure=False,
         client_id="paigram",
         client_secret="wrong",
-        platform_endpoints={},
         http_transport=transport,
     ) as client:
         with pytest.raises(AuthenticationError, match="client authentication failed"):
@@ -328,13 +456,30 @@ async def test_oauth_server_failure_is_retryable() -> None:
     async with PaiGramAccountClient(
         account_http_url="https://account.example.test",
         account_grpc_target="127.0.0.1:1",
-        account_grpc_secure=False,
         client_id="paigram",
         client_secret="secret",
-        platform_endpoints={},
         http_transport=transport,
     ) as client:
         with pytest.raises(ServiceUnavailableError, match="temporarily unavailable"):
+            await client.resolve_user("telegram:10001", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_oauth_rate_limit_has_distinct_error() -> None:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            429,
+            json={"error": "temporarily_unavailable", "error_description": "token rate limit exceeded"},
+        )
+    )
+    async with PaiGramAccountClient(
+        account_http_url="https://account.example.test",
+        account_grpc_target="127.0.0.1:1",
+        client_id="paigram",
+        client_secret="secret",
+        http_transport=transport,
+    ) as client:
+        with pytest.raises(RateLimitError, match="token rate limit exceeded"):
             await client.resolve_user("telegram:10001", request_id="request-123")
 
 
@@ -348,12 +493,28 @@ async def test_account_precondition_maps_credential_state() -> None:
 @pytest.mark.asyncio
 async def test_platform_precondition_maps_credential_state() -> None:
     async with (
-        account_server() as account_target,
         platform_server(PreconditionMihomoRuntimeService()) as platform_target,
-        client_for(account_target, platform_target) as client,
+        account_server(platform_target) as account_target,
+        client_for(account_target) as client,
     ):
         binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
         with pytest.raises(CredentialError, match="credential is inactive"):
+            await client.get_credential_status(
+                external_user_id="telegram:10001",
+                binding=binding,
+                request_id="request-123",
+            )
+
+
+@pytest.mark.asyncio
+async def test_platform_rate_limit_has_distinct_error() -> None:
+    async with (
+        platform_server(RateLimitedMihomoRuntimeService()) as platform_target,
+        account_server(platform_target) as account_target,
+        client_for(account_target) as client,
+    ):
+        binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
+        with pytest.raises(RateLimitError, match="platform rate limit exceeded"):
             await client.get_credential_status(
                 external_user_id="telegram:10001",
                 binding=binding,

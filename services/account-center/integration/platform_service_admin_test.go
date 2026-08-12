@@ -10,21 +10,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/tlstest"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 
+	"paigram/internal/config"
 	"paigram/internal/service/platform"
 )
 
 func TestPlatformServiceAdminRoutes(t *testing.T) {
-	stack := newIntegrationStack(t)
+	tlsBundle := tlstest.New(t, "control.internal")
+	stack := newIntegrationStackWithConfig(t, func(cfg *config.Config) {
+		cfg.PlatformControl = config.PlatformControlConfig{
+			RootCAFile: tlsBundle.CAFile, CertificateFile: tlsBundle.ClientCertFile,
+			PrivateKeyFile: tlsBundle.ClientKeyFile, ServerName: tlsBundle.ServerName,
+			DialTimeout: 5 * time.Second,
+		}
+	})
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
-	grpcServer := grpc.NewServer()
+	tlsConfig, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+		CertificateFile: tlsBundle.ServerCertFile, PrivateKeyFile: tlsBundle.ServerKeyFile,
+		ClientCAFile: tlsBundle.CAFile,
+	}, transporttls.MutualTLS)
+	require.NoError(t, err)
+	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
@@ -43,15 +59,17 @@ func TestPlatformServiceAdminRoutes(t *testing.T) {
 	grantAdminRoleToUser(t, stack, userID)
 
 	createResp := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/admin/system/platform-services", map[string]any{
-		"platform_key":      "mihomo",
-		"display_name":      "Mihomo",
-		"service_key":       "platform-mihomo-service",
-		"service_audience":  "mihomo.platform",
-		"discovery_type":    "static",
-		"endpoint":          listener.Addr().String(),
-		"enabled":           true,
-		"supported_actions": []string{"bind_credential"},
-		"credential_schema": map[string]any{"type": "object"},
+		"platform_key":        "mihomo",
+		"display_name":        "Mihomo",
+		"service_key":         "platform-mihomo-service",
+		"service_audience":    "mihomo.platform",
+		"discovery_type":      "static",
+		"control_endpoint":    listener.Addr().String(),
+		"runtime_endpoint":    "runtime.internal:9001",
+		"runtime_server_name": "runtime.internal",
+		"enabled":             true,
+		"supported_actions":   []string{"bind_credential"},
+		"credential_schema":   map[string]any{"type": "object"},
 	}, authHeaders(accessToken))
 	require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
 

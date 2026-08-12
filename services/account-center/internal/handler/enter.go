@@ -20,6 +20,7 @@ import (
 	handlerTelegramOIDC "paigram/internal/handler/telegramoidc"
 	handlerUser "paigram/internal/handler/user"
 	"paigram/internal/logging"
+	"paigram/internal/platformtransport"
 	"paigram/internal/service"
 	serviceAudit "paigram/internal/service/audit"
 	serviceAuthority "paigram/internal/service/authority"
@@ -36,6 +37,7 @@ import (
 	serviceSystemConfig "paigram/internal/service/systemconfig"
 	serviceTelegramOIDC "paigram/internal/service/telegramoidc"
 	serviceUser "paigram/internal/service/user"
+	"paigram/internal/serviceticket"
 	"paigram/internal/sessioncache"
 )
 
@@ -77,11 +79,27 @@ var ApiGroupApp = new(ApiGroup)
 // become non-functional 500s. Deployments that don't use Telegram OIDC
 // can leave the config block unset; they only need to validate it
 // through config.Validate when they DO opt in. See spec §5.5.
-func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig) error {
+func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, platformControlCfg config.PlatformControlConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer) error {
 	if db == nil {
 		return errors.New("initialize api groups: db is nil")
 	}
+	controlDialer, err := platformtransport.NewControlDialer(platformtransport.ControlConfig{
+		RootCAFile:      platformControlCfg.RootCAFile,
+		CertificateFile: platformControlCfg.CertificateFile,
+		PrivateKeyFile:  platformControlCfg.PrivateKeyFile,
+		ServerName:      platformControlCfg.ServerName,
+		Timeout:         platformControlCfg.DialTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	return InitializeApiGroupsWithTransport(db, cache, authCfg, securityCfg, telegramOIDCCfg, ticketSigner, controlDialer)
+}
 
+func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) error {
+	if db == nil {
+		return errors.New("initialize api groups: db is nil")
+	}
 	// Initialize Casbin enforcer
 	if _, err := casbin.InitEnforcer(db); err != nil {
 		return err
@@ -95,11 +113,14 @@ func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.A
 	service.ServiceGroupApp.SystemConfigGroup = *serviceSystemConfig.NewServiceGroup(db)
 	service.ServiceGroupApp.AuditGroup = *serviceAudit.NewServiceGroup(db)
 	service.ServiceGroupApp.PlatformServiceGroup = *servicePlatform.NewServiceGroup(db)
-	if err := service.ServiceGroupApp.PlatformServiceGroup.PlatformService.ConfigureAuth(authCfg); err != nil {
+	if err := service.ServiceGroupApp.PlatformServiceGroup.PlatformService.ConfigureTicketSigner(ticketSigner); err != nil {
 		return err
 	}
-	service.ServiceGroupApp.PlatformServiceGroup.PlatformService.SetGenericSummaryProxy(servicePlatform.NewGRPCGenericSummaryProxy(nil))
-	service.ServiceGroupApp.PlatformBindingGroup = *servicePlatformBinding.NewServiceGroup(db, &service.ServiceGroupApp.PlatformServiceGroup.PlatformService)
+	if err := service.ServiceGroupApp.PlatformServiceGroup.PlatformService.ConfigureTransport(controlDialer); err != nil {
+		return err
+	}
+	credentialGateway := servicePlatformBinding.NewGRPCGenericCredentialGateway(controlDialer)
+	service.ServiceGroupApp.PlatformBindingGroup = *servicePlatformBinding.NewServiceGroup(db, &service.ServiceGroupApp.PlatformServiceGroup.PlatformService, credentialGateway)
 	service.ServiceGroupApp.BotRouteGroup = *serviceBotRoute.NewServiceGroup(db, nil)
 	service.ServiceGroupApp.LoginRiskServiceGroup = *serviceLoginRisk.NewServiceGroup(db)
 	service.ServiceGroupApp.GeolocationServiceGroup = *serviceGeolocation.NewServiceGroup()

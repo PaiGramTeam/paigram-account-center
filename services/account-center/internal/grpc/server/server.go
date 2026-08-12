@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 
 	accountv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	grpccredentials "google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 	"gorm.io/gorm"
 
@@ -20,6 +23,7 @@ import (
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/botroute"
 	"paigram/internal/service/credentials"
+	"paigram/internal/serviceticket"
 )
 
 // GRPCServer represents the gRPC server
@@ -37,6 +41,21 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 	if cfg == nil {
 		return nil, fmt.Errorf("grpc config is required")
 	}
+	ticketSigner, err := serviceticket.NewFileSigner(
+		cfg.Auth.ServiceTicketIssuer,
+		time.Duration(cfg.Auth.ServiceTicketTTLSeconds)*time.Second,
+		cfg.Auth.ServiceTicketSigningKeyFile,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("init service ticket signer: %w", err)
+	}
+	return NewGRPCServerWithTicketSigner(port, db, redisClient, cfg, ticketSigner)
+}
+
+func NewGRPCServerWithTicketSigner(port int, db *gorm.DB, redisClient *redis.Client, cfg *config.Config, ticketSigner serviceticket.Signer) (*GRPCServer, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("grpc config is required")
+	}
 
 	// OAuth access tokens and platform service tickets use independent keys.
 	credentialsRegistry := credentials.NewService(db)
@@ -50,9 +69,17 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 	}
 
 	authInterceptor := interceptor.NewAuthInterceptor(tokenSvc)
+	tlsConfig, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+		CertificateFile: cfg.GRPC.CertificateFile,
+		PrivateKeyFile:  cfg.GRPC.PrivateKeyFile,
+	}, transporttls.ServerAuthOnly)
+	if err != nil {
+		return nil, fmt.Errorf("init grpc TLS: %w", err)
+	}
 
 	// Create gRPC server with interceptors
 	opts := []grpc.ServerOption{
+		grpc.Creds(grpccredentials.NewTLS(tlsConfig)),
 		grpc.ChainUnaryInterceptor(
 			observability.UnaryServerInterceptor(),
 			authInterceptor.Unary(),
@@ -65,7 +92,7 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 
 	server := grpc.NewServer(opts...)
 
-	botAccessGroup, err := botaccess.NewServiceGroup(db, cfg.Auth)
+	botAccessGroup, err := botaccess.NewServiceGroupWithSigner(db, ticketSigner)
 	if err != nil {
 		return nil, fmt.Errorf("init bot access services: %w", err)
 	}

@@ -44,6 +44,11 @@ class BotAccessServiceStub:
                 request_serializer=account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsRequest.SerializeToString,
                 response_deserializer=account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsResponse.FromString,
                 _registered_method=True)
+        self.GetPlatformRuntimeRoute = channel.unary_unary(
+                '/paigram.v1.BotAccessService/GetPlatformRuntimeRoute',
+                request_serializer=account_dot_v1_dot_bot__access__pb2.GetPlatformRuntimeRouteRequest.SerializeToString,
+                response_deserializer=account_dot_v1_dot_bot__access__pb2.GetPlatformRuntimeRouteResponse.FromString,
+                _registered_method=True)
         self.IssueServiceTicket = channel.unary_unary(
                 '/paigram.v1.BotAccessService/IssueServiceTicket',
                 request_serializer=account_dot_v1_dot_bot__access__pb2.IssueServiceTicketRequest.SerializeToString,
@@ -61,6 +66,12 @@ class BotAccessServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def ListAccessibleBindings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetPlatformRuntimeRoute(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -84,6 +95,11 @@ def add_BotAccessServiceServicer_to_server(servicer, server):
                     servicer.ListAccessibleBindings,
                     request_deserializer=account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsRequest.FromString,
                     response_serializer=account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsResponse.SerializeToString,
+            ),
+            'GetPlatformRuntimeRoute': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetPlatformRuntimeRoute,
+                    request_deserializer=account_dot_v1_dot_bot__access__pb2.GetPlatformRuntimeRouteRequest.FromString,
+                    response_serializer=account_dot_v1_dot_bot__access__pb2.GetPlatformRuntimeRouteResponse.SerializeToString,
             ),
             'IssueServiceTicket': grpc.unary_unary_rpc_method_handler(
                     servicer.IssueServiceTicket,
@@ -145,6 +161,33 @@ class BotAccessService:
             '/paigram.v1.BotAccessService/ListAccessibleBindings',
             account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsRequest.SerializeToString,
             account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetPlatformRuntimeRoute(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.v1.BotAccessService/GetPlatformRuntimeRoute',
+            account_dot_v1_dot_bot__access__pb2.GetPlatformRuntimeRouteRequest.SerializeToString,
+            account_dot_v1_dot_bot__access__pb2.GetPlatformRuntimeRouteResponse.FromString,
             options,
             channel_credentials,
             insecure,

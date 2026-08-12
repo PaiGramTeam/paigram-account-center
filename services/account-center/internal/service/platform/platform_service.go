@@ -14,7 +14,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -22,6 +21,7 @@ import (
 	"paigram/internal/config"
 	"paigram/internal/grpc/clientauth"
 	"paigram/internal/model"
+	"paigram/internal/platformtransport"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/platformbinding"
 	"paigram/internal/serviceticket"
@@ -39,9 +39,12 @@ type ServiceTicketClaims = botaccess.ServiceTicketClaims
 
 // PlatformListView is the browser-facing platform registry list model.
 type PlatformListView struct {
-	Platform         string   `json:"platform"`
-	DisplayName      string   `json:"display_name"`
-	SupportedActions []string `json:"supported_actions"`
+	Platform          string   `json:"platform"`
+	DisplayName       string   `json:"display_name"`
+	RuntimeEndpoint   string   `json:"runtime_endpoint"`
+	RuntimeServerName string   `json:"runtime_server_name"`
+	ServiceAudience   string   `json:"service_audience"`
+	SupportedActions  []string `json:"supported_actions"`
 }
 
 // PlatformSchemaView is the browser-facing platform schema model.
@@ -59,7 +62,7 @@ type platformSummaryProxy interface {
 // PlatformService provides platform registry lookups.
 type PlatformService struct {
 	db                  *gorm.DB
-	ticketSigner        *serviceticket.Signer
+	ticketSigner        serviceticket.Signer
 	dial                dialFunc
 	genericSummaryProxy platformSummaryProxy
 	healthChecker       platformHealthChecker
@@ -93,13 +96,20 @@ func isSupportedInternalActorType(actorType string) bool {
 
 // ConfigureAuth loads service ticket signing settings from auth config.
 func (s *PlatformService) ConfigureAuth(authCfg config.AuthConfig) error {
-	signer, err := serviceticket.NewSigner(serviceticket.Config{
-		Issuer:        authCfg.ServiceTicketIssuer,
-		KeyID:         authCfg.ServiceTicketKeyID,
-		TTL:           time.Duration(authCfg.ServiceTicketTTLSeconds) * time.Second,
-		PrivateKeyPEM: authCfg.ServiceTicketPrivateKeyPEM,
-	})
+	signer, err := serviceticket.NewFileSigner(
+		authCfg.ServiceTicketIssuer,
+		time.Duration(authCfg.ServiceTicketTTLSeconds)*time.Second,
+		authCfg.ServiceTicketSigningKeyFile,
+	)
 	if err != nil {
+		return ErrInvalidTicketConfig
+	}
+	return s.ConfigureTicketSigner(signer)
+
+}
+
+func (s *PlatformService) ConfigureTicketSigner(signer serviceticket.Signer) error {
+	if signer == nil {
 		return ErrInvalidTicketConfig
 	}
 	s.ticketSigner = signer
@@ -145,9 +155,12 @@ func (s *PlatformService) ListEnabledPlatformViews() ([]PlatformListView, error)
 		}
 
 		views = append(views, PlatformListView{
-			Platform:         platform.PlatformKey,
-			DisplayName:      platform.DisplayName,
-			SupportedActions: supportedActions,
+			Platform:          platform.PlatformKey,
+			DisplayName:       platform.DisplayName,
+			RuntimeEndpoint:   platform.RuntimeEndpoint,
+			RuntimeServerName: platform.RuntimeServerName,
+			ServiceAudience:   platform.ServiceAudience,
+			SupportedActions:  supportedActions,
 		})
 	}
 
@@ -289,18 +302,10 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 
 	dial := s.dial
 	if dial == nil {
-		dial = func(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-
-			return grpc.DialContext(ctx, endpoint,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithBlock(),
-			)
-		}
+		return platformtransport.ErrControlTransportNotConfigured
 	}
 
-	conn, err := dial(ctx, platformRow.Endpoint)
+	conn, err := dial(ctx, platformRow.ControlEndpoint)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPlatformServiceUnavailable, err)
 	}
@@ -369,6 +374,23 @@ func (s *PlatformService) SetGenericSummaryProxy(proxy platformSummaryProxy) {
 	s.genericSummaryProxy = proxy
 }
 
+func (s *PlatformService) ConfigureTransport(dial func(context.Context, string) (*grpc.ClientConn, error)) error {
+	if dial == nil {
+		return platformtransport.ErrControlTransportNotConfigured
+	}
+	s.dial = dialFunc(dial)
+	s.genericSummaryProxy = NewGRPCGenericSummaryProxy(dial)
+	s.healthChecker = newGRPCHealthChecker(2*time.Second, dial)
+	return nil
+}
+
+func (s *PlatformService) ControlDialer() func(context.Context, string) (*grpc.ClientConn, error) {
+	if s == nil || s.dial == nil {
+		return nil
+	}
+	return s.dial
+}
+
 func (s *PlatformService) SetHealthChecker(checker platformHealthChecker) {
 	s.healthChecker = checker
 }
@@ -398,7 +420,7 @@ func (s *PlatformService) GetBindingRuntimeSummary(ctx context.Context, actorTyp
 	}
 
 	platformAccountID := nullableBindingExternalAccountKey(binding.ExternalAccountKey)
-	return s.genericSummaryProxy.GetCredentialSummary(ctx, platformRow.Endpoint, ticket, binding.BindingRef, platformAccountID)
+	return s.genericSummaryProxy.GetCredentialSummary(ctx, platformRow.ControlEndpoint, ticket, binding.BindingRef, platformAccountID)
 }
 
 func nullableBindingExternalAccountKey(value sql.NullString) string {

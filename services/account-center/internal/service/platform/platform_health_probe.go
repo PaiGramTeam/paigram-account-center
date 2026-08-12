@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+
+	"paigram/internal/platformtransport"
 )
 
 type RuntimeState string
@@ -32,10 +33,11 @@ type platformHealthChecker interface {
 
 type grpcHealthChecker struct {
 	timeout time.Duration
+	dial    dialFunc
 }
 
-func newGRPCHealthChecker(timeout time.Duration) *grpcHealthChecker {
-	return &grpcHealthChecker{timeout: timeout}
+func newGRPCHealthChecker(timeout time.Duration, dial func(context.Context, string) (*grpc.ClientConn, error)) *grpcHealthChecker {
+	return &grpcHealthChecker{timeout: timeout, dial: dial}
 }
 
 func (c *grpcHealthChecker) Check(ctx context.Context, endpoint string) runtimeProbeResult {
@@ -43,14 +45,14 @@ func (c *grpcHealthChecker) Check(ctx context.Context, endpoint string) runtimeP
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if c.dial == nil {
+		return runtimeProbeResult{State: RuntimeStateMisconfigured, CheckedAt: checkedAt, Error: platformtransport.ErrControlTransportNotConfigured.Error()}
+	}
 
 	dialCtx, dialCancel := context.WithTimeout(ctx, c.timeout)
 	defer dialCancel()
 
-	conn, err := grpc.DialContext(dialCtx, endpoint,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
+	conn, err := c.dial(dialCtx, endpoint)
 	if err != nil {
 		return runtimeProbeResult{
 			State:     RuntimeStateUnreachable,

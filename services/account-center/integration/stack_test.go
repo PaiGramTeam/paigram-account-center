@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/tlstest"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -24,6 +25,7 @@ import (
 	"paigram/internal/email"
 	"paigram/internal/middleware"
 	"paigram/internal/model"
+	"paigram/internal/platformtransport"
 	"paigram/internal/router"
 	"paigram/internal/sessioncache"
 	"paigram/internal/testutil"
@@ -38,6 +40,8 @@ type integrationStack struct {
 	RedisPrefix string
 	Email       *email.Service
 	Router      http.Handler
+	ControlTLS  tlstest.Bundle
+	ControlDial platformtransport.DialFunc
 }
 
 func newIntegrationStack(t *testing.T) *integrationStack {
@@ -79,10 +83,17 @@ func newIntegrationStackWithConfig(t *testing.T, mutate func(*config.Config)) *i
 	rateLimitStore, err := middleware.NewRedisStore(stack.Redis, stack.RedisPrefix+":ratelimit")
 	require.NoError(t, err)
 
-	testCfg := newTestConfig(t, stack.RedisPrefix)
+	stack.ControlTLS = tlstest.New(t, "control.internal")
+	testCfg := newTestConfigWithControlTLS(t, stack.RedisPrefix, stack.ControlTLS)
 	if mutate != nil {
 		mutate(testCfg)
 	}
+	stack.ControlDial, err = platformtransport.NewControlDialer(platformtransport.ControlConfig{
+		RootCAFile: testCfg.PlatformControl.RootCAFile, CertificateFile: testCfg.PlatformControl.CertificateFile,
+		PrivateKeyFile: testCfg.PlatformControl.PrivateKeyFile, ServerName: testCfg.PlatformControl.ServerName,
+		Timeout: testCfg.PlatformControl.DialTimeout,
+	})
+	require.NoError(t, err)
 	stack.Router, err = router.New(testCfg, sessionStore, stack.DB, rateLimitStore, stack.Email)
 	require.NoError(t, err)
 
@@ -93,6 +104,10 @@ func newIntegrationStackWithConfig(t *testing.T, mutate func(*config.Config)) *i
 }
 
 func newTestConfig(t testing.TB, redisPrefix string) *config.Config {
+	return newTestConfigWithControlTLS(t, redisPrefix, tlstest.New(t, "control.internal"))
+}
+
+func newTestConfigWithControlTLS(t testing.TB, redisPrefix string, controlTLS tlstest.Bundle) *config.Config {
 	authConfig, _ := testutil.NewAuthConfig(t)
 	authConfig.EmailVerificationTTLSeconds = 86400
 	authConfig.SessionUpdateAgeSeconds = 86400
@@ -107,6 +122,11 @@ func newTestConfig(t testing.TB, redisPrefix string) *config.Config {
 		},
 		OpenAPI: config.OpenAPIConfig{Enabled: true, Path: "/openapi"},
 		Auth:    authConfig,
+		PlatformControl: config.PlatformControlConfig{
+			RootCAFile: controlTLS.CAFile, CertificateFile: controlTLS.ClientCertFile,
+			PrivateKeyFile: controlTLS.ClientKeyFile, ServerName: controlTLS.ServerName,
+			DialTimeout: 5 * time.Second,
+		},
 		Frontend: config.FrontendConfig{
 			BaseURL: integrationBrowserOrigin,
 		},

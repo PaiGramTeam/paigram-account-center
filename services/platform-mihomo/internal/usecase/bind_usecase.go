@@ -41,7 +41,7 @@ type BindUsecase struct {
 	profileRepo    biz.ProfileRepository
 	artifactRepo   biz.ArtifactRepository
 	client         platformmihomo.Client
-	encryptionKey  []byte
+	encryptionKey  internalcrypto.KeyProvider
 }
 
 type credentialTransactioner interface {
@@ -53,7 +53,7 @@ func NewBindUsecase(
 	deviceRepo biz.DeviceRepository,
 	profileRepo biz.ProfileRepository,
 	client platformmihomo.Client,
-	encryptionKey []byte,
+	encryptionKey internalcrypto.KeyProvider,
 	artifactRepo biz.ArtifactRepository,
 ) *BindUsecase {
 	return &BindUsecase{
@@ -158,7 +158,7 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		AccountID:               prepared.accountID,
 		Region:                  prepared.region,
 		CredentialBlob:          prepared.encryptedBlob,
-		CredentialVersion:       "v1",
+		CredentialVersion:       "v2",
 		Status:                  "active",
 		LastValidatedAt:         &now,
 		ProfileSnapshotComplete: true,

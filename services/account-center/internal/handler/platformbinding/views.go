@@ -44,17 +44,12 @@ type ProfileView struct {
 }
 
 type ConsumerGrantView struct {
-	ID               uint64                    `json:"id,omitempty"`
 	BindingID        uint64                    `json:"binding_id"`
 	Consumer         string                    `json:"consumer"`
 	Status           model.ConsumerGrantStatus `json:"status"`
 	PropagationState string                    `json:"propagation_state,omitempty"`
 	Actions          []string                  `json:"actions"`
-	GrantedBy        any                       `json:"granted_by,omitempty"`
-	GrantedAt        any                       `json:"granted_at,omitempty"`
 	RevokedAt        any                       `json:"revoked_at"`
-	CreatedAt        any                       `json:"created_at,omitempty"`
-	UpdatedAt        any                       `json:"updated_at,omitempty"`
 }
 
 type CredentialOperationPendingView struct {
@@ -132,13 +127,6 @@ func buildGrantView(item *model.ConsumerGrant) ConsumerGrantView {
 	}
 	if !item.LastInvalidatedAt.Valid && (item.Status == model.ConsumerGrantStatusRevoked || item.TicketVersion > 1) {
 		view.PropagationState = "propagation_pending"
-	}
-	if item.ID != 0 {
-		view.ID = item.ID
-		view.GrantedBy = nullableInt64(item.GrantedBy)
-		view.GrantedAt = item.GrantedAt
-		view.CreatedAt = item.CreatedAt
-		view.UpdatedAt = item.UpdatedAt
 	}
 	return view
 }

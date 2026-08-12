@@ -11,6 +11,7 @@ app:
 
 database:
   dsn: ""
+  dsn_file: "/run/secrets/account_database_dsn"
   migrations_dir: "/opt/paigram/migrations"
   max_idle_conns: 10
   max_open_conns: 100
@@ -30,9 +31,16 @@ auth:
   session_cookie_secure: true
   service_ticket_ttl: 300
   service_ticket_issuer: "paigram-account-center"
-  service_ticket_key_id: "account-center-ed25519-2026-01"
-  service_ticket_private_key_pem: ""
+  service_ticket_signing_key_file: "/run/secrets/account_service_ticket_signing_key.json"
   oauth_signing_key: ""
+  oauth_signing_key_file: "/run/secrets/account_oauth_signing_key"
+
+platform_control:
+  root_ca_file: "/run/secrets/platform_control_ca.pem"
+  certificate_file: "/run/secrets/account_control_client_cert.pem"
+  private_key_file: "/run/secrets/account_control_client_key.pem"
+  server_name: "platform-control.internal"
+  dial_timeout: 5s
 
 frontend:
   base_url: ""
@@ -41,12 +49,15 @@ redis:
   enabled: true
   addr: "redis:6379"
   password: ""
+  password_file: "/run/secrets/account_redis_password"
   db: 0
   prefix: "paigram:"
 
 grpc:
   enabled: true
   port: 50051
+  certificate_file: "/run/secrets/account_grpc_cert.pem"
+  private_key_file: "/run/secrets/account_grpc_key.pem"
 
 email:
   enabled: false
@@ -54,6 +65,7 @@ email:
 
 security:
   encryption_key: ""
+  encryption_key_file: "/run/secrets/account_encryption_key"
   require_redis_for_2fa: true
   security_headers:
     assume_https: true

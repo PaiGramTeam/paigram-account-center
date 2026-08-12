@@ -70,11 +70,11 @@ func TestPlatformBindingProjectionRepairTaskRepairsStaleProjection(t *testing.T)
 			IsDefault:         true,
 		}},
 	}}
-	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
+	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stack, stub))
 
 	platformGroup := serviceplatform.NewServiceGroup(stack.DB)
 	require.NoError(t, platformGroup.PlatformService.ConfigureAuth(newTestConfig(t, stack.RedisPrefix).Auth))
-	platformGroup.PlatformService.SetGenericSummaryProxy(serviceplatform.NewGRPCGenericSummaryProxy(nil))
+	require.NoError(t, platformGroup.PlatformService.ConfigureTransport(stack.ControlDial))
 	handler := tasks.NewPlatformBindingProjectionRepairHandler(stack.DB, &platformGroup.PlatformService)
 	repairTask, err := tasks.NewPlatformBindingProjectionRepairTask(binding.ID)
 	require.NoError(t, err)

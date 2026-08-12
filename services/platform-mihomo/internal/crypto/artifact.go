@@ -12,11 +12,18 @@ import (
 	"strings"
 )
 
-const artifactCipherVersion = "v1"
+const artifactCipherVersion = "v2"
 
 var ErrInvalidArtifactCiphertext = errors.New("invalid artifact ciphertext")
 
-func EncryptArtifact(masterKey []byte, plaintext, bindingRef, accountKey, artifactType, scopeKey string) (string, error) {
+func EncryptArtifact(keySource KeyProvider, plaintext, bindingRef, accountKey, artifactType, scopeKey string) (string, error) {
+	if keySource == nil {
+		return "", ErrInvalidKeyring
+	}
+	keyID, masterKey, err := keySource.ActiveKey()
+	if err != nil {
+		return "", err
+	}
 	gcm, err := artifactGCM(masterKey)
 	if err != nil {
 		return "", err
@@ -25,14 +32,25 @@ func EncryptArtifact(masterKey []byte, plaintext, bindingRef, accountKey, artifa
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", err
 	}
-	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), artifactAAD(bindingRef, accountKey, artifactType, scopeKey))
-	return artifactCipherVersion + "." + base64.RawURLEncoding.EncodeToString(ciphertext), nil
+	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), artifactAAD(artifactCipherVersion, keyID, bindingRef, accountKey, artifactType, scopeKey))
+	return artifactCipherVersion + "." + keyID + "." + base64.RawURLEncoding.EncodeToString(ciphertext), nil
 }
 
-func DecryptArtifact(masterKey []byte, encoded, bindingRef, accountKey, artifactType, scopeKey string) (string, error) {
-	version, payload, ok := strings.Cut(encoded, ".")
+func DecryptArtifact(keySource KeyProvider, encoded, bindingRef, accountKey, artifactType, scopeKey string) (string, error) {
+	version, remainder, ok := strings.Cut(encoded, ".")
 	if !ok || version != artifactCipherVersion {
 		return "", ErrInvalidArtifactCiphertext
+	}
+	keyID, payload, ok := strings.Cut(remainder, ".")
+	if !ok || keyID == "" {
+		return "", ErrInvalidArtifactCiphertext
+	}
+	if keySource == nil {
+		return "", ErrInvalidKeyring
+	}
+	masterKey, err := keySource.ResolveKey(keyID)
+	if err != nil {
+		return "", errors.Join(ErrInvalidArtifactCiphertext, err)
 	}
 	ciphertext, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
@@ -45,7 +63,7 @@ func DecryptArtifact(masterKey []byte, encoded, bindingRef, accountKey, artifact
 	if len(ciphertext) < gcm.NonceSize() {
 		return "", ErrInvalidArtifactCiphertext
 	}
-	plaintext, err := gcm.Open(nil, ciphertext[:gcm.NonceSize()], ciphertext[gcm.NonceSize():], artifactAAD(bindingRef, accountKey, artifactType, scopeKey))
+	plaintext, err := gcm.Open(nil, ciphertext[:gcm.NonceSize()], ciphertext[gcm.NonceSize():], artifactAAD(version, keyID, bindingRef, accountKey, artifactType, scopeKey))
 	if err != nil {
 		return "", errors.Join(ErrInvalidArtifactCiphertext, err)
 	}

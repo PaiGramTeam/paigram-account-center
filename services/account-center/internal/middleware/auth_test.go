@@ -48,6 +48,8 @@ func setupAuthMiddlewareDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS users (
 			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_ref            TEXT    NOT NULL,
+			owner_epoch         INTEGER NOT NULL DEFAULT 1,
 			primary_login_type  TEXT    NOT NULL DEFAULT 'email',
 			status              TEXT    NOT NULL DEFAULT 'active',
 			primary_role_id     INTEGER,
@@ -56,6 +58,9 @@ func setupAuthMiddlewareDB(t *testing.T) *gorm.DB {
 			updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			deleted_at          DATETIME
 		)`).Error)
+	require.NoError(t, db.Exec(
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_users_ref ON users(user_ref)`,
+	).Error)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS user_sessions (
 			id                  INTEGER PRIMARY KEY AUTOINCREMENT,

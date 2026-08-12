@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -174,11 +176,17 @@ func operationResultForRequest(result *platformv2.OperationResult, operation *pl
 	return copy
 }
 
-func startPlatformBindingRouteServer(t *testing.T, stub *platformBindingRouteStub) string {
+func startPlatformBindingRouteServer(t *testing.T, stack *integrationStack, stub *platformBindingRouteStub) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	server := grpc.NewServer()
+	tlsConfig, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+		CertificateFile: stack.ControlTLS.ServerCertFile,
+		PrivateKeyFile:  stack.ControlTLS.ServerKeyFile,
+		ClientCAFile:    stack.ControlTLS.CAFile,
+	}, transporttls.MutualTLS)
+	require.NoError(t, err)
+	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	platformv2.RegisterPlatformControlServiceServer(server, stub)
 	serveErrCh := make(chan error, 1)
 	go func() {

@@ -196,8 +196,6 @@ func TestInitEncryption(t *testing.T) {
 		{
 			name: "valid 32-byte raw key from arg",
 			setup: func(t *testing.T) string {
-				// Ensure env fallback is not used.
-				t.Setenv("ENCRYPTION_KEY", "")
 				return "12345678901234567890123456789012"
 			},
 			wantErr: false,
@@ -205,7 +203,6 @@ func TestInitEncryption(t *testing.T) {
 		{
 			name: "valid base64 key from arg",
 			setup: func(t *testing.T) string {
-				t.Setenv("ENCRYPTION_KEY", "")
 				key := make([]byte, 32)
 				_, _ = rand.Read(key)
 				return base64.StdEncoding.EncodeToString(key)
@@ -213,17 +210,16 @@ func TestInitEncryption(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "empty arg falls back to ENCRYPTION_KEY env",
+			name: "empty arg rejects legacy environment fallback",
 			setup: func(t *testing.T) string {
 				t.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
 				return ""
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "empty arg and empty env",
 			setup: func(t *testing.T) string {
-				t.Setenv("ENCRYPTION_KEY", "")
 				return ""
 			},
 			wantErr: true,
@@ -231,7 +227,6 @@ func TestInitEncryption(t *testing.T) {
 		{
 			name: "invalid key length from arg",
 			setup: func(t *testing.T) string {
-				t.Setenv("ENCRYPTION_KEY", "")
 				return "tooshort"
 			},
 			wantErr: true,

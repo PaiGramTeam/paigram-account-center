@@ -133,6 +133,16 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	assert.Equal(t, "hoyo-account-001", accounts.Bindings[0].AccountKey)
 	assert.Equal(t, "platform-hoyoverse-service", accounts.Bindings[0].PlatformServiceKey)
 
+	route, err := accessClient.GetPlatformRuntimeRoute(ctx, &pb.GetPlatformRuntimeRouteRequest{
+		PlatformServiceKey: "platform-hoyoverse-service",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "hoyoverse", route.PlatformKey)
+	assert.Equal(t, "runtime.internal:9001", route.RuntimeEndpoint)
+	assert.Equal(t, "runtime.internal", route.RuntimeServerName)
+	assert.Equal(t, "hoyoverse.runtime", route.ServiceAudience)
+	assert.Equal(t, []string{"daily.sign"}, route.SupportedActions)
+
 	ticketResp, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId:  "tg-123",
 		BindingRef:      ref.BindingRef,
@@ -365,9 +375,11 @@ func seedBotAccessGRPCTestData(t *testing.T, db *gorm.DB) (model.Bot, model.User
 		ServiceKey:           "platform-hoyoverse-service",
 		ServiceAudience:      "hoyoverse.runtime",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:1",
+		ControlEndpoint:      "127.0.0.1:1",
+		RuntimeEndpoint:      "runtime.internal:9001",
+		RuntimeServerName:    "runtime.internal",
 		Enabled:              true,
-		SupportedActionsJSON: `[]`,
+		SupportedActionsJSON: `["daily.sign"]`,
 		CredentialSchemaJSON: `{"type":"object"}`,
 	}).Error)
 
@@ -434,7 +446,9 @@ func seedBotAccessPlatformService(t *testing.T, db *gorm.DB) {
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:1",
+		ControlEndpoint:      "127.0.0.1:1",
+		RuntimeEndpoint:      "runtime.internal:9001",
+		RuntimeServerName:    "runtime.internal",
 		Enabled:              true,
 		SupportedActionsJSON: `[]`,
 		CredentialSchemaJSON: `{"type":"object"}`,

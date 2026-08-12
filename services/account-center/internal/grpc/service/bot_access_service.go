@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -39,6 +40,7 @@ type BotAccessService struct {
 	bindingAccessService *botaccess.BindingAccessService
 	ticketService        *botaccess.TicketService
 	db                   *gorm.DB
+	runtimeRouteLookup   func(string) (model.PlatformService, error)
 }
 
 func NewBotAccessService(bindingAccessService *botaccess.BindingAccessService, ticketService *botaccess.TicketService, db *gorm.DB) *BotAccessService {
@@ -46,6 +48,11 @@ func NewBotAccessService(bindingAccessService *botaccess.BindingAccessService, t
 		bindingAccessService: bindingAccessService,
 		ticketService:        ticketService,
 		db:                   db,
+		runtimeRouteLookup: func(serviceKey string) (model.PlatformService, error) {
+			var platform model.PlatformService
+			err := db.Where("service_key = ? AND enabled = ?", serviceKey, true).First(&platform).Error
+			return platform, err
+		},
 	}
 }
 
@@ -91,6 +98,40 @@ func (s *BotAccessService) ListAccessibleBindings(ctx context.Context, req *pb.L
 	}
 
 	return &pb.ListAccessibleBindingsResponse{Bindings: items}, nil
+}
+
+func (s *BotAccessService) GetPlatformRuntimeRoute(ctx context.Context, req *pb.GetPlatformRuntimeRouteRequest) (*pb.GetPlatformRuntimeRouteResponse, error) {
+	if _, err := botAccessCallerFromContext(ctx, botAccessScopeRead); err != nil {
+		return nil, err
+	}
+	serviceKey := strings.TrimSpace(req.GetPlatformServiceKey())
+	if serviceKey == "" {
+		return nil, status.Error(codes.InvalidArgument, "platform_service_key is required")
+	}
+
+	platform, err := s.runtimeRouteLookup(serviceKey)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Error(codes.NotFound, "platform runtime route not found")
+		}
+		return nil, status.Error(codes.Internal, "resolve platform runtime route")
+	}
+	if strings.TrimSpace(platform.RuntimeEndpoint) == "" || strings.TrimSpace(platform.RuntimeServerName) == "" || strings.TrimSpace(platform.ServiceAudience) == "" {
+		return nil, status.Error(codes.FailedPrecondition, "platform runtime route is incomplete")
+	}
+	supportedActions := []string{}
+	if err := json.Unmarshal([]byte(platform.SupportedActionsJSON), &supportedActions); err != nil {
+		return nil, status.Error(codes.Internal, "decode platform supported actions")
+	}
+
+	return &pb.GetPlatformRuntimeRouteResponse{
+		PlatformKey:        platform.PlatformKey,
+		PlatformServiceKey: platform.ServiceKey,
+		RuntimeEndpoint:    platform.RuntimeEndpoint,
+		RuntimeServerName:  platform.RuntimeServerName,
+		ServiceAudience:    platform.ServiceAudience,
+		SupportedActions:   supportedActions,
+	}, nil
 }
 
 func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.IssueServiceTicketRequest) (*pb.IssueServiceTicketResponse, error) {

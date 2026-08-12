@@ -11,16 +11,14 @@ PaiGram 使用的异步 Python SDK。它负责：
 SDK 不提供写入原始平台凭据的接口。凭据录入与所有权管理属于 Account Center 的第一方前端和服务端流程。
 
 ```python
-from paigram_account_sdk import PaiGramAccountClient, PlatformEndpoint
+from paigram_account_sdk import PaiGramAccountClient
 
 async with PaiGramAccountClient(
     account_http_url="https://account.example.com",
     account_grpc_target="account.example.com:443",
+    account_grpc_server_name="account.example.com",
     client_id="telegram-service",
     client_secret="...",
-    platform_endpoints={
-        "platform-mihomo-service": PlatformEndpoint(target="mihomo.example.com:443"),
-    },
 ) as client:
     bindings = await client.list_bindings("telegram:10001")
     status = await client.get_credential_status(
@@ -41,6 +39,8 @@ async with PaiGramAccountClient(
 `client_id` 表示一个 OAuth 消费者凭据；账号中心会把它映射到独立的逻辑 `bot_id`。同一个 Bot 可以使用多个服务凭据，但平台授权按消费者 `client_id` 独立授予和撤销。
 
 SDK 不公开刷新、删除或写入平台原始凭据的方法。消费者只能请求注册平台声明的读取/运行时动作，所有权操作必须走账号中心的用户端或管理端接口。
+
+平台 runtime endpoint、精确 TLS server name、audience 与 action catalog 由 SDK 使用机器令牌从 Account Center registry 获取，并与 Platform descriptor 交叉校验。私有 CA 部署可通过 `platform_root_certificates={"platform-mihomo-service": ca_pem}` 配置 operator trust；未提供时使用系统信任库。SDK 不提供明文 gRPC 开关，且内部服务连接不继承 HTTP 代理环境变量。
 
 本地验证：
 

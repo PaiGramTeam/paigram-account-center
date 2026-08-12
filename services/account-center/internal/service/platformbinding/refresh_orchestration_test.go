@@ -20,7 +20,7 @@ func TestRefreshBindingProjectsAuthoritativeProfileSnapshotBeforeCompletingInten
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformService := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeRefreshGateway{summary: &RuntimeSummary{
@@ -58,7 +58,7 @@ func TestRefreshBindingPersistsIncompleteSnapshotWithoutDeletingProfiles(t *test
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformService := &fakeOrchestrationPlatformService{
-		platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"},
+		platform: &model.PlatformService{ControlEndpoint: "127.0.0.1:9000"},
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeRefreshGateway{summary: &RuntimeSummary{

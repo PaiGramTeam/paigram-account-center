@@ -12,7 +12,7 @@ import (
 type ServiceTicketClaims = serviceticket.Claims
 
 type TicketService struct {
-	signer *serviceticket.Signer
+	signer serviceticket.Signer
 }
 
 type DelegationAuthorization struct {
@@ -24,13 +24,19 @@ type DelegationAuthorization struct {
 }
 
 func NewTicketService(authCfg config.AuthConfig) (*TicketService, error) {
-	signer, err := serviceticket.NewSigner(serviceticket.Config{
-		Issuer:        authCfg.ServiceTicketIssuer,
-		KeyID:         authCfg.ServiceTicketKeyID,
-		TTL:           time.Duration(authCfg.ServiceTicketTTLSeconds) * time.Second,
-		PrivateKeyPEM: authCfg.ServiceTicketPrivateKeyPEM,
-	})
+	signer, err := serviceticket.NewFileSigner(
+		authCfg.ServiceTicketIssuer,
+		time.Duration(authCfg.ServiceTicketTTLSeconds)*time.Second,
+		authCfg.ServiceTicketSigningKeyFile,
+	)
 	if err != nil {
+		return nil, ErrInvalidTicketConfig
+	}
+	return NewTicketServiceWithSigner(signer)
+}
+
+func NewTicketServiceWithSigner(signer serviceticket.Signer) (*TicketService, error) {
+	if signer == nil {
 		return nil, ErrInvalidTicketConfig
 	}
 	return &TicketService{signer: signer}, nil

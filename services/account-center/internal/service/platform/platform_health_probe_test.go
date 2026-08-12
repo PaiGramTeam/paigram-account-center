@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -47,7 +48,7 @@ func TestGRPCHealthCheckerCheckHealthy(t *testing.T) {
 		<-serveErrCh
 	})
 
-	checker := newGRPCHealthChecker(500 * time.Millisecond)
+	checker := newGRPCHealthChecker(500*time.Millisecond, testInsecureHealthDial)
 	result := checker.Check(context.Background(), listener.Addr().String())
 
 	require.Equal(t, RuntimeStateHealthy, result.State)
@@ -56,7 +57,7 @@ func TestGRPCHealthCheckerCheckHealthy(t *testing.T) {
 }
 
 func TestGRPCHealthCheckerCheckUnreachable(t *testing.T) {
-	checker := newGRPCHealthChecker(200 * time.Millisecond)
+	checker := newGRPCHealthChecker(200*time.Millisecond, testInsecureHealthDial)
 	result := checker.Check(context.Background(), "127.0.0.1:1")
 
 	require.Equal(t, RuntimeStateUnreachable, result.State)
@@ -85,7 +86,7 @@ func TestGRPCHealthCheckerCheckHealthyWithSeparateDialAndRPCBudgets(t *testing.T
 		<-serveErrCh
 	})
 
-	checker := newGRPCHealthChecker(200 * time.Millisecond)
+	checker := newGRPCHealthChecker(200*time.Millisecond, testInsecureHealthDial)
 	result := checker.Check(context.Background(), listener.Addr().String())
 
 	require.Equal(t, RuntimeStateHealthy, result.State)
@@ -112,10 +113,14 @@ func TestGRPCHealthCheckerCheckUnknownStatus(t *testing.T) {
 		<-serveErrCh
 	})
 
-	checker := newGRPCHealthChecker(500 * time.Millisecond)
+	checker := newGRPCHealthChecker(500*time.Millisecond, testInsecureHealthDial)
 	result := checker.Check(context.Background(), listener.Addr().String())
 
 	require.Equal(t, RuntimeStateUnknown, result.State)
 	require.NotEmpty(t, result.Error)
 	require.False(t, result.CheckedAt.IsZero())
+}
+
+func testInsecureHealthDial(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
+	return grpc.DialContext(ctx, endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 }

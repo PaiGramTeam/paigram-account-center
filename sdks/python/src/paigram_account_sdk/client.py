@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ from .errors import (
     DeadlineExceededError,
     InvalidRequestError,
     NotFoundError,
+    RateLimitError,
     ServiceUnavailableError,
     TransportError,
 )
@@ -38,7 +40,6 @@ from .models import (
     PlatformAccountStatus,
     PlatformBinding,
     PlatformDescriptor,
-    PlatformEndpoint,
     ProfileSummary,
     ServiceTicket,
     ValidationResult,
@@ -54,11 +55,11 @@ class PaiGramAccountClient:
         *,
         account_http_url: str,
         account_grpc_target: str,
+        account_grpc_server_name: str | None = None,
         client_id: str,
         client_secret: str,
-        platform_endpoints: Mapping[str, PlatformEndpoint],
-        account_grpc_secure: bool = True,
         account_root_certificates: bytes | None = None,
+        platform_root_certificates: Mapping[str, bytes | None] | None = None,
         timeout: float = 10.0,
         http_transport: httpx.AsyncBaseTransport | None = None,
         request_id_factory: Callable[[], str] | None = None,
@@ -69,26 +70,24 @@ class PaiGramAccountClient:
         if not account_grpc_target:
             logger.warning("PaiGram Account SDK rejected an empty account gRPC target")
             raise InvalidRequestError("gRPC target is required")
-        invalid_platform = next((key for key, endpoint in platform_endpoints.items() if not endpoint.target), None)
-        if invalid_platform is not None:
-            logger.warning("PaiGram Account SDK rejected an empty platform gRPC target for %s", invalid_platform)
-            raise InvalidRequestError(f"platform endpoint target is required: {invalid_platform}")
         self._timeout = timeout
-        self._platform_endpoints = dict(platform_endpoints)
+        self._platform_root_certificates = dict(platform_root_certificates or {})
         self._http_client = httpx.AsyncClient(
             base_url=account_http_url.rstrip("/"),
             timeout=timeout,
             transport=http_transport,
         )
         self._tokens = _ClientCredentialsTokenProvider(self._http_client, client_id, client_secret, timeout)
-        self._account_channel = _create_channel(
+        self._account_channel = _create_secure_channel(
             account_grpc_target,
-            secure=account_grpc_secure,
             root_certificates=account_root_certificates,
+            server_name=account_grpc_server_name,
         )
         self._account = bot_access_pb2_grpc.BotAccessServiceStub(self._account_channel)  # type: ignore[no-untyped-call]
         self._platform_channels: dict[str, grpc.aio.Channel] = {}
         self._platform_stubs: dict[str, runtime_pb2_grpc.MihomoRuntimeServiceStub] = {}
+        self._platform_routes: dict[str, bot_access_pb2.GetPlatformRuntimeRouteResponse] = {}
+        self._platform_route_lock = asyncio.Lock()
         self._request_id_factory = request_id_factory or (lambda: uuid4().hex)
         self._closed = False
 
@@ -104,10 +103,12 @@ class PaiGramAccountClient:
         await self.close()
 
     async def close(self) -> None:
-        if self._closed:
-            return
+        async with self._platform_route_lock:
+            if self._closed:
+                return
+            self._closed = True
+            resources = (self._http_client, self._account_channel, *self._platform_channels.values())
         first_error: BaseException | None = None
-        resources = (self._http_client, self._account_channel, *self._platform_channels.values())
         for resource in resources:
             try:
                 await resource.aclose() if isinstance(resource, httpx.AsyncClient) else await resource.close()
@@ -115,7 +116,6 @@ class PaiGramAccountClient:
                 logger.error("PaiGram Account SDK failed to close a transport", exc_info=error)
                 if first_error is None:
                     first_error = error
-        self._closed = True
         if first_error is not None:
             raise first_error
 
@@ -198,7 +198,7 @@ class PaiGramAccountClient:
         return await self._describe_platform(service_key, self._resolve_request_id(request_id))
 
     async def _describe_platform(self, service_key: str, request_id: str) -> PlatformDescriptor:
-        stub = self._platform_stub(service_key)
+        stub = await self._platform_stub(service_key, request_id)
         response = await _grpc_call(
             stub.DescribePlatform(
                 runtime_pb2.DescribePlatformRequest(),
@@ -208,6 +208,15 @@ class PaiGramAccountClient:
             request_id,
             failed_precondition_error=ServiceUnavailableError,
         )
+        route = self._platform_routes[service_key]
+        if (
+            response.platform_key != route.platform_key
+            or response.service_audience != route.service_audience
+            or len(response.supported_actions) != len(route.supported_actions)
+            or set(response.supported_actions) != set(route.supported_actions)
+        ):
+            logger.error("Platform descriptor does not match the authenticated Account Center route")
+            raise ServiceUnavailableError("platform descriptor does not match registered route")
         schema = MessageToDict(response.credential_schema, preserving_proto_field_name=True)
         return PlatformDescriptor(
             platform_key=response.platform_key,
@@ -389,6 +398,8 @@ class PaiGramAccountClient:
         method: Callable[..., Awaitable[object]],
         request: object,
         request_id: str,
+        *,
+        failed_precondition_error: type[AccountSDKError] = CredentialError,
     ) -> object:
         token = await self._tokens.get(request_id)
         call = method(
@@ -399,7 +410,7 @@ class PaiGramAccountClient:
         return await _grpc_call(
             call,
             request_id,
-            failed_precondition_error=CredentialError,
+            failed_precondition_error=failed_precondition_error,
         )
 
     async def _authorize_platform_action(
@@ -418,26 +429,44 @@ class PaiGramAccountClient:
             profile_ref=profile_ref,
             request_id=request_id,
         )
-        return self._platform_stub(binding.platform_service_key), ticket
+        return await self._platform_stub(binding.platform_service_key, request_id), ticket
 
-    def _platform_stub(self, service_key: str) -> runtime_pb2_grpc.MihomoRuntimeServiceStub:
+    async def _platform_stub(self, service_key: str, request_id: str) -> runtime_pb2_grpc.MihomoRuntimeServiceStub:
         self._ensure_open()
-        endpoint = self._platform_endpoints.get(service_key)
-        if endpoint is None:
-            logger.warning("PaiGram Account SDK has no endpoint for platform service %s", service_key)
-            raise InvalidRequestError(f"platform endpoint is not configured: {service_key}")
         existing = self._platform_stubs.get(service_key)
         if existing is not None:
             return existing
-        channel = _create_channel(
-            endpoint.target,
-            secure=endpoint.secure,
-            root_certificates=endpoint.root_certificates,
-        )
-        stub = runtime_pb2_grpc.MihomoRuntimeServiceStub(channel)  # type: ignore[no-untyped-call]
-        self._platform_channels[service_key] = channel
-        self._platform_stubs[service_key] = stub
-        return stub
+        async with self._platform_route_lock:
+            self._ensure_open()
+            existing = self._platform_stubs.get(service_key)
+            if existing is not None:
+                return existing
+            route = cast(
+                bot_access_pb2.GetPlatformRuntimeRouteResponse,
+                await self._account_call(
+                    self._account.GetPlatformRuntimeRoute,
+                    bot_access_pb2.GetPlatformRuntimeRouteRequest(platform_service_key=service_key),
+                    request_id,
+                    failed_precondition_error=ServiceUnavailableError,
+                ),
+            )
+            self._ensure_open()
+            if route.platform_service_key != service_key:
+                logger.error("Account Center returned a runtime route for the wrong platform service")
+                raise ServiceUnavailableError("platform runtime route does not match requested service")
+            if not _valid_grpc_target(route.runtime_endpoint) or not _valid_tls_server_name(route.runtime_server_name):
+                logger.error("Account Center returned an invalid platform runtime route")
+                raise ServiceUnavailableError(f"invalid platform runtime route: {service_key}")
+            channel = _create_secure_channel(
+                route.runtime_endpoint,
+                root_certificates=self._platform_root_certificates.get(service_key),
+                server_name=route.runtime_server_name,
+            )
+            stub = runtime_pb2_grpc.MihomoRuntimeServiceStub(channel)  # type: ignore[no-untyped-call]
+            self._platform_channels[service_key] = channel
+            self._platform_stubs[service_key] = stub
+            self._platform_routes[service_key] = route
+            return stub
 
     def _ensure_open(self) -> None:
         if self._closed:
@@ -452,19 +481,38 @@ class PaiGramAccountClient:
         return resolved
 
 
-def _create_channel(
+def _create_secure_channel(
     target: str,
     *,
-    secure: bool,
     root_certificates: bytes | None,
+    server_name: str | None,
 ) -> grpc.aio.Channel:
     if not target:
         logger.warning("PaiGram Account SDK rejected an empty gRPC target")
         raise InvalidRequestError("gRPC target is required")
-    if not secure:
-        return grpc.aio.insecure_channel(target)
     credentials = grpc.ssl_channel_credentials(root_certificates=root_certificates)
-    return grpc.aio.secure_channel(target, credentials)
+    options: tuple[tuple[str, str | int], ...] = (("grpc.enable_http_proxy", 0),)
+    if server_name is not None:
+        options += (
+            ("grpc.ssl_target_name_override", server_name),
+            ("grpc.default_authority", server_name),
+        )
+    return grpc.aio.secure_channel(target, credentials, options=options)
+
+
+def _valid_tls_server_name(server_name: str | None) -> bool:
+    if server_name is None or not server_name or server_name.strip() != server_name:
+        return False
+    return not any(character.isspace() or character in "/:?#" for character in server_name)
+
+
+def _valid_grpc_target(target: str) -> bool:
+    if not target or target.strip() != target or "://" in target:
+        return False
+    if any(character.isspace() or character in "/?#" for character in target):
+        return False
+    host, separator, port = target.rpartition(":")
+    return bool(separator and host and port.isdecimal() and 0 < int(port) <= 65535)
 
 
 async def _grpc_call(
@@ -506,7 +554,9 @@ def _map_grpc_error(
         error_type = failed_precondition_error
     elif error.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
         error_type = DeadlineExceededError
-    elif error.code() == grpc.StatusCode.UNAVAILABLE or error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
+    elif error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED:
+        error_type = RateLimitError
+    elif error.code() == grpc.StatusCode.UNAVAILABLE:
         error_type = ServiceUnavailableError
     else:
         error_type = TransportError

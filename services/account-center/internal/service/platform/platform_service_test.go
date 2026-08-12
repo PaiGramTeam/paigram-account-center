@@ -3,14 +3,12 @@ package platform
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"net"
 	"strings"
 	"testing"
 
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,16 +30,15 @@ func testPlatformAuthConfig(t *testing.T) config.AuthConfig {
 
 func testPlatformAuth(t *testing.T) (config.AuthConfig, ed25519.PublicKey) {
 	t.Helper()
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	privateKeyPEM, publicKeyPEM, err := contractticket.GenerateKeyPairPEM()
 	require.NoError(t, err)
-	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	publicKey, err := contractticket.ParsePublicKeyPEM(publicKeyPEM)
 	require.NoError(t, err)
 
 	return config.AuthConfig{
-		ServiceTicketTTLSeconds:    300,
-		ServiceTicketIssuer:        "account-center",
-		ServiceTicketKeyID:         "test-key",
-		ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
+		ServiceTicketTTLSeconds:     300,
+		ServiceTicketIssuer:         "account-center",
+		ServiceTicketSigningKeyFile: testutil.WriteServiceTicketSigningKey(t, "test-key", privateKeyPEM),
 	}, publicKey
 }
 
@@ -53,7 +50,9 @@ func TestPlatformServiceGetEnabledPlatform(t *testing.T) {
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
+		ControlEndpoint:      "127.0.0.1:9000",
+		RuntimeEndpoint:      "runtime.internal:9001",
+		RuntimeServerName:    "runtime.internal",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential","delete_credential"]`,
 		CredentialSchemaJSON: `{}`,
@@ -73,7 +72,7 @@ func TestPlatformServiceListEnabledPlatforms(t *testing.T) {
 		ServiceKey:           "platform-zenless-service",
 		ServiceAudience:      "platform-zenless-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9001",
+		ControlEndpoint:      "127.0.0.1:9001",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential"]`,
 		CredentialSchemaJSON: `{}`,
@@ -84,7 +83,7 @@ func TestPlatformServiceListEnabledPlatforms(t *testing.T) {
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
+		ControlEndpoint:      "127.0.0.1:9000",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential","delete_credential"]`,
 		CredentialSchemaJSON: `{}`,
@@ -95,7 +94,7 @@ func TestPlatformServiceListEnabledPlatforms(t *testing.T) {
 		ServiceKey:           "platform-disabled-service",
 		ServiceAudience:      "platform-disabled-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9002",
+		ControlEndpoint:      "127.0.0.1:9002",
 		Enabled:              false,
 		SupportedActionsJSON: `[]`,
 		CredentialSchemaJSON: `{}`,
@@ -127,7 +126,7 @@ func TestPlatformServiceBindsControlTicketToOperation(t *testing.T) {
 	require.NoError(t, db.Create(owner).Error)
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey: "mihomo", DisplayName: "Mihomo", ServiceKey: "platform-mihomo-service",
-		ServiceAudience: "platform-mihomo-service", DiscoveryType: "static", Endpoint: "bufnet",
+		ServiceAudience: "platform-mihomo-service", DiscoveryType: "static", ControlEndpoint: "bufnet",
 		Enabled: true, SupportedActionsJSON: `[]`, CredentialSchemaJSON: `{}`,
 	}).Error)
 	svc := NewServiceGroup(db).PlatformService
@@ -155,7 +154,6 @@ func TestPlatformServiceConfigureAuthRejectsMissingPrivateKey(t *testing.T) {
 	require.ErrorIs(t, svc.ConfigureAuth(config.AuthConfig{
 		ServiceTicketTTLSeconds: 300,
 		ServiceTicketIssuer:     "account-center",
-		ServiceTicketKeyID:      "test-key",
 	}), ErrInvalidTicketConfig)
 	require.Nil(t, svc.ticketSigner)
 }
@@ -169,7 +167,7 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "bufnet",
+		ControlEndpoint:      "bufnet",
 		Enabled:              true,
 		SupportedActionsJSON: `[]`,
 		CredentialSchemaJSON: `{}`,
@@ -246,7 +244,7 @@ func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "bufnet",
+		ControlEndpoint:      "bufnet",
 		Enabled:              true,
 		SupportedActionsJSON: `[]`,
 		CredentialSchemaJSON: `{}`,
@@ -298,7 +296,7 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "bufnet",
+		ControlEndpoint:      "bufnet",
 		Enabled:              true,
 		SupportedActionsJSON: `[]`,
 		CredentialSchemaJSON: `{}`,
@@ -358,7 +356,7 @@ func TestPlatformServiceListPlatformViews(t *testing.T) {
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
+		ControlEndpoint:      "127.0.0.1:9000",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential","delete_credential"]`,
 		CredentialSchemaJSON: `{"type":"object"}`,
@@ -369,9 +367,12 @@ func TestPlatformServiceListPlatformViews(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, views, 1)
 	require.Equal(t, PlatformListView{
-		Platform:         "mihomo",
-		DisplayName:      "Mihomo",
-		SupportedActions: []string{"bind_credential", "delete_credential"},
+		Platform:          "mihomo",
+		DisplayName:       "Mihomo",
+		RuntimeEndpoint:   "runtime.internal:9001",
+		RuntimeServerName: "runtime.internal",
+		ServiceAudience:   "platform-mihomo-service",
+		SupportedActions:  []string{"bind_credential", "delete_credential"},
 	}, views[0])
 }
 
@@ -402,7 +403,9 @@ func TestPlatformServiceGetPlatformSchemaView(t *testing.T) {
 		ServiceKey:           "platform-mihomo-service",
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
+		ControlEndpoint:      "127.0.0.1:9000",
+		RuntimeEndpoint:      "runtime.internal:9001",
+		RuntimeServerName:    "runtime.internal",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential"]`,
 		CredentialSchemaJSON: `{"type":"object","required":["cookie_bundle"]}`,

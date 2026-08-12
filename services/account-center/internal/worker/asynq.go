@@ -12,12 +12,14 @@ import (
 	"paigram/internal/config"
 	"paigram/internal/handler/auth"
 	"paigram/internal/observability"
+	"paigram/internal/platformtransport"
 	serviceplatform "paigram/internal/service/platform"
+	"paigram/internal/serviceticket"
 	"paigram/internal/tasks"
 )
 
 // StartAsynqServer starts the asynq worker server and scheduler
-func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB, authHandler *auth.Handler) (*asynq.Server, *asynq.Scheduler, error) {
+func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB, authHandler *auth.Handler, ticketSigner serviceticket.Signer) (*asynq.Server, *asynq.Scheduler, error) {
 	if !cfg.Redis.Enabled {
 		log.Println("[Asynq] Redis not enabled, skipping worker startup")
 		return nil, nil, nil
@@ -32,10 +34,22 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 
 	// Create task handlers
 	platformService := serviceplatform.NewServiceGroup(db)
-	if err := platformService.PlatformService.ConfigureAuth(cfg.Auth); err != nil {
+	if err := platformService.PlatformService.ConfigureTicketSigner(ticketSigner); err != nil {
 		return nil, nil, err
 	}
-	platformService.PlatformService.SetGenericSummaryProxy(serviceplatform.NewGRPCGenericSummaryProxy(nil))
+	controlDialer, err := platformtransport.NewControlDialer(platformtransport.ControlConfig{
+		RootCAFile:      cfg.PlatformControl.RootCAFile,
+		CertificateFile: cfg.PlatformControl.CertificateFile,
+		PrivateKeyFile:  cfg.PlatformControl.PrivateKeyFile,
+		ServerName:      cfg.PlatformControl.ServerName,
+		Timeout:         cfg.PlatformControl.DialTimeout,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := platformService.PlatformService.ConfigureTransport(controlDialer); err != nil {
+		return nil, nil, err
+	}
 	refreshHandler := tasks.NewRefreshOAuthTokenHandler(db, cfg, authHandler)
 	scheduleHandler := tasks.NewScheduleOAuthRefreshHandler(db, cfg, asynqClient)
 	cleanupHandler := tasks.NewCleanExpiredOAuthStatesHandler(db)

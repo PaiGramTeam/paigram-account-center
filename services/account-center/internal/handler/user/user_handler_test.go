@@ -54,7 +54,7 @@ func setupListUsersContractTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	statements := []string{
-		`CREATE TABLE users (id integer PRIMARY KEY AUTOINCREMENT, primary_login_type text NOT NULL, status text NOT NULL, primary_role_id integer, last_login_at datetime, created_at datetime NOT NULL, updated_at datetime NOT NULL, deleted_at datetime)`,
+		`CREATE TABLE users (id integer PRIMARY KEY AUTOINCREMENT, user_ref text NOT NULL, owner_epoch integer NOT NULL DEFAULT 1, primary_login_type text NOT NULL, status text NOT NULL, primary_role_id integer, last_login_at datetime, created_at datetime NOT NULL, updated_at datetime NOT NULL, deleted_at datetime)`,
 		`CREATE TABLE user_profiles (id integer PRIMARY KEY AUTOINCREMENT, user_id integer NOT NULL, display_name text NOT NULL, avatar_url text, bio text, locale text, created_at datetime, updated_at datetime)`,
 		`CREATE TABLE roles (id integer PRIMARY KEY AUTOINCREMENT, name text NOT NULL, display_name text NOT NULL, description text, is_system numeric NOT NULL DEFAULT 0, created_at datetime, updated_at datetime, deleted_at datetime)`,
 		`CREATE TABLE user_roles (id integer PRIMARY KEY AUTOINCREMENT, user_id integer NOT NULL, role_id integer NOT NULL, granted_by integer NOT NULL, created_at datetime NOT NULL, updated_at datetime NOT NULL)`,
@@ -463,8 +463,10 @@ func TestHandler_ListUsersNormalizesPaginationMetadataAndUsesCanonicalEnvelope(t
 	now := time.Now().UTC().Truncate(time.Second)
 	for i := 1; i <= 25; i++ {
 		require.NoError(t, db.Exec(
-			`INSERT INTO users (id, primary_login_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+			`INSERT INTO users (id, user_ref, owner_epoch, primary_login_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			i,
+			fmt.Sprintf("usr_contract_%d", i),
+			1,
 			string(model.LoginTypeEmail),
 			string(model.UserStatusActive),
 			now.Add(time.Duration(i)*time.Minute),

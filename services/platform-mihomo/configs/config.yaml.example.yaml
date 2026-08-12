@@ -1,25 +1,32 @@
 server:
-  grpc:
+  control:
     network: tcp
     addr: "0.0.0.0:9000"
     timeout_seconds: 5
+    tls:
+      certificate_file: "/run/secrets/platform_control_cert.pem"
+      private_key_file: "/run/secrets/platform_control_key.pem"
+      client_ca_file: "/run/secrets/account_control_client_ca.pem"
+  runtime:
+    network: tcp
+    addr: "0.0.0.0:9001"
+    timeout_seconds: 5
+    tls:
+      certificate_file: "/run/secrets/platform_runtime_cert.pem"
+      private_key_file: "/run/secrets/platform_runtime_key.pem"
 data:
   database:
-    dsn: "postgres://platform_mihomo:password@127.0.0.1:5432/platform_mihomo?sslmode=disable"
+    dsn_file: "/run/secrets/platform_database_dsn"
   redis:
     addr: "127.0.0.1:6379"
     password: ""
+    password_file: "/run/secrets/platform_redis_password"
     db: 0
     prefix: "platform-mihomo:"
 security:
-  # Replace with a real 32-byte secret before running the service.
-  credential_encryption_key: 0123456789abcdef0123456789abcdef
+  credential_encryption_keyring_file: "/run/secrets/platform_encryption_keyring.json"
   service_ticket_issuer: paigram-account-center
-  service_ticket_key_id: account-center-ed25519-key
-  service_ticket_public_key_pem: |
-    -----BEGIN PUBLIC KEY-----
-    MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-    -----END PUBLIC KEY-----
+  service_ticket_public_keyring_file: "/run/secrets/account_service_ticket_public_keyring.json"
 upstream:
   base_url: "https://mihomo-upstream.internal"
   timeout_seconds: 10

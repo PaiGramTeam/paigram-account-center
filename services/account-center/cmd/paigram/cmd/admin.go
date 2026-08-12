@@ -146,8 +146,8 @@ func createAdmin(cmd *cobra.Command) {
 			os.Exit(1)
 		}
 		fmt.Println("Default admin account created.")
-		fmt.Println("Email and password came from ADMIN_EMAIL / ADMIN_PASSWORD environment variables")
-		fmt.Println("(default email: admin@paigram.local; ADMIN_PASSWORD is required).")
+		fmt.Println("Email and password came from ADMIN_EMAIL and ADMIN_PASSWORD_FILE / ADMIN_PASSWORD")
+		fmt.Println("(default email: admin@paigram.local; a password source is required).")
 		fmt.Println("\n⚠️  Rotate the password via the admin UI as soon as possible.")
 		return
 	}

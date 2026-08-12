@@ -38,15 +38,12 @@ type swaggerPlatformBindingProfileItem struct {
 
 // swagger:model platformBindingConsumerGrantItem
 type swaggerPlatformBindingConsumerGrantItem struct {
-	ID        uint64  `json:"id"`
-	BindingID uint64  `json:"binding_id"`
-	Consumer  string  `json:"consumer"`
-	Status    string  `json:"status"`
-	GrantedBy *int64  `json:"granted_by,omitempty"`
-	GrantedAt string  `json:"granted_at"`
-	RevokedAt *string `json:"revoked_at,omitempty"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	BindingID        uint64   `json:"binding_id"`
+	Consumer         string   `json:"consumer"`
+	Status           string   `json:"status"`
+	PropagationState string   `json:"propagation_state,omitempty"`
+	Actions          []string `json:"actions"`
+	RevokedAt        *string  `json:"revoked_at,omitempty"`
 }
 
 // swagger:model platformBindingPagination
