@@ -653,9 +653,7 @@ func grantPermissionsToUser(t *testing.T, stack *integrationStack, userID uint64
 		rolePermission := model.RolePermission{RoleID: role.ID, PermissionID: permission.ID}
 		require.NoError(t, stack.DB.Where(&rolePermission).FirstOrCreate(&rolePermission).Error)
 
-		// Create Casbin policies for the permission
-		// Map permission names to (path, HTTP method) pairs
-		policies := mapPermissionToPolicies(permName)
+		policies := casbin.PoliciesForPermission(permName)
 
 		for _, policy := range policies {
 			added, err := enforcer.AddPolicy(fmt.Sprint(role.ID), policy.Path, policy.Method)
@@ -678,120 +676,6 @@ func grantPermissionsToUser(t *testing.T, stack *integrationStack, userID uint64
 	}
 }
 
-// PolicyRule represents a Casbin policy rule with path and HTTP method
-type PolicyRule struct {
-	Path   string
-	Method string
-}
-
-// mapPermissionToPolicies maps permission names to Casbin policy rules (path + HTTP method)
-func mapPermissionToPolicies(permName string) []PolicyRule {
-	switch permName {
-	case model.PermUserRead:
-		return []PolicyRule{
-			{"/api/v1/admin/users/*", "GET"},
-		}
-	case model.PermUserWrite:
-		return []PolicyRule{
-			{"/api/v1/admin/users", "POST"},
-			{"/api/v1/admin/users/*", "PATCH"},
-			{"/api/v1/admin/users/*", "PUT"},
-		}
-	case model.BuildPermissionName(model.ResourceUser, model.ActionCreate):
-		return []PolicyRule{{"/api/v1/admin/users", "POST"}}
-	case model.BuildPermissionName(model.ResourceUser, model.ActionUpdate):
-		return []PolicyRule{{"/api/v1/admin/users/*", "PATCH"}, {"/api/v1/admin/users/*", "PUT"}}
-	case model.PermUserDelete:
-		return []PolicyRule{
-			{"/api/v1/admin/users/*", "DELETE"},
-		}
-	case model.BuildPermissionName(model.ResourceUser, model.ActionDelete):
-		return []PolicyRule{{"/api/v1/admin/users/*", "DELETE"}}
-	case model.BuildPermissionName(model.ResourceUser, model.ActionList):
-		return []PolicyRule{{"/api/v1/admin/users", "GET"}}
-	case model.PermUserManage:
-		return []PolicyRule{
-			{"/api/v1/admin/users/*", "GET"},
-			{"/api/v1/admin/users/*", "POST"},
-			{"/api/v1/admin/users/*", "PATCH"},
-			{"/api/v1/admin/users/*", "DELETE"},
-		}
-	case model.PermRoleRead:
-		return []PolicyRule{
-			{"/api/v1/admin/roles", "GET"},
-			{"/api/v1/admin/roles/*", "GET"},
-			{"/api/v1/admin/users/*/roles", "GET"},
-		}
-	case model.PermRoleWrite:
-		return []PolicyRule{
-			{"/api/v1/admin/roles", "POST"},
-			{"/api/v1/admin/roles/*", "PATCH"},
-			{"/api/v1/admin/roles/*", "PUT"},
-		}
-	case model.BuildPermissionName(model.ResourceRole, model.ActionCreate):
-		return []PolicyRule{{"/api/v1/admin/roles", "POST"}}
-	case model.BuildPermissionName(model.ResourceRole, model.ActionUpdate):
-		return []PolicyRule{{"/api/v1/admin/roles/*", "PATCH"}, {"/api/v1/admin/roles/*", "PUT"}}
-	case model.PermRoleDelete:
-		return []PolicyRule{
-			{"/api/v1/admin/roles/*", "DELETE"},
-		}
-	case model.BuildPermissionName(model.ResourceRole, model.ActionDelete):
-		return []PolicyRule{{"/api/v1/admin/roles/*", "DELETE"}}
-	case model.BuildPermissionName(model.ResourceRole, model.ActionList):
-		return []PolicyRule{{"/api/v1/admin/roles", "GET"}}
-	case model.PermRoleManage:
-		return []PolicyRule{
-			{"/api/v1/admin/roles/*/users", "PUT"},
-			{"/api/v1/admin/roles/*/permissions", "PUT"},
-		}
-	case model.PermPermissionRead:
-		return []PolicyRule{
-			{"/api/v1/admin/users/*/permissions", "GET"},
-			{"/api/v1/admin/roles/*/permissions", "GET"},
-		}
-	case model.BuildPermissionName(model.ResourceSession, model.ActionRead):
-		return []PolicyRule{{"/api/v1/admin/users/*/sessions", "GET"}}
-	case model.BuildPermissionName(model.ResourceSession, model.ActionDelete):
-		return []PolicyRule{{"/api/v1/admin/users/*/sessions/*", "DELETE"}}
-	case model.PermPermissionWrite:
-		return nil
-	case model.PermPermissionDelete:
-		return nil
-	case model.PermAuditRead:
-		return []PolicyRule{
-			{"/api/v1/admin/users/*/audit-logs", "GET"},
-			{"/api/v1/admin/users/*/login-logs", "GET"},
-			{"/api/v1/admin/audit-logs", "GET"},
-			{"/api/v1/admin/audit-logs/*", "GET"},
-		}
-	default:
-		// Fallback: derive from permission name
-		resource := strings.Split(permName, ":")[0]
-		action := strings.Split(permName, ":")[1]
-		method := actionToHTTPMethod(action)
-		return []PolicyRule{
-			{fmt.Sprintf("/api/v1/%s/*", resource), method},
-		}
-	}
-}
-
-// actionToHTTPMethod converts permission action to HTTP method
-func actionToHTTPMethod(action string) string {
-	switch strings.ToLower(action) {
-	case "read":
-		return "GET"
-	case "write":
-		return "POST"
-	case "delete":
-		return "DELETE"
-	case "manage":
-		return "GET" // Default for manage, usually needs multiple methods
-	default:
-		return "GET"
-	}
-}
-
 func grantAdminRoleToUser(t *testing.T, stack *integrationStack, userID uint64) {
 	t.Helper()
 
@@ -810,12 +694,12 @@ func grantAdminRoleToUser(t *testing.T, stack *integrationStack, userID uint64) 
 
 	// Grant admin all permissions via Casbin policies
 	// Admin should have access to all routes
-	adminPolicies := []PolicyRule{
-		{"/api/v1/*", "GET"},
-		{"/api/v1/*", "POST"},
-		{"/api/v1/*", "PUT"},
-		{"/api/v1/*", "PATCH"},
-		{"/api/v1/*", "DELETE"},
+	adminPolicies := []casbin.PolicyRule{
+		{Path: "/api/v1/*", Method: "GET"},
+		{Path: "/api/v1/*", Method: "POST"},
+		{Path: "/api/v1/*", Method: "PUT"},
+		{Path: "/api/v1/*", Method: "PATCH"},
+		{Path: "/api/v1/*", Method: "DELETE"},
 	}
 
 	for _, policy := range adminPolicies {

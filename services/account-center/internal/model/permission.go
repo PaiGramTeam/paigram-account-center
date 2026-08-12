@@ -107,15 +107,18 @@ func BuildPermissionName(resource, action string) string {
 // Predefined permission constants
 const (
 	// User permissions
+	PermUserCreate = "user:create"
 	PermUserRead   = "user:read"
-	PermUserWrite  = "user:write"
+	PermUserUpdate = "user:update"
 	PermUserDelete = "user:delete"
-	PermUserManage = "user:manage"
+	PermUserList   = "user:list"
 
 	// Role permissions
+	PermRoleCreate = "role:create"
 	PermRoleRead   = "role:read"
-	PermRoleWrite  = "role:write"
+	PermRoleUpdate = "role:update"
 	PermRoleDelete = "role:delete"
+	PermRoleList   = "role:list"
 	PermRoleManage = "role:manage"
 
 	// System permissions
@@ -123,10 +126,10 @@ const (
 	PermSystemUpdate = "system:update"
 
 	// Permission management
+	PermPermissionCreate = "permission:create"
 	PermPermissionRead   = "permission:read"
-	PermPermissionWrite  = "permission:write"
 	PermPermissionDelete = "permission:delete"
-	PermPermissionManage = "permission:manage"
+	PermPermissionList   = "permission:list"
 
 	// Platform permissions
 	PermPlatformCreate = "platform:create"
@@ -143,11 +146,19 @@ const (
 	PermPlatformAccountList   = "platform_account:list"
 
 	// Bot permissions
+	PermBotCreate = "bot:create"
 	PermBotRead   = "bot:read"
-	PermBotWrite  = "bot:write"
+	PermBotUpdate = "bot:update"
 	PermBotDelete = "bot:delete"
+	PermBotList   = "bot:list"
 	PermBotManage = "bot:manage"
+
+	// Session permissions
+	PermSessionRead   = "session:read"
+	PermSessionDelete = "session:delete"
+	PermSessionList   = "session:list"
 
 	// Audit permissions
 	PermAuditRead = "audit:read"
+	PermAuditList = "audit:list"
 )

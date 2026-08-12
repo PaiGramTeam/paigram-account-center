@@ -223,7 +223,9 @@ func TestPoliciesForPermissionCoversSeededCatalogRoutes(t *testing.T) {
 		})
 	}
 
-	assert.Empty(t, PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionRead)))
+	assert.Contains(t, PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionRead)), PolicyRule{
+		Path: "/api/v1/admin/system/bot-routes/:id", Method: "GET",
+	})
 }
 
 func TestPoliciesForSystemRoleModeratorDerivedFromSeedPermissions(t *testing.T) {
@@ -259,4 +261,30 @@ func TestServiceCredentialRoutesUseBotPermissions(t *testing.T) {
 	assert.Contains(t, PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionUpdate)), PolicyRule{
 		Path: "/api/v1/admin/service-credentials/:client_id/secret", Method: "POST",
 	})
+}
+
+func TestPermissionDefinitionsAndPoliciesUseOneCanonicalVocabulary(t *testing.T) {
+	definitions := AllPermissionDefinitions()
+	definitionNames := make(map[string]struct{}, len(definitions))
+	for _, definition := range definitions {
+		assert.Equal(t, model.BuildPermissionName(definition.Resource, definition.Action), definition.Name)
+		_, duplicate := definitionNames[definition.Name]
+		assert.False(t, duplicate, "duplicate permission definition: %s", definition.Name)
+		definitionNames[definition.Name] = struct{}{}
+		assert.Contains(t, permissionPolicies, definition.Name)
+	}
+
+	for permissionName := range permissionPolicies {
+		assert.Contains(t, definitionNames, permissionName)
+	}
+	for _, roleName := range []string{model.RoleAdmin, model.RoleModerator, model.RoleUser, model.RoleGuest} {
+		for _, permissionName := range PermissionNamesForSystemRole(roleName) {
+			assert.Contains(t, definitionNames, permissionName, "unknown permission assigned to role %s", roleName)
+		}
+	}
+
+	for _, legacyName := range []string{"user:write", "user:manage", "role:write", "permission:write", "permission:manage", "bot:write"} {
+		assert.NotContains(t, definitionNames, legacyName)
+		assert.Empty(t, PoliciesForPermission(legacyName))
+	}
 }

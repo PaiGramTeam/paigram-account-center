@@ -173,15 +173,21 @@ const refreshData = () => {
 const mockAdminPermissions = () => {
   if (userStore.userInfo) {
     userStore.userInfo.permissions = [
+      'user:create',
       'user:read',
-      'user:write',
+      'user:update',
       'user:delete',
-      'user:manage',
+      'user:list',
+      'role:create',
       'role:read',
-      'role:write',
+      'role:update',
+      'role:delete',
+      'role:list',
+      'role:manage',
       'permission:read',
-      'permission:write',
+      'permission:list',
       'audit:read',
+      'audit:list',
     ]
     userStore.userInfo.roles = ['admin']
     Message.success('已设置管理员权限，菜单应该全部显示')

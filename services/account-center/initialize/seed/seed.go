@@ -21,67 +21,8 @@ type PolicyDrift struct {
 	Unexpected [][]string
 }
 
-// DefaultPermissions defines the default permissions in the system.
-var DefaultPermissions = []struct {
-	Name        string
-	Resource    string
-	Action      string
-	Description string
-}{
-	// User permissions
-	{model.BuildPermissionName(model.ResourceUser, model.ActionCreate), model.ResourceUser, model.ActionCreate, "Create new users"},
-	{model.BuildPermissionName(model.ResourceUser, model.ActionRead), model.ResourceUser, model.ActionRead, "View user information"},
-	{model.BuildPermissionName(model.ResourceUser, model.ActionUpdate), model.ResourceUser, model.ActionUpdate, "Update user information"},
-	{model.BuildPermissionName(model.ResourceUser, model.ActionDelete), model.ResourceUser, model.ActionDelete, "Delete users"},
-	{model.BuildPermissionName(model.ResourceUser, model.ActionList), model.ResourceUser, model.ActionList, "List all users"},
-
-	// Role permissions
-	{model.BuildPermissionName(model.ResourceRole, model.ActionCreate), model.ResourceRole, model.ActionCreate, "Create new roles"},
-	{model.BuildPermissionName(model.ResourceRole, model.ActionRead), model.ResourceRole, model.ActionRead, "View role information"},
-	{model.BuildPermissionName(model.ResourceRole, model.ActionUpdate), model.ResourceRole, model.ActionUpdate, "Update role information"},
-	{model.BuildPermissionName(model.ResourceRole, model.ActionDelete), model.ResourceRole, model.ActionDelete, "Delete roles"},
-	{model.BuildPermissionName(model.ResourceRole, model.ActionList), model.ResourceRole, model.ActionList, "List all roles"},
-	{model.BuildPermissionName(model.ResourceRole, model.ActionManage), model.ResourceRole, model.ActionManage, "Manage role assignments"},
-
-	// Permission permissions
-	{model.BuildPermissionName(model.ResourcePermission, model.ActionCreate), model.ResourcePermission, model.ActionCreate, "Create new permissions"},
-	{model.BuildPermissionName(model.ResourcePermission, model.ActionRead), model.ResourcePermission, model.ActionRead, "View permission information"},
-	{model.BuildPermissionName(model.ResourcePermission, model.ActionDelete), model.ResourcePermission, model.ActionDelete, "Delete permissions"},
-	{model.BuildPermissionName(model.ResourcePermission, model.ActionList), model.ResourcePermission, model.ActionList, "List all permissions"},
-
-	// System permissions
-	{model.BuildPermissionName(model.ResourceSystem, model.ActionRead), model.ResourceSystem, model.ActionRead, "View system settings and auth controls"},
-	{model.BuildPermissionName(model.ResourceSystem, model.ActionUpdate), model.ResourceSystem, model.ActionUpdate, "Update system settings and auth controls"},
-
-	// Platform permissions
-	{model.BuildPermissionName(model.ResourcePlatform, model.ActionCreate), model.ResourcePlatform, model.ActionCreate, "Create platform registrations"},
-	{model.BuildPermissionName(model.ResourcePlatform, model.ActionRead), model.ResourcePlatform, model.ActionRead, "View platform registration information"},
-	{model.BuildPermissionName(model.ResourcePlatform, model.ActionUpdate), model.ResourcePlatform, model.ActionUpdate, "Update platform registrations"},
-	{model.BuildPermissionName(model.ResourcePlatform, model.ActionDelete), model.ResourcePlatform, model.ActionDelete, "Delete platform registrations"},
-	{model.BuildPermissionName(model.ResourcePlatform, model.ActionList), model.ResourcePlatform, model.ActionList, "List platform registrations"},
-	{model.BuildPermissionName(model.ResourcePlatform, model.ActionManage), model.ResourcePlatform, model.ActionManage, "Manage platform registrations"},
-	{model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionRead), model.ResourcePlatformAccount, model.ActionRead, "View platform account bindings"},
-	{model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionList), model.ResourcePlatformAccount, model.ActionList, "List platform account bindings"},
-	{model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionUpdate), model.ResourcePlatformAccount, model.ActionUpdate, "Update platform account bindings"},
-	{model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionDelete), model.ResourcePlatformAccount, model.ActionDelete, "Delete platform account bindings"},
-
-	// Bot permissions
-	{model.BuildPermissionName(model.ResourceBot, model.ActionCreate), model.ResourceBot, model.ActionCreate, "Create new bots"},
-	{model.BuildPermissionName(model.ResourceBot, model.ActionRead), model.ResourceBot, model.ActionRead, "View bot information"},
-	{model.BuildPermissionName(model.ResourceBot, model.ActionUpdate), model.ResourceBot, model.ActionUpdate, "Update bot information"},
-	{model.BuildPermissionName(model.ResourceBot, model.ActionDelete), model.ResourceBot, model.ActionDelete, "Delete bots"},
-	{model.BuildPermissionName(model.ResourceBot, model.ActionList), model.ResourceBot, model.ActionList, "List all bots"},
-	{model.BuildPermissionName(model.ResourceBot, model.ActionManage), model.ResourceBot, model.ActionManage, "Manage bot tokens"},
-
-	// Session permissions
-	{model.BuildPermissionName(model.ResourceSession, model.ActionRead), model.ResourceSession, model.ActionRead, "View session information"},
-	{model.BuildPermissionName(model.ResourceSession, model.ActionDelete), model.ResourceSession, model.ActionDelete, "Revoke sessions"},
-	{model.BuildPermissionName(model.ResourceSession, model.ActionList), model.ResourceSession, model.ActionList, "List all sessions"},
-
-	// Audit permissions
-	{model.BuildPermissionName(model.ResourceAudit, model.ActionRead), model.ResourceAudit, model.ActionRead, "View audit logs"},
-	{model.BuildPermissionName(model.ResourceAudit, model.ActionList), model.ResourceAudit, model.ActionList, "List audit logs"},
-}
+// DefaultPermissions is sourced from the permission catalog used by policy generation.
+var DefaultPermissions = casbin.AllPermissionDefinitions()
 
 // DefaultRoles defines the default roles and their permissions.
 var DefaultRoles = []struct {

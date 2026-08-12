@@ -76,26 +76,6 @@ func loadRolePolicies(tx *gorm.DB, roleID uint64) ([]CasbinPolicyInfo, error) {
 
 func policiesForPermissionName(permissionName string) []CasbinPolicyInfo {
 	rules := internalcasbin.PoliciesForPermission(permissionName)
-	if len(rules) == 0 {
-		switch permissionName {
-		case model.PermUserWrite:
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceUser, model.ActionCreate))...)
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceUser, model.ActionUpdate))...)
-		case model.PermRoleWrite:
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceRole, model.ActionCreate))...)
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceRole, model.ActionUpdate))...)
-		case model.PermPermissionWrite:
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourcePermission, model.ActionCreate))...)
-		case model.PermBotWrite:
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionCreate))...)
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionUpdate))...)
-		case model.PermUserManage:
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceSession, model.ActionRead))...)
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceSession, model.ActionDelete))...)
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceSession, model.ActionList))...)
-			rules = append(rules, internalcasbin.PoliciesForPermission(model.BuildPermissionName(model.ResourceUser, model.ActionRead))...)
-		}
-	}
 
 	policies := make([]CasbinPolicyInfo, 0, len(rules))
 	for _, rule := range rules {
