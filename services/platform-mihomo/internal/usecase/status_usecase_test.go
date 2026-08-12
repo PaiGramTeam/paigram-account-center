@@ -11,7 +11,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
@@ -97,7 +96,7 @@ func TestRefreshCredentialDoesNotMarkRefreshedOnValidationFailure(t *testing.T) 
 
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
-	require.Equal(t, v1.CredentialStatus_CREDENTIAL_STATUS_EXPIRED, resp.Status)
+	require.Equal(t, CredentialStatusExpired, resp.Status)
 	require.Nil(t, resp.RefreshedAt)
 	require.Nil(t, credentialRepo.byPlatformAccountID["hoyo_10001"].LastRefreshedAt)
 }
@@ -120,7 +119,7 @@ func TestRefreshCredentialRevalidatesWithoutReplacingCredentialBlob(t *testing.T
 
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
-	require.Equal(t, v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, resp.Status)
+	require.Equal(t, CredentialStatusActive, resp.Status)
 
 	stored := credentialRepo.byPlatformAccountID["hoyo_10001"]
 	require.Equal(t, encryptedBlob, stored.CredentialBlob)
@@ -146,7 +145,7 @@ func TestValidateCredentialMapsChallengeRequiredStatus(t *testing.T) {
 
 	resp, err := uc.ValidateCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
-	require.Equal(t, v1.CredentialStatus_CREDENTIAL_STATUS_CHALLENGE_REQUIRED, resp.Status)
+	require.Equal(t, CredentialStatusChallengeRequired, resp.Status)
 	require.Equal(t, "CHALLENGE_REQUIRED", resp.ErrorCode)
 }
 

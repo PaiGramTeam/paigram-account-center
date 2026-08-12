@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	mihomoapiv1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/data"
 	"platform-mihomo-service/internal/usecase"
 )
@@ -386,31 +385,31 @@ func toGenericCredentialSummary(output *usecase.CredentialSummaryOutput) *platfo
 	}
 }
 
-func toGenericProfileSummary(profile *mihomoapiv1.ProfileSummary) *platformv1.ProfileSummary {
+func toGenericProfileSummary(profile *usecase.ProfileSummary) *platformv1.ProfileSummary {
 	if profile == nil {
 		return nil
 	}
 	return &platformv1.ProfileSummary{
-		Id:                profile.Id,
-		PlatformAccountId: profile.PlatformAccountId,
+		Id:                profile.ID,
+		PlatformAccountId: profile.PlatformAccountID,
 		GameBiz:           profile.GameBiz,
 		Region:            profile.Region,
-		PlayerId:          profile.PlayerId,
+		PlayerId:          profile.PlayerID,
 		Nickname:          profile.Nickname,
 		Level:             profile.Level,
 		IsDefault:         profile.IsDefault,
 	}
 }
 
-func toGenericCredentialStatus(statusValue mihomoapiv1.CredentialStatus) platformv1.CredentialStatus {
+func toGenericCredentialStatus(statusValue usecase.CredentialStatus) platformv1.CredentialStatus {
 	switch statusValue {
-	case mihomoapiv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE:
+	case usecase.CredentialStatusActive:
 		return platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE
-	case mihomoapiv1.CredentialStatus_CREDENTIAL_STATUS_EXPIRED:
+	case usecase.CredentialStatusExpired:
 		return platformv1.CredentialStatus_CREDENTIAL_STATUS_EXPIRED
-	case mihomoapiv1.CredentialStatus_CREDENTIAL_STATUS_INVALID:
+	case usecase.CredentialStatusInvalid:
 		return platformv1.CredentialStatus_CREDENTIAL_STATUS_INVALID
-	case mihomoapiv1.CredentialStatus_CREDENTIAL_STATUS_CHALLENGE_REQUIRED:
+	case usecase.CredentialStatusChallengeRequired:
 		return platformv1.CredentialStatus_CREDENTIAL_STATUS_CHALLENGE_REQUIRED
 	default:
 		return platformv1.CredentialStatus_CREDENTIAL_STATUS_UNSPECIFIED

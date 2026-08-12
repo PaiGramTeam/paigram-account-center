@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
@@ -28,9 +27,9 @@ func TestBindCredentialPersistsCredentialDeviceAndProfiles(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(101), resp.BindingID)
 	require.Equal(t, "binding_101_10001", resp.PlatformAccountID)
-	require.Equal(t, v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, resp.Status)
+	require.Equal(t, CredentialStatusActive, resp.Status)
 	require.Len(t, resp.Profiles, 1)
-	require.Equal(t, "1008611", resp.Profiles[0].PlayerId)
+	require.Equal(t, "1008611", resp.Profiles[0].PlayerID)
 	require.True(t, resp.Profiles[0].IsDefault)
 
 	credential := uc.credentialRepo.byPlatformAccountID[resp.PlatformAccountID]
@@ -69,12 +68,12 @@ func TestBindCredentialPersistsCredentialDeviceAndProfiles(t *testing.T) {
 	listed, err := uc.profileUsecase.ListProfiles(context.Background(), resp.PlatformAccountID)
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
-	require.Equal(t, "1008611", listed[0].PlayerId)
+	require.Equal(t, "1008611", listed[0].PlayerID)
 
 	primary, err := uc.profileUsecase.GetPrimaryProfile(context.Background(), resp.PlatformAccountID)
 	require.NoError(t, err)
 	require.NotNil(t, primary)
-	require.Equal(t, "1008611", primary.PlayerId)
+	require.Equal(t, "1008611", primary.PlayerID)
 }
 
 func TestBindCredentialPersistsBindingIDOnCredentialAndProfiles(t *testing.T) {

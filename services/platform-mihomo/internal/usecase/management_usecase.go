@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 )
 
@@ -13,11 +12,11 @@ var ErrPlatformAccountMismatch = errors.New("platform account does not match req
 
 type CredentialSummaryOutput struct {
 	PlatformAccountID string
-	Status            v1.CredentialStatus
+	Status            CredentialStatus
 	LastValidatedAt   *time.Time
 	LastRefreshedAt   *time.Time
 	Devices           []*biz.Device
-	Profiles          []*v1.ProfileSummary
+	Profiles          []*ProfileSummary
 }
 
 type ManagementUsecase struct {
@@ -71,7 +70,7 @@ func (uc *ManagementUsecase) GetCredentialSummary(ctx context.Context, platformA
 
 	return &CredentialSummaryOutput{
 		PlatformAccountID: credential.PlatformAccountID,
-		Status:            toCredentialStatus(credential.Status),
+		Status:            credentialStatusFromStorage(credential.Status),
 		LastValidatedAt:   credential.LastValidatedAt,
 		LastRefreshedAt:   credential.LastRefreshedAt,
 		Devices:           devices,
@@ -104,13 +103,13 @@ func (uc *ManagementUsecase) GetCredentialSummaryWithScope(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	summaries := make([]*v1.ProfileSummary, 0, len(profiles))
+	summaries := make([]*ProfileSummary, 0, len(profiles))
 	for _, profile := range profiles {
 		summaries = append(summaries, toProfileSummary(profile))
 	}
 	return &CredentialSummaryOutput{
 		PlatformAccountID: credential.PlatformAccountID,
-		Status:            toCredentialStatus(credential.Status),
+		Status:            credentialStatusFromStorage(credential.Status),
 		LastValidatedAt:   credential.LastValidatedAt,
 		LastRefreshedAt:   credential.LastRefreshedAt,
 		Devices:           devices,
@@ -191,11 +190,11 @@ func (uc *ManagementUsecase) DeleteCredentialWithScope(ctx context.Context, guar
 	return uc.management.DeleteCredentialGraphByBindingID(ctx, guard.BindingID)
 }
 
-func (uc *ManagementUsecase) pruneStaleProfiles(ctx context.Context, platformAccountID string, profiles []v1.ProfileSummary) error {
+func (uc *ManagementUsecase) pruneStaleProfiles(ctx context.Context, platformAccountID string, profiles []ProfileSummary) error {
 	keep := make([]biz.ProfileIdentity, 0, len(profiles))
 	for i := range profiles {
 		profile := &profiles[i]
-		keep = append(keep, biz.ProfileIdentity{PlayerID: profile.PlayerId, Region: profile.Region})
+		keep = append(keep, biz.ProfileIdentity{PlayerID: profile.PlayerID, Region: profile.Region})
 	}
 	bindingID, err := BindingIDFromPlatformAccountID(platformAccountID)
 	if err != nil {

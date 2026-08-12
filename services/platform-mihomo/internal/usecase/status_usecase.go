@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
@@ -14,17 +13,17 @@ import (
 var ErrCredentialNotFound = errors.New("credential not found")
 
 type GetCredentialStatusOutput struct {
-	Status          v1.CredentialStatus
+	Status          CredentialStatus
 	LastValidatedAt *time.Time
 }
 
 type ValidateCredentialOutput struct {
-	Status    v1.CredentialStatus
+	Status    CredentialStatus
 	ErrorCode string
 }
 
 type RefreshCredentialOutput struct {
-	Status      v1.CredentialStatus
+	Status      CredentialStatus
 	RefreshedAt *time.Time
 }
 
@@ -53,7 +52,7 @@ func (uc *StatusUsecase) GetCredentialStatus(ctx context.Context, platformAccoun
 	}
 
 	return &GetCredentialStatusOutput{
-		Status:          toCredentialStatus(credential.Status),
+		Status:          credentialStatusFromStorage(credential.Status),
 		LastValidatedAt: credential.LastValidatedAt,
 	}, nil
 }
@@ -101,10 +100,10 @@ func (uc *StatusUsecase) getCredential(ctx context.Context, platformAccountID st
 	return credential, nil
 }
 
-func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credential, markRefreshed bool) (v1.CredentialStatus, string, error) {
+func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credential, markRefreshed bool) (CredentialStatus, string, error) {
 	cookieBundleJSON, err := internalcrypto.DecryptString(uc.encryptionKey, credential.CredentialBlob)
 	if err != nil {
-		return v1.CredentialStatus_CREDENTIAL_STATUS_UNSPECIFIED, "decrypt_failed", err
+		return CredentialStatusUnspecified, "decrypt_failed", err
 	}
 
 	_, _, _, err = uc.hoyoClient.ValidateAndDiscover(ctx, cookieBundleJSON, credential.Region)
@@ -114,9 +113,9 @@ func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credent
 	if err != nil {
 		credential.Status = classifyCredentialStatus(err)
 		if saveErr := uc.credentials.Save(ctx, credential); saveErr != nil {
-			return v1.CredentialStatus_CREDENTIAL_STATUS_UNSPECIFIED, "save_failed", saveErr
+			return CredentialStatusUnspecified, "save_failed", saveErr
 		}
-		return toCredentialStatus(credential.Status), classifyErrorCode(err), nil
+		return credentialStatusFromStorage(credential.Status), classifyErrorCode(err), nil
 	}
 
 	credential.Status = "active"
@@ -124,25 +123,10 @@ func (uc *StatusUsecase) revalidate(ctx context.Context, credential *biz.Credent
 		credential.LastRefreshedAt = &now
 	}
 	if saveErr := uc.credentials.Save(ctx, credential); saveErr != nil {
-		return v1.CredentialStatus_CREDENTIAL_STATUS_UNSPECIFIED, "save_failed", saveErr
+		return CredentialStatusUnspecified, "save_failed", saveErr
 	}
 
-	return v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, "", nil
-}
-
-func toCredentialStatus(status string) v1.CredentialStatus {
-	switch status {
-	case "active":
-		return v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE
-	case "expired":
-		return v1.CredentialStatus_CREDENTIAL_STATUS_EXPIRED
-	case "invalid":
-		return v1.CredentialStatus_CREDENTIAL_STATUS_INVALID
-	case "challenge_required":
-		return v1.CredentialStatus_CREDENTIAL_STATUS_CHALLENGE_REQUIRED
-	default:
-		return v1.CredentialStatus_CREDENTIAL_STATUS_UNSPECIFIED
-	}
+	return CredentialStatusActive, "", nil
 }
 
 func classifyCredentialStatus(err error) string {

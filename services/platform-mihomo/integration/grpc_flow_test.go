@@ -11,16 +11,17 @@ import (
 	"testing"
 	"time"
 
+	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/data"
 	"platform-mihomo-service/internal/service"
 	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
@@ -46,25 +47,27 @@ func TestBindThenGetAuthKeyFlow(t *testing.T) {
 
 	bindResp, err := client.BindCredential(testTicket(t), validBindRequest())
 	require.NoError(t, err)
-	require.NotEmpty(t, bindResp.PlatformAccountId)
-	require.NotEmpty(t, bindResp.Profiles)
-	playerID := bindResp.Profiles[0].PlayerId
+	require.NotNil(t, bindResp.Summary)
+	require.NotEmpty(t, bindResp.Summary.PlatformAccountId)
+	require.NotEmpty(t, bindResp.Summary.Profiles)
+	platformAccountID := bindResp.Summary.PlatformAccountId
+	playerID := bindResp.Summary.Profiles[0].PlayerId
 
-	authResp, err := client.GetAuthKey(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.authkey.issue"), bindResp.PlatformAccountId, playerID)
+	authResp, err := client.GetAuthKey(testTicketForAccount(t, platformAccountID, "mihomo.authkey.issue"), platformAccountID, playerID)
 	require.NoError(t, err)
 	require.NotEmpty(t, authResp.Authkey)
 
-	artifact := requireRuntimeArtifact(t, stack.SQLDB, bindResp.PlatformAccountId, playerID)
+	artifact := requireRuntimeArtifact(t, stack.SQLDB, platformAccountID, playerID)
 	require.Equal(t, authResp.Authkey, artifact.ArtifactValue)
-	requireRuntimeArtifactCount(t, stack.SQLDB, bindResp.PlatformAccountId, 1)
+	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 1)
 	if stack.Redis != nil {
-		requireRedisArtifactCached(t, stack, testBindingID, bindResp.PlatformAccountId, playerID, authResp.Authkey)
+		requireRedisArtifactCached(t, stack, testBindingID, platformAccountID, playerID, authResp.Authkey)
 	}
 
-	secondAuthResp, err := client.GetAuthKey(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.authkey.issue"), bindResp.PlatformAccountId, playerID)
+	secondAuthResp, err := client.GetAuthKey(testTicketForAccount(t, platformAccountID, "mihomo.authkey.issue"), platformAccountID, playerID)
 	require.NoError(t, err)
 	require.Equal(t, authResp.Authkey, secondAuthResp.Authkey)
-	requireRuntimeArtifactCount(t, stack.SQLDB, bindResp.PlatformAccountId, 1)
+	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 1)
 }
 
 func TestUpdateThenDeleteCredentialFlow(t *testing.T) {
@@ -73,54 +76,49 @@ func TestUpdateThenDeleteCredentialFlow(t *testing.T) {
 
 	bindResp, err := client.BindCredential(testTicket(t), validBindRequest())
 	require.NoError(t, err)
-	playerID := bindResp.Profiles[0].PlayerId
+	require.NotNil(t, bindResp.Summary)
+	platformAccountID := bindResp.Summary.PlatformAccountId
+	playerID := bindResp.Summary.Profiles[0].PlayerId
 
-	authResp, err := client.GetAuthKey(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.authkey.issue"), bindResp.PlatformAccountId, playerID)
+	authResp, err := client.GetAuthKey(testTicketForAccount(t, platformAccountID, "mihomo.authkey.issue"), platformAccountID, playerID)
 	require.NoError(t, err)
 	require.NotEmpty(t, authResp.Authkey)
-	requireRuntimeArtifact(t, stack.SQLDB, bindResp.PlatformAccountId, playerID)
+	requireRuntimeArtifact(t, stack.SQLDB, platformAccountID, playerID)
 	if stack.Redis != nil {
-		requireRedisArtifactCached(t, stack, testBindingID, bindResp.PlatformAccountId, playerID, authResp.Authkey)
+		requireRedisArtifactCached(t, stack, testBindingID, platformAccountID, playerID, authResp.Authkey)
 	}
 
-	summaryResp, err := client.GetCredentialSummary(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.credential.read_meta"), bindResp.PlatformAccountId)
+	summaryResp, err := client.GetCredentialSummary(testTicketForAccount(t, platformAccountID, "mihomo.credential.read_meta"), platformAccountID)
 	require.NoError(t, err)
-	require.NotNil(t, summaryResp.Summary)
-	require.Equal(t, bindResp.PlatformAccountId, summaryResp.Summary.PlatformAccountId)
-	require.Len(t, summaryResp.Summary.Devices, 1)
-	require.Len(t, summaryResp.Summary.Profiles, 1)
+	require.Equal(t, platformAccountID, summaryResp.PlatformAccountId)
+	require.Len(t, summaryResp.Devices, 1)
+	require.Len(t, summaryResp.Profiles, 1)
 
-	updateResp, err := client.UpdateCredential(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.credential.update"), &v1.UpdateCredentialRequest{
-		PlatformAccountId: bindResp.PlatformAccountId,
-		CookieBundleJson:  `{"account_id":"10001","cookie_token":"updated"}`,
-		Device: &v1.DeviceInfo{
-			DeviceId:   "87654321-4321-4321-4321-cba987654321",
-			DeviceFp:   "zyxwvutsrqponm",
-			DeviceName: "updated-device",
-		},
-		RegionHint: "cn_gf01",
+	updateResp, err := client.ReplaceCredential(testTicketForAccount(t, platformAccountID, "mihomo.credential.update"), &platformv1.ReplaceCredentialRequest{
+		PlatformAccountId:     platformAccountID,
+		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"updated\"}","device_id":"87654321-4321-4321-4321-cba987654321","device_fp":"zyxwvutsrqponm","device_name":"updated-device","region_hint":"cn_gf01"}`,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, updateResp.Summary)
 	require.Len(t, updateResp.Summary.Devices, 2)
 	require.Equal(t, "87654321-4321-4321-4321-cba987654321", updateResp.Summary.Devices[1].DeviceId)
-	requireRuntimeArtifactCount(t, stack.SQLDB, bindResp.PlatformAccountId, 0)
+	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 0)
 
-	deleteResp, err := client.DeleteCredential(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.credential.delete"), bindResp.PlatformAccountId)
+	deleteResp, err := client.DeleteCredential(testTicketForAccount(t, platformAccountID, "mihomo.credential.delete"), platformAccountID)
 	require.NoError(t, err)
 	require.True(t, deleteResp.Success)
 
-	_, err = client.GetCredentialSummary(testTicketForAccount(t, bindResp.PlatformAccountId, "mihomo.credential.read_meta"), bindResp.PlatformAccountId)
+	_, err = client.GetCredentialSummary(testTicketForAccount(t, platformAccountID, "mihomo.credential.read_meta"), platformAccountID)
 	require.Error(t, err)
 	require.Equal(t, codes.NotFound, status.Code(err))
-	requireRuntimeArtifactCount(t, stack.SQLDB, bindResp.PlatformAccountId, 0)
+	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 0)
 	if stack.Redis != nil {
-		requireRedisArtifactMissing(t, stack, testBindingID, bindResp.PlatformAccountId, playerID)
+		requireRedisArtifactMissing(t, stack, testBindingID, platformAccountID, playerID)
 	}
 }
 
 type testMihomoClient struct {
-	client v1.MihomoAccountServiceClient
+	client platformv1.PlatformServiceClient
 	t      *testing.T
 }
 
@@ -136,18 +134,17 @@ func newMihomoClientForTest(t *testing.T, stack *integrationStack) *testMihomoCl
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, hoyoClient, integrationEncryptionKey, artifactRepo)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
 
-	svc := service.NewMihomoAccountService(
+	svc := service.NewGenericPlatformService(
 		data.NewStaticKeyTicketVerifier(integrationTicketIssuer, integrationTicketKeyID, integrationTicketPrivateKey.Public().(ed25519.PublicKey)),
 		bindUC,
 		usecase.NewStatusUsecase(credentialRepo, hoyoClient, integrationEncryptionKey),
-		profileUC,
-		usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, hoyoClient, integrationEncryptionKey),
 		usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC),
-	)
+		nil,
+	).WithConsumerUsecases(profileUC, usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, hoyoClient, integrationEncryptionKey))
 
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	v1.RegisterMihomoAccountServiceServer(server, svc)
+	platformv1.RegisterPlatformServiceServer(server, svc)
 
 	go func() {
 		_ = server.Serve(listener)
@@ -170,64 +167,63 @@ func newMihomoClientForTest(t *testing.T, stack *integrationStack) *testMihomoCl
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	return &testMihomoClient{client: v1.NewMihomoAccountServiceClient(conn), t: t}
+	return &testMihomoClient{client: platformv1.NewPlatformServiceClient(conn), t: t}
 }
 
-func (c *testMihomoClient) BindCredential(serviceTicket string, request *v1.BindCredentialRequest) (*v1.BindCredentialResponse, error) {
+func (c *testMihomoClient) BindCredential(serviceTicket string, request *platformv1.BindCredentialRequest) (*platformv1.BindCredentialResponse, error) {
 	c.t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	request.ServiceTicket = serviceTicket
-	return c.client.BindCredential(ctx, request)
+	return c.client.BindCredential(withServiceTicket(ctx, serviceTicket), request)
 }
 
-func (c *testMihomoClient) GetAuthKey(serviceTicket string, platformAccountID string, playerID string) (*v1.GetAuthKeyResponse, error) {
+func (c *testMihomoClient) GetAuthKey(serviceTicket string, platformAccountID string, playerID string) (*platformv1.GetAuthKeyResponse, error) {
 	c.t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	return c.client.GetAuthKey(ctx, &v1.GetAuthKeyRequest{
-		ServiceTicket:     serviceTicket,
+	return c.client.GetAuthKey(withServiceTicket(ctx, serviceTicket), &platformv1.GetAuthKeyRequest{
 		PlatformAccountId: platformAccountID,
 		PlayerId:          playerID,
 	})
 }
 
-func (c *testMihomoClient) GetCredentialSummary(serviceTicket string, platformAccountID string) (*v1.GetCredentialSummaryResponse, error) {
+func (c *testMihomoClient) GetCredentialSummary(serviceTicket string, platformAccountID string) (*platformv1.GetCredentialSummaryResponse, error) {
 	c.t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	return c.client.GetCredentialSummary(ctx, &v1.GetCredentialSummaryRequest{
-		ServiceTicket:     serviceTicket,
+	return c.client.GetCredentialSummary(withServiceTicket(ctx, serviceTicket), &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: platformAccountID,
 	})
 }
 
-func (c *testMihomoClient) UpdateCredential(serviceTicket string, request *v1.UpdateCredentialRequest) (*v1.UpdateCredentialResponse, error) {
+func (c *testMihomoClient) ReplaceCredential(serviceTicket string, request *platformv1.ReplaceCredentialRequest) (*platformv1.ReplaceCredentialResponse, error) {
 	c.t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	request.ServiceTicket = serviceTicket
-	return c.client.UpdateCredential(ctx, request)
+	return c.client.ReplaceCredential(withServiceTicket(ctx, serviceTicket), request)
 }
 
-func (c *testMihomoClient) DeleteCredential(serviceTicket string, platformAccountID string) (*v1.DeleteCredentialResponse, error) {
+func (c *testMihomoClient) DeleteCredential(serviceTicket string, platformAccountID string) (*platformv1.DeleteCredentialResponse, error) {
 	c.t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	return c.client.DeleteCredential(ctx, &v1.DeleteCredentialRequest{
-		ServiceTicket:     serviceTicket,
+	return c.client.DeleteCredential(withServiceTicket(ctx, serviceTicket), &platformv1.DeleteCredentialRequest{
 		PlatformAccountId: platformAccountID,
 	})
+}
+
+func withServiceTicket(ctx context.Context, serviceTicket string) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+serviceTicket)
 }
 
 type runtimeArtifactRecord struct {
@@ -337,13 +333,8 @@ func testTicketForAccount(t *testing.T, platformAccountID string, scopes ...stri
 	return signed
 }
 
-func validBindRequest() *v1.BindCredentialRequest {
-	return &v1.BindCredentialRequest{
-		CookieBundleJson: `{"account_id":"10001","cookie_token":"abc"}`,
-		Device: &v1.DeviceInfo{
-			DeviceId:   "12345678-1234-1234-1234-123456789abc",
-			DeviceFp:   "abcdefghijklmn",
-			DeviceName: "integration-device",
-		},
+func validBindRequest() *platformv1.BindCredentialRequest {
+	return &platformv1.BindCredentialRequest{
+		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"integration-device"}`,
 	}
 }

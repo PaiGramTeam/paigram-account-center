@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 )
 
@@ -18,13 +17,13 @@ func NewProfileUsecase(profileRepo biz.ProfileRepository) *ProfileUsecase {
 	return &ProfileUsecase{profileRepo: profileRepo}
 }
 
-func (uc *ProfileUsecase) ListProfiles(ctx context.Context, platformAccountID string) ([]*v1.ProfileSummary, error) {
+func (uc *ProfileUsecase) ListProfiles(ctx context.Context, platformAccountID string) ([]*ProfileSummary, error) {
 	profiles, err := uc.profileRepo.ListByPlatformAccountID(ctx, platformAccountID)
 	if err != nil {
 		return nil, err
 	}
 
-	summaries := make([]*v1.ProfileSummary, 0, len(profiles))
+	summaries := make([]*ProfileSummary, 0, len(profiles))
 	for _, profile := range profiles {
 		summaries = append(summaries, toProfileSummary(profile))
 	}
@@ -32,13 +31,13 @@ func (uc *ProfileUsecase) ListProfiles(ctx context.Context, platformAccountID st
 	return summaries, nil
 }
 
-func (uc *ProfileUsecase) ListProfilesWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string) ([]*v1.ProfileSummary, error) {
+func (uc *ProfileUsecase) ListProfilesWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string) ([]*ProfileSummary, error) {
 	profiles, err := uc.listScopedProfiles(ctx, guard, platformAccountID)
 	if err != nil {
 		return nil, err
 	}
 
-	summaries := make([]*v1.ProfileSummary, 0, len(profiles))
+	summaries := make([]*ProfileSummary, 0, len(profiles))
 	for _, profile := range profiles {
 		summaries = append(summaries, toProfileSummary(profile))
 	}
@@ -46,7 +45,7 @@ func (uc *ProfileUsecase) ListProfilesWithScope(ctx context.Context, guard Scope
 	return summaries, nil
 }
 
-func (uc *ProfileUsecase) GetPrimaryProfile(ctx context.Context, platformAccountID string) (*v1.ProfileSummary, error) {
+func (uc *ProfileUsecase) GetPrimaryProfile(ctx context.Context, platformAccountID string) (*ProfileSummary, error) {
 	profiles, err := uc.profileRepo.ListByPlatformAccountID(ctx, platformAccountID)
 	if err != nil {
 		return nil, err
@@ -65,7 +64,7 @@ func (uc *ProfileUsecase) GetPrimaryProfile(ctx context.Context, platformAccount
 	return toProfileSummary(profiles[0]), nil
 }
 
-func (uc *ProfileUsecase) GetPrimaryProfileWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string) (*v1.ProfileSummary, error) {
+func (uc *ProfileUsecase) GetPrimaryProfileWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string) (*ProfileSummary, error) {
 	profiles, err := uc.listScopedProfiles(ctx, guard, platformAccountID)
 	if err != nil {
 		return nil, err
@@ -81,7 +80,7 @@ func (uc *ProfileUsecase) GetPrimaryProfileWithScope(ctx context.Context, guard 
 	return toProfileSummary(profiles[0]), nil
 }
 
-func (uc *ProfileUsecase) ConfirmPrimaryProfile(ctx context.Context, platformAccountID string, playerID string) (*v1.ProfileSummary, error) {
+func (uc *ProfileUsecase) ConfirmPrimaryProfile(ctx context.Context, platformAccountID string, playerID string) (*ProfileSummary, error) {
 	profiles, err := uc.profileRepo.ListByPlatformAccountID(ctx, platformAccountID)
 	if err != nil {
 		return nil, err
@@ -105,7 +104,7 @@ func (uc *ProfileUsecase) ConfirmPrimaryProfile(ctx context.Context, platformAcc
 	return toProfileSummary(selected), nil
 }
 
-func (uc *ProfileUsecase) ConfirmPrimaryProfileWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string, playerID string) (*v1.ProfileSummary, error) {
+func (uc *ProfileUsecase) ConfirmPrimaryProfileWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string, playerID string) (*ProfileSummary, error) {
 	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
 		return nil, err
 	}
@@ -200,17 +199,4 @@ func (uc *ProfileUsecase) findProfileByBindingAndPlayerID(ctx context.Context, b
 		return filtered, selected, nil
 	}
 	return filtered, nil, ErrProfileNotFound
-}
-
-func toProfileSummary(profile *biz.Profile) *v1.ProfileSummary {
-	return &v1.ProfileSummary{
-		Id:                profile.ID,
-		PlatformAccountId: profile.PlatformAccountID,
-		GameBiz:           profile.GameBiz,
-		Region:            profile.Region,
-		PlayerId:          profile.PlayerID,
-		Nickname:          profile.Nickname,
-		Level:             int32(profile.Level),
-		IsDefault:         profile.IsDefault,
-	}
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
@@ -23,8 +22,8 @@ type BindCredentialInput struct {
 type BindCredentialOutput struct {
 	BindingID         uint64
 	PlatformAccountID string
-	Profiles          []v1.ProfileSummary
-	Status            v1.CredentialStatus
+	Profiles          []ProfileSummary
+	Status            CredentialStatus
 }
 
 type bindCredentialPreparation struct {
@@ -202,7 +201,7 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 			return nil, err
 		}
 	}
-	outputProfiles := make([]v1.ProfileSummary, 0, len(prepared.discoveredProfiles))
+	outputProfiles := make([]ProfileSummary, 0, len(prepared.discoveredProfiles))
 	for index, discoveredProfile := range prepared.discoveredProfiles {
 		profile := &biz.Profile{
 			BindingID:         input.BindingID,
@@ -237,7 +236,7 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		BindingID:         input.BindingID,
 		PlatformAccountID: prepared.platformAccountID,
 		Profiles:          outputProfiles,
-		Status:            v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+		Status:            CredentialStatusActive,
 	}, nil
 }
 

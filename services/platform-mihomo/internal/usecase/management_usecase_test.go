@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 )
@@ -19,12 +18,12 @@ func TestGetCredentialSummaryReturnsDevicesAndProfiles(t *testing.T) {
 	summary, err := uc.GetCredentialSummary(context.Background(), platformAccountID)
 	require.NoError(t, err)
 	require.Equal(t, platformAccountID, summary.PlatformAccountID)
-	require.Equal(t, v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, summary.Status)
+	require.Equal(t, CredentialStatusActive, summary.Status)
 	require.NotNil(t, summary.LastValidatedAt)
 	require.NotEmpty(t, summary.Profiles)
 	require.NotEmpty(t, summary.Devices)
 	require.Equal(t, "12345678-1234-1234-1234-123456789abc", summary.Devices[0].DeviceID)
-	require.Equal(t, "1008611", summary.Profiles[0].PlayerId)
+	require.Equal(t, "1008611", summary.Profiles[0].PlayerID)
 }
 
 func TestUpdateCredentialReturnsUpdatedSummary(t *testing.T) {
@@ -105,7 +104,7 @@ func TestUpdateCredentialRemovesStaleProfiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, summary.Profiles, 1)
-	require.Equal(t, "2008611", summary.Profiles[0].PlayerId)
+	require.Equal(t, "2008611", summary.Profiles[0].PlayerID)
 }
 
 func TestDeleteCredentialRemovesCredentialArtifactsAndRelations(t *testing.T) {
