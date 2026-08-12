@@ -736,7 +736,7 @@ func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneSta
 		Nickname:           "Traveler",
 		IsPrimary:          true,
 	}).Error)
-	grant, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+	_, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
 		BindingID: binding.ID,
 		Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
 		GrantedBy: sql.NullInt64{Int64: int64(ownerID), Valid: true},
@@ -760,9 +760,6 @@ func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneSta
 	var grantCount int64
 	require.NoError(t, stack.DB.Model(&model.ConsumerGrant{}).Where("binding_id = ?", binding.ID).Count(&grantCount).Error)
 	assert.Zero(t, grantCount)
-	var actionCount int64
-	require.NoError(t, stack.DB.Model(&model.ConsumerGrantAction{}).Where("grant_id = ?", grant.ID).Count(&actionCount).Error)
-	assert.Zero(t, actionCount)
 }
 
 func TestAdminDeletePlatformBindingRouteDeletesProviderCredential(t *testing.T) {

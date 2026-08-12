@@ -450,7 +450,10 @@ CREATE FUNCTION validate_consumer_grant_actions(target_grant_id BIGINT) RETURNS 
 DECLARE
     grant_status VARCHAR(32);
 BEGIN
-    SELECT status INTO grant_status FROM consumer_grants WHERE id = target_grant_id;
+    SELECT status INTO grant_status
+    FROM consumer_grants
+    WHERE id = target_grant_id
+    FOR UPDATE;
     IF grant_status = 'active' AND NOT EXISTS (
         SELECT 1 FROM consumer_grant_actions WHERE grant_id = target_grant_id
     ) THEN

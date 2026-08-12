@@ -187,8 +187,12 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 	bot, _, ref := seedBotAccessGRPCTestData(t, db)
 	var grant model.ConsumerGrant
 	require.NoError(t, db.Where("binding_id = ? AND consumer = ?", ref.ID, bot.ID).First(&grant).Error)
-	require.NoError(t, db.Where("grant_id = ?", grant.ID).Delete(&model.ConsumerGrantAction{}).Error)
-	require.NoError(t, db.Create(&model.ConsumerGrantAction{GrantID: grant.ID, Action: "daily.sign"}).Error)
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("grant_id = ?", grant.ID).Delete(&model.ConsumerGrantAction{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.ConsumerGrantAction{GrantID: grant.ID, Action: "daily.sign"}).Error
+	}))
 
 	conn := newBotAccessBufconnClient(t, db, signingKey)
 	defer conn.Close()

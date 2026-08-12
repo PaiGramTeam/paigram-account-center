@@ -11,6 +11,7 @@ import (
 
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"paigram/internal/model"
 	serviceaudit "paigram/internal/service/audit"
@@ -55,7 +56,8 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 	var grant model.ConsumerGrant
 	created := false
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		lookup := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
+		lookup := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Actions").
+			Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
 		if lookup.Error != nil {
 			if !errors.Is(lookup.Error, gorm.ErrRecordNotFound) {
 				return lookup.Error
@@ -187,7 +189,8 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 	shouldInvalidate := false
 	minimumGrantVersion := uint64(0)
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Actions").
+			Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				grant = model.ConsumerGrant{
 					BindingID:         input.BindingID,

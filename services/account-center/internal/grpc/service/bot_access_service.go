@@ -112,11 +112,7 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", "platform_service_unavailable", nil)
 		return nil, mapBotAccessError("resolve platform service audience", err)
 	}
-	grantedScopes, err := s.bindingAccessService.GetGrantedScopesForConsumer(caller.consumer, binding.ID)
-	if err != nil {
-		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
-		return nil, mapBotAccessError("get granted scopes", err)
-	}
+	grantedScopes := botaccess.GrantActions(*grant)
 	scopes, err := selectTicketScopes(grantedScopes, req.GetRequestedScopes())
 	if err != nil {
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
