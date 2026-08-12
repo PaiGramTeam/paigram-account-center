@@ -14,7 +14,6 @@ OUTPUT_ROOT = SDK_ROOT / "src" / "paigram_account_sdk" / "_generated"
 PROTO_FILES = (
     "account/v1/bot_access.proto",
     "platform/v1/platform.proto",
-    "mihomo/v1/credential.proto",
 )
 logger = logging.getLogger(__name__)
 

@@ -34,10 +34,10 @@ try {
     $currentAccount = Join-Path $checkRoot "current-account.binpb"
 
     Invoke-Checked -Command {
-        buf build $protoContractsSource --path platform/v1 --path mihomo/v1 -o $sourceShared
+        buf build $protoContractsSource --path platform/v1 -o $sourceShared
     } -FailureMessage "Could not build the source shared-contract baseline"
     Invoke-Checked -Command {
-        buf build . --path proto/platform/v1 --path proto/mihomo/v1 -o $currentShared
+        buf build . --path proto/platform/v1 -o $currentShared
     } -FailureMessage "Could not build the current shared contracts"
     Invoke-Checked -Command {
         buf breaking $currentShared --against $sourceShared --config buf.breaking.yaml
@@ -63,4 +63,3 @@ finally {
         Remove-Item -LiteralPath $resolvedCheckRoot -Recurse -Force
     }
 }
-

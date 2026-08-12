@@ -328,7 +328,7 @@ func TestGenericPlatformServiceGetCredentialSummary(t *testing.T) {
 
 	summaryCtx := metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		"authorization",
-		"Bearer "+signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.read_meta"),
+		"Bearer "+signedServiceTicketForAccount(t, bindResp.PlatformAccountID, "mihomo.credential.read_meta"),
 	))
 	resp, err := adapter.GetCredentialSummary(summaryCtx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
@@ -338,28 +338,28 @@ func TestGenericPlatformServiceGetCredentialSummary(t *testing.T) {
 	require.NotEmpty(t, resp.Profiles)
 	require.NotEmpty(t, resp.Devices)
 
-	statusCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionStatusRead))
+	statusCtx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, usecase.ActionStatusRead))
 	statusResp, err := adapter.GetCredentialStatus(statusCtx, &platformv1.GetCredentialStatusRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
 	require.Equal(t, platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, statusResp.Status)
 
-	validationCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionCredentialValidate))
+	validationCtx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, usecase.ActionCredentialValidate))
 	validationResp, err := adapter.ValidateCredential(validationCtx, &platformv1.ValidateCredentialRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
 	require.Equal(t, platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, validationResp.Status)
 
-	profilesCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionProfileRead))
+	profilesCtx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, usecase.ActionProfileRead))
 	profilesResp, err := adapter.ListProfiles(profilesCtx, &platformv1.ListProfilesRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, profilesResp.Profiles)
 
-	confirmCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionProfileWrite))
+	confirmCtx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, usecase.ActionProfileWrite))
 	confirmResp, err := adapter.ConfirmPrimaryProfile(confirmCtx, &platformv1.ConfirmPrimaryProfileRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 		PlayerId:          profilesResp.Profiles[0].PlayerId,
@@ -368,7 +368,7 @@ func TestGenericPlatformServiceGetCredentialSummary(t *testing.T) {
 	require.Equal(t, profilesResp.Profiles[0].PlayerId, confirmResp.GetProfile().GetPlayerId())
 	require.True(t, confirmResp.GetProfile().GetIsDefault())
 
-	authkeyCtx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, usecase.ActionAuthKeyIssue))
+	authkeyCtx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, usecase.ActionAuthKeyIssue))
 	authkeyResp, err := adapter.GetAuthKey(authkeyCtx, &platformv1.GetAuthKeyRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 		PlayerId:          profilesResp.Profiles[0].PlayerId,
@@ -434,7 +434,7 @@ func TestGenericPlatformServiceRejectsMissingSummaryScope(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID))
+	ctx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID))
 	_, err = adapter.GetCredentialSummary(ctx, &platformv1.GetCredentialSummaryRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})
@@ -558,7 +558,7 @@ func TestGenericPlatformServiceBindCredentialUsesBindAction(t *testing.T) {
 		nil,
 	)
 
-	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.bind"))
+	ctx := incomingServiceTicketContext(signedServiceTicketForAccount(t, "", "mihomo.credential.bind"))
 	resp, err := adapter.BindCredential(ctx, &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
@@ -593,7 +593,7 @@ func TestGenericPlatformServiceBindCredentialRejectsUpdateAction(t *testing.T) {
 		nil,
 	)
 
-	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.update"))
+	ctx := incomingServiceTicketContext(signedServiceTicketForAccount(t, "", "mihomo.credential.update"))
 	_, err := adapter.BindCredential(ctx, &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
@@ -635,7 +635,7 @@ func TestGenericPlatformServiceReplaceCredentialRejectsBindAction(t *testing.T) 
 	})
 	require.NoError(t, err)
 
-	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.bind"))
+	ctx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, "mihomo.credential.bind"))
 	_, err = adapter.ReplaceCredential(ctx, &platformv1.ReplaceCredentialRequest{
 		PlatformAccountId:     bindResp.PlatformAccountID,
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"updated\"}","device_id":"device-2","device_fp":"fp-2","device_name":"iPad","region_hint":"cn_gf01"}`,
@@ -678,7 +678,7 @@ func TestGenericPlatformServiceDeleteCredentialUsesDeleteScope(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.delete"))
+	ctx := incomingServiceTicketContext(signedServiceTicketForAccount(t, bindResp.PlatformAccountID, "mihomo.credential.delete"))
 	resp, err := adapter.DeleteCredential(ctx, &platformv1.DeleteCredentialRequest{
 		PlatformAccountId: bindResp.PlatformAccountID,
 	})

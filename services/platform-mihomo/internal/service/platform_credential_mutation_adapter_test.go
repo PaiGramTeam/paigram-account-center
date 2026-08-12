@@ -11,14 +11,14 @@ import (
 
 func TestGenericPlatformServiceReplaceCredentialUsesUpdateAction(t *testing.T) {
 	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
-	bindContext := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.bind"))
+	bindContext := incomingServiceTicketContext(signedServiceTicketForAccount(t, "", "mihomo.credential.bind"))
 	bound, err := adapter.BindCredential(bindContext, &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"initial\"}","device_id":"device-1","device_fp":"fingerprint-1","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 	require.NoError(t, err)
 	platformAccountID := bound.GetSummary().GetPlatformAccountId()
 
-	replaceContext := incomingServiceTicketContext(signedMihomoSummaryTicket(t, platformAccountID, "mihomo.credential.update"))
+	replaceContext := incomingServiceTicketContext(signedServiceTicketForAccount(t, platformAccountID, "mihomo.credential.update"))
 	replaced, err := adapter.ReplaceCredential(replaceContext, &platformv1.ReplaceCredentialRequest{
 		PlatformAccountId:     platformAccountID,
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"replacement\"}","device_id":"device-2","device_fp":"fingerprint-2","device_name":"iPad","region_hint":"cn_gf01"}`,
@@ -30,7 +30,7 @@ func TestGenericPlatformServiceReplaceCredentialUsesUpdateAction(t *testing.T) {
 
 func TestGenericPlatformServiceBindCredentialRejectsExistingBinding(t *testing.T) {
 	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
-	bindContext := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.bind"))
+	bindContext := incomingServiceTicketContext(signedServiceTicketForAccount(t, "", "mihomo.credential.bind"))
 	request := &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"initial\"}","device_id":"device-1","device_fp":"fingerprint-1","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	}
