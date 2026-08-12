@@ -34,6 +34,7 @@ type OperationResult struct {
 type OperationRepository interface {
 	WithinTransaction(ctx context.Context, fn func(context.Context) error) error
 	Admit(ctx context.Context, operation OperationRef) (*OperationResult, bool, error)
+	LockPending(ctx context.Context, operationID, executionToken string) error
 	Complete(ctx context.Context, result OperationResult) error
 	FailPending(ctx context.Context, operationID, executionToken, reasonCode string) error
 	Get(ctx context.Context, operationID string) (*OperationResult, error)

@@ -70,6 +70,17 @@ func (r *OperationRepo) Admit(ctx context.Context, operation biz.OperationRef) (
 	return output, admitted, err
 }
 
+func (r *OperationRepo) LockPending(ctx context.Context, operationID, executionToken string) error {
+	var record model.PlatformOperation
+	err := dbFromContext(ctx, r.db).Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("operation_id = ? AND state = ? AND execution_token = ?", operationID, operationStatePending, executionToken).
+		Take(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return biz.ErrOperationState
+	}
+	return err
+}
+
 func (r *OperationRepo) Complete(ctx context.Context, result biz.OperationResult) error {
 	if result.State == "" || result.State == operationStatePending || result.State == operationStateNotReceived {
 		return biz.ErrOperationState
