@@ -21,7 +21,6 @@ func TestMapBotAccessErrorUsesConsumerBindingSemantics(t *testing.T) {
 	}{
 		{name: "missing consumer grant", err: botaccess.ErrBotGrantNotFound, code: codes.PermissionDenied, message: "consumer grant required for binding"},
 		{name: "revoked consumer grant", err: botaccess.ErrBotGrantRevoked, code: codes.PermissionDenied, message: "consumer grant revoked for binding"},
-		{name: "binding already linked", err: botaccess.ErrPlatformAccountOwnedByOtherUser, code: codes.AlreadyExists, message: "platform account already bound"},
 	}
 
 	for _, tt := range tests {

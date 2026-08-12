@@ -270,8 +270,6 @@ func mapBotAccessError(operation string, err error) error {
 		return status.Error(codes.InvalidArgument, "consumer is not supported")
 	case errors.Is(err, botaccess.ErrScopeNotGranted):
 		return status.Error(codes.PermissionDenied, "requested scope is not granted")
-	case errors.Is(err, botaccess.ErrPlatformAccountOwnedByOtherUser):
-		return status.Error(codes.AlreadyExists, "platform account already bound")
 	case errors.Is(err, botaccess.ErrPlatformServiceNotEnabled):
 		return status.Error(codes.InvalidArgument, "platform service is not enabled for platform")
 	case errors.Is(err, botaccess.ErrInactiveAccountRef):
@@ -339,8 +337,6 @@ func reasonCodeFromBotAccessErr(err error) string {
 		return "consumer_not_supported"
 	case errors.Is(err, botaccess.ErrScopeNotGranted):
 		return "scope_not_granted"
-	case errors.Is(err, botaccess.ErrPlatformAccountOwnedByOtherUser):
-		return "binding_owned_by_other_user"
 	case errors.Is(err, botaccess.ErrInactiveAccountRef):
 		return "inactive_account_ref"
 	case errors.Is(err, botaccess.ErrInvalidTicketConfig):

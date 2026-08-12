@@ -112,7 +112,7 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	conn := newBotAccessBufconnClient(t, db, signingKey, &ticketPublicKey)
 	defer conn.Close()
 
-	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.write", "bot.access.issue_ticket"})
+	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.issue_ticket"})
 
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+accessToken))
 	accessClient := pb.NewBotAccessServiceClient(conn)
@@ -192,7 +192,7 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 
 	conn := newBotAccessBufconnClient(t, db, signingKey)
 	defer conn.Close()
-	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.write", "bot.access.issue_ticket"})
+	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.issue_ticket"})
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+accessToken))
 	accessClient := pb.NewBotAccessServiceClient(conn)
 
@@ -232,7 +232,7 @@ func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) 
 
 	conn := newBotAccessBufconnClient(t, db, signingKey)
 	defer conn.Close()
-	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.write", "bot.access.issue_ticket"})
+	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.issue_ticket"})
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+accessToken))
 	accessClient := pb.NewBotAccessServiceClient(conn)
 
