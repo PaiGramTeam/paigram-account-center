@@ -4,8 +4,6 @@ DROP TABLE IF EXISTS system_config_entries CASCADE;
 DROP TABLE IF EXISTS consumer_grants CASCADE;
 DROP TABLE IF EXISTS platform_account_profiles CASCADE;
 DROP TABLE IF EXISTS platform_account_bindings CASCADE;
-DROP TABLE IF EXISTS bot_account_grants CASCADE;
-DROP TABLE IF EXISTS platform_account_refs CASCADE;
 DROP TABLE IF EXISTS platform_services CASCADE;
 DROP TABLE IF EXISTS service_credentials CASCADE;
 DROP TABLE IF EXISTS bot_identities CASCADE;

@@ -28,22 +28,21 @@ type Config struct {
 }
 
 type Claims struct {
-	ActorType            string   `json:"actor_type"`
-	ActorID              string   `json:"actor_id"`
-	Consumer             string   `json:"consumer,omitempty"`
-	ClientID             string   `json:"client_id,omitempty"`
-	OwnerUserID          uint64   `json:"owner_user_id"`
-	BotID                string   `json:"bot_id,omitempty"`
-	UserID               uint64   `json:"user_id,omitempty"`
-	Platform             string   `json:"platform"`
-	PlatformServiceKey   string   `json:"platform_service_key,omitempty"`
-	BindingID            uint64   `json:"binding_id"`
-	ProfileID            uint64   `json:"profile_id,omitempty"`
-	GrantVersion         uint64   `json:"grant_version,omitempty"`
-	PlatformAccountID    string   `json:"platform_account_id,omitempty"`
-	Scopes               []string `json:"scopes,omitempty"`
-	AllowedActions       []string `json:"allowed_actions,omitempty"`
-	PlatformAccountRefID uint64   `json:"platform_account_ref_id,omitempty"`
+	ActorType          string   `json:"actor_type"`
+	ActorID            string   `json:"actor_id"`
+	Consumer           string   `json:"consumer,omitempty"`
+	ClientID           string   `json:"client_id,omitempty"`
+	OwnerUserID        uint64   `json:"owner_user_id"`
+	BotID              string   `json:"bot_id,omitempty"`
+	UserID             uint64   `json:"user_id,omitempty"`
+	Platform           string   `json:"platform"`
+	PlatformServiceKey string   `json:"platform_service_key,omitempty"`
+	BindingID          uint64   `json:"binding_id"`
+	ProfileID          uint64   `json:"profile_id,omitempty"`
+	GrantVersion       uint64   `json:"grant_version,omitempty"`
+	PlatformAccountID  string   `json:"platform_account_id,omitempty"`
+	Scopes             []string `json:"scopes,omitempty"`
+	AllowedActions     []string `json:"allowed_actions,omitempty"`
 	jwt.RegisteredClaims
 }
 

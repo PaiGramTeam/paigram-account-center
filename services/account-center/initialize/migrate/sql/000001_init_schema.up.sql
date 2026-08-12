@@ -361,46 +361,6 @@ CREATE TABLE platform_services (
     CONSTRAINT uniq_platform_services_service_key UNIQUE (service_key)
 );
 
-CREATE TABLE platform_account_refs (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    platform VARCHAR(64) NOT NULL,
-    platform_service_key VARCHAR(128) NOT NULL,
-    platform_account_id VARCHAR(191) NOT NULL,
-    display_name VARCHAR(255) NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'active',
-    meta_json JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMPTZ,
-    CONSTRAINT uk_platform_account_refs_platform_account UNIQUE (platform, platform_account_id),
-    CONSTRAINT fk_platform_account_refs_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE INDEX idx_platform_account_refs_user_platform ON platform_account_refs (user_id, platform);
-CREATE INDEX idx_platform_account_refs_status ON platform_account_refs (status);
-CREATE INDEX idx_platform_account_refs_deleted_at ON platform_account_refs (deleted_at);
-
-CREATE TABLE bot_account_grants (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    bot_id VARCHAR(64) NOT NULL,
-    platform_account_ref_id BIGINT NOT NULL,
-    scopes JSONB NOT NULL,
-    granted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    revoked_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMPTZ,
-    CONSTRAINT uk_bot_account_grants_bot_account UNIQUE (bot_id, platform_account_ref_id),
-    CONSTRAINT fk_bot_account_grants_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_bot_account_grants_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT fk_bot_account_grants_ref FOREIGN KEY (platform_account_ref_id) REFERENCES platform_account_refs (id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-CREATE INDEX idx_bot_account_grants_user_id ON bot_account_grants (user_id);
-CREATE INDEX idx_bot_account_grants_platform_account_ref_id ON bot_account_grants (platform_account_ref_id);
-CREATE INDEX idx_bot_account_grants_revoked_at ON bot_account_grants (revoked_at);
-CREATE INDEX idx_bot_account_grants_deleted_at ON bot_account_grants (deleted_at);
-
 CREATE TABLE platform_account_bindings (
     id BIGSERIAL PRIMARY KEY,
     owner_user_id BIGINT NOT NULL,

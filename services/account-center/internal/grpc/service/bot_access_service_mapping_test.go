@@ -19,8 +19,8 @@ func TestMapBotAccessErrorUsesConsumerBindingSemantics(t *testing.T) {
 		code    codes.Code
 		message string
 	}{
-		{name: "missing consumer grant", err: botaccess.ErrBotGrantNotFound, code: codes.PermissionDenied, message: "consumer grant required for binding"},
-		{name: "revoked consumer grant", err: botaccess.ErrBotGrantRevoked, code: codes.PermissionDenied, message: "consumer grant revoked for binding"},
+		{name: "missing consumer grant", err: botaccess.ErrConsumerGrantNotFound, code: codes.PermissionDenied, message: "consumer grant required for binding"},
+		{name: "revoked consumer grant", err: botaccess.ErrConsumerGrantRevoked, code: codes.PermissionDenied, message: "consumer grant revoked for binding"},
 	}
 
 	for _, tt := range tests {

@@ -326,7 +326,7 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 	// seed a pamgram bot identity for the same external_user_id pointing
 	// at the same binding owner, then deliberately omit the matching
 	// consumer_grants row so GetGrantedBindingForConsumer hits
-	// ErrBotGrantNotFound instead of ErrBotIdentityNotFound (which would
+	// ErrConsumerGrantNotFound instead of ErrBotIdentityNotFound (which would
 	// map to NotFound).
 	require.NoError(t, db.Create(&model.Bot{
 		ID:          "pamgram",

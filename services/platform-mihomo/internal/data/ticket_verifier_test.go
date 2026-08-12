@@ -252,7 +252,6 @@ func TestVerifyAcceptsBindingAwareClaims(t *testing.T) {
 	require.Equal(t, uint64(1001), claims.ProfileID)
 	require.Equal(t, []string{"mihomo.profile.read"}, claims.Scopes)
 	require.Equal(t, testTicketAudience, claims.Audience)
-	require.Equal(t, uint64(101), claims.PlatformAccountRefID)
 }
 
 func TestVerifyNormalizesAllowedActionsClaim(t *testing.T) {
@@ -395,23 +394,6 @@ func TestVerifyRejectsUnsupportedNonConsumerActorType(t *testing.T) {
 
 	_, err := verifier.Verify(raw, testTicketAudience)
 	require.ErrorContains(t, err, "unsupported")
-}
-
-func TestVerifyRejectsMismatchedLegacyPlatformAccountRefID(t *testing.T) {
-	verifier := testTicketVerifier()
-	raw := issueTestTicket(t, map[string]any{
-		"actor_type":              "consumer",
-		"actor_id":                "user-1",
-		"owner_user_id":           float64(1),
-		"binding_id":              float64(101),
-		"platform":                "mihomo",
-		"consumer":                "paigram",
-		"grant_version":           float64(2),
-		"platform_account_ref_id": float64(202),
-	})
-
-	_, err := verifier.Verify(raw, testTicketAudience)
-	require.ErrorContains(t, err, "binding_id does not match platform_account_ref_id")
 }
 
 type fakeGrantVersionLookup struct {

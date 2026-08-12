@@ -112,7 +112,7 @@ func TestPlatformServiceCheckPlatformServiceDisabledSkipsProbe(t *testing.T) {
 }
 
 func TestPlatformServiceDeletePlatformServiceRejectsReferencedPlatform(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_admin_delete_referenced", &model.PlatformService{}, &model.User{}, &model.PlatformAccountRef{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_admin_delete_referenced", &model.PlatformService{}, &model.User{}, &model.PlatformAccountBinding{})
 	row := model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -127,13 +127,12 @@ func TestPlatformServiceDeletePlatformServiceRejectsReferencedPlatform(t *testin
 	require.NoError(t, db.Create(&row).Error)
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)
-	require.NoError(t, db.Create(&model.PlatformAccountRef{
-		UserID:             owner.ID,
+	require.NoError(t, db.Create(&model.PlatformAccountBinding{
+		OwnerUserID:        owner.ID,
 		Platform:           "mihomo",
 		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountID:  "hoyo_ref_11_10001",
 		DisplayName:        "Traveler",
-		Status:             model.PlatformAccountRefStatusActive,
+		Status:             model.PlatformAccountBindingStatusActive,
 	}).Error)
 
 	svc := NewServiceGroup(db).PlatformService

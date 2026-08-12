@@ -122,27 +122,26 @@ func TestAccountRefService_ListAccessibleBindingsFiltersByConsumerGrant(t *testi
 	require.NoError(t, db.Create(&revoked).Error)
 	require.NoError(t, db.Create(&otherOwner).Error)
 
-	consumer, err := legacyConsumerForBotID(identity.BotID)
-	require.NoError(t, err)
+	consumer := "paigram-client"
 	require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: activeVisible.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}).Error)
 	require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: filteredPlatform.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}).Error)
 	require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: inactive.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}).Error)
 	require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: revoked.ID, Consumer: consumer, Status: model.ConsumerGrantStatusRevoked, GrantedAt: time.Now().UTC(), RevokedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true}}).Error)
 	require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: otherOwner.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}).Error)
 
-	accounts, err := service.ListAccessibleBindings(identity.BotID, identity.ExternalUserID, "telegram")
+	accounts, err := service.ListAccessibleBindingsForConsumer(identity.BotID, consumer, identity.ExternalUserID, "telegram")
 	require.NoError(t, err)
 	require.Len(t, accounts, 1)
 	assert.Equal(t, activeVisible.ID, accounts[0].ID)
 	assert.Equal(t, activeVisible.OwnerUserID, accounts[0].OwnerUserID)
 	assert.Equal(t, "acct-visible", accounts[0].ExternalAccountKey.String)
 
-	otherBotAccounts, err := service.ListAccessibleBindings(otherBot.ID, "external-list-other-bot", "telegram")
+	otherBotAccounts, err := service.ListAccessibleBindingsForConsumer(otherBot.ID, "pamgram-client", "external-list-other-bot", "telegram")
 	require.NoError(t, err)
 	assert.Empty(t, otherBotAccounts)
 }
 
-func TestAccountRefService_GetGrantedBinding(t *testing.T) {
+func TestAccountRefService_GetGrantedBindingForConsumer(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
 	service := &AccountRefService{db: db}
 
@@ -156,19 +155,18 @@ func TestAccountRefService_GetGrantedBinding(t *testing.T) {
 		Status:             model.PlatformAccountBindingStatusActive,
 	}
 	require.NoError(t, db.Create(&binding).Error)
-	consumer, err := legacyConsumerForBotID(identity.BotID)
-	require.NoError(t, err)
+	consumer := "paigram-client"
 	grant := model.ConsumerGrant{BindingID: binding.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}
 	require.NoError(t, db.Create(&grant).Error)
 
-	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBinding(identity.BotID, identity.ExternalUserID, binding.ID, 0)
+	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBindingForConsumer(identity.BotID, consumer, identity.ExternalUserID, binding.ID, 0)
 	require.NoError(t, err)
 	assert.Equal(t, identity.ID, resolvedIdentity.ID)
 	assert.Equal(t, binding.ID, resolvedBinding.ID)
 	assert.Equal(t, binding.ID, resolvedGrant.BindingID)
 }
 
-func TestAccountRefService_GetGrantedBindingRejectsProfileFromOtherBinding(t *testing.T) {
+func TestAccountRefService_GetGrantedBindingForConsumerRejectsProfileFromOtherBinding(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
 	service := &AccountRefService{db: db}
 
@@ -191,8 +189,7 @@ func TestAccountRefService_GetGrantedBindingRejectsProfileFromOtherBinding(t *te
 	}
 	require.NoError(t, db.Create(&binding).Error)
 	require.NoError(t, db.Create(&otherBinding).Error)
-	consumer, err := legacyConsumerForBotID(identity.BotID)
-	require.NoError(t, err)
+	consumer := "paigram-client"
 	require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: binding.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}).Error)
 	foreignProfile := model.PlatformAccountProfile{
 		BindingID:          otherBinding.ID,
@@ -204,14 +201,14 @@ func TestAccountRefService_GetGrantedBindingRejectsProfileFromOtherBinding(t *te
 	}
 	require.NoError(t, db.Create(&foreignProfile).Error)
 
-	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBinding(identity.BotID, identity.ExternalUserID, binding.ID, foreignProfile.ID)
+	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBindingForConsumer(identity.BotID, consumer, identity.ExternalUserID, binding.ID, foreignProfile.ID)
 	require.ErrorIs(t, err, ErrPlatformAccountMissing)
 	assert.Nil(t, resolvedIdentity)
 	assert.Nil(t, resolvedBinding)
 	assert.Nil(t, resolvedGrant)
 }
 
-func TestAccountRefService_GetGrantedScopesReadsConsumerGrantScopes(t *testing.T) {
+func TestAccountRefService_GetGrantedScopesForConsumerReadsGrantScopes(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
 	service := &AccountRefService{db: db}
 
@@ -225,8 +222,7 @@ func TestAccountRefService_GetGrantedScopesReadsConsumerGrantScopes(t *testing.T
 		Status:             model.PlatformAccountBindingStatusActive,
 	}
 	require.NoError(t, db.Create(&binding).Error)
-	consumer, err := legacyConsumerForBotID(identity.BotID)
-	require.NoError(t, err)
+	consumer := "paigram-client"
 	require.NoError(t, db.Create(&model.ConsumerGrant{
 		BindingID:  binding.ID,
 		Consumer:   consumer,
@@ -235,7 +231,7 @@ func TestAccountRefService_GetGrantedScopesReadsConsumerGrantScopes(t *testing.T
 		GrantedAt:  time.Now().UTC(),
 	}).Error)
 
-	scopes, err := service.GetGrantedScopes(identity.BotID, binding.ID)
+	scopes, err := service.GetGrantedScopesForConsumer(consumer, binding.ID)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"messages:read", "messages:write"}, scopes)
 }
@@ -250,7 +246,7 @@ func TestAccountRefService_ListAccessibleBindingsReturnsEmptyForBotWithoutGrants
 	// client_id; no per-bot map exists. A bot whose credential has no
 	// matching consumer grants simply gets an empty result, not an
 	// "unsupported consumer" error.
-	accounts, err := service.ListAccessibleBindings(identity.BotID, identity.ExternalUserID, "telegram")
+	accounts, err := service.ListAccessibleBindingsForConsumer(identity.BotID, "unsupported-client", identity.ExternalUserID, "telegram")
 	require.NoError(t, err)
 	assert.Empty(t, accounts)
 }

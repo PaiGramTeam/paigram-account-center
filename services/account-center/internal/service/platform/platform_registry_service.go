@@ -109,11 +109,13 @@ func (s *PlatformService) DeletePlatformService(ctx context.Context, id uint64) 
 		return err
 	}
 
-	var refs int64
-	if err := s.db.WithContext(ctx).Model(&model.PlatformAccountRef{}).Where("platform = ?", row.PlatformKey).Count(&refs).Error; err != nil {
+	var bindings int64
+	if err := s.db.WithContext(ctx).Model(&model.PlatformAccountBinding{}).
+		Where("platform = ? AND platform_service_key = ?", row.PlatformKey, row.ServiceKey).
+		Count(&bindings).Error; err != nil {
 		return err
 	}
-	if refs > 0 {
+	if bindings > 0 {
 		return ErrPlatformServiceReferenced
 	}
 

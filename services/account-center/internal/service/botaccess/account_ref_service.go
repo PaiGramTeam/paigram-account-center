@@ -25,14 +25,6 @@ func (s *AccountRefService) ResolveBotUser(botID, externalUserID string) (*model
 	return &identity, nil
 }
 
-func (s *AccountRefService) ListAccessibleBindings(botID, externalUserID, platform string) ([]model.PlatformAccountBinding, error) {
-	consumer, err := legacyConsumerForBotID(botID)
-	if err != nil {
-		return nil, err
-	}
-	return s.ListAccessibleBindingsForConsumer(botID, consumer, externalUserID, platform)
-}
-
 func (s *AccountRefService) ListAccessibleBindingsForConsumer(botID, consumer, externalUserID, platform string) ([]model.PlatformAccountBinding, error) {
 	identity, err := s.ResolveBotUser(botID, externalUserID)
 	if err != nil {
@@ -62,14 +54,6 @@ func (s *AccountRefService) ListAccessibleBindingsForConsumer(botID, consumer, e
 	return bindings, nil
 }
 
-func (s *AccountRefService) GetGrantedBinding(botID, externalUserID string, bindingID, profileID uint64) (*model.BotIdentity, *model.PlatformAccountBinding, *model.ConsumerGrant, error) {
-	consumer, err := legacyConsumerForBotID(botID)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return s.GetGrantedBindingForConsumer(botID, consumer, externalUserID, bindingID, profileID)
-}
-
 func (s *AccountRefService) GetGrantedBindingForConsumer(botID, consumer, externalUserID string, bindingID, profileID uint64) (*model.BotIdentity, *model.PlatformAccountBinding, *model.ConsumerGrant, error) {
 	identity, err := s.ResolveBotUser(botID, externalUserID)
 	if err != nil {
@@ -93,12 +77,12 @@ func (s *AccountRefService) GetGrantedBindingForConsumer(botID, consumer, extern
 	var grant model.ConsumerGrant
 	if err := s.db.Where("binding_id = ? AND consumer = ?", binding.ID, consumer).First(&grant).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, nil, nil, ErrBotGrantNotFound
+			return nil, nil, nil, ErrConsumerGrantNotFound
 		}
 		return nil, nil, nil, fmt.Errorf("get consumer grant: %w", err)
 	}
 	if grant.Status != model.ConsumerGrantStatusActive || grant.RevokedAt.Valid {
-		return nil, nil, nil, ErrBotGrantRevoked
+		return nil, nil, nil, ErrConsumerGrantRevoked
 	}
 	if profileID != 0 {
 		var profile model.PlatformAccountProfile
@@ -113,14 +97,6 @@ func (s *AccountRefService) GetGrantedBindingForConsumer(botID, consumer, extern
 	return identity, &binding, &grant, nil
 }
 
-func (s *AccountRefService) GetGrantedScopes(botID string, bindingID uint64) ([]string, error) {
-	consumer, err := legacyConsumerForBotID(botID)
-	if err != nil {
-		return nil, err
-	}
-	return s.GetGrantedScopesForConsumer(consumer, bindingID)
-}
-
 func (s *AccountRefService) GetGrantedScopesForConsumer(consumer string, bindingID uint64) ([]string, error) {
 	if consumer == "" {
 		return nil, ErrConsumerNotSupported
@@ -129,12 +105,12 @@ func (s *AccountRefService) GetGrantedScopesForConsumer(consumer string, binding
 	var grant model.ConsumerGrant
 	if err := s.db.Where("binding_id = ? AND consumer = ?", bindingID, consumer).First(&grant).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, ErrBotGrantNotFound
+			return nil, ErrConsumerGrantNotFound
 		}
 		return nil, fmt.Errorf("get consumer grant scopes: %w", err)
 	}
 	if grant.Status != model.ConsumerGrantStatusActive || grant.RevokedAt.Valid {
-		return nil, ErrBotGrantRevoked
+		return nil, ErrConsumerGrantRevoked
 	}
 
 	scopes, err := DecodeGrantScopes(grant)
@@ -143,28 +119,6 @@ func (s *AccountRefService) GetGrantedScopesForConsumer(consumer string, binding
 	}
 
 	return scopes, nil
-}
-
-// legacyConsumerForBotID returns the consumer string for the legacy REST
-// surfaces (ListAccessibleBindings, GetGrantedBinding, GetGrantedScopes)
-// that still receive bot_id from the caller rather than the
-// CredentialClaims.ClientID populated by the OAuth interceptor.
-//
-// Under Path D Option D (spec §10) the consumer IS the calling
-// credential's client_id, not the bot_id. This helper preserves the
-// bot_id-as-consumer convention used by pre-Path-D test seeds and
-// pre-migration REST callers. Operators MUST register service
-// credentials whose client_id matches the bot_id for these legacy
-// routes to resolve correctly.
-//
-// Deprecated: callers should migrate to the *ForConsumer variants which
-// take a consumer string derived from CredentialClaimsFromContext.
-// Tracked in Path D Phase 2 follow-up.
-func legacyConsumerForBotID(botID string) (string, error) {
-	if botID == "" {
-		return "", ErrConsumerNotSupported
-	}
-	return botID, nil
 }
 
 func nullableBindingExternalAccountKey(value sql.NullString) string {

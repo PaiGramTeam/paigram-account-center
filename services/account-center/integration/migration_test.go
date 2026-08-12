@@ -9,6 +9,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+
+	"paigram/internal/model"
+	platformservice "paigram/internal/service/platform"
 )
 
 func TestMigrationsApplyToFreshPostgreSQL(t *testing.T) {
@@ -22,10 +26,8 @@ func TestMigrationsApplyToFreshPostgreSQL(t *testing.T) {
 	requireTableExists(t, stack.SQLDB, stack.Schema, "user_devices")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "bot_identities")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "bots")
-	// Path D §2.1 + §2.2: service_credentials replaces machine_identities,
-	// machine_identity_secrets, machine_tokens, signing_keys, and the
-	// legacy bot_tokens opaque store. Confirm the new table exists and
-	// the five old tables do not.
+	// Service credentials replace the retired machine identity, signing key,
+	// machine token, and opaque bot token stores.
 	requireTableExists(t, stack.SQLDB, stack.Schema, "service_credentials")
 	requireServiceCredentialColumns(t, stack.SQLDB, stack.Schema)
 	requireTableAbsent(t, stack.SQLDB, stack.Schema, "machine_identities")
@@ -33,12 +35,11 @@ func TestMigrationsApplyToFreshPostgreSQL(t *testing.T) {
 	requireTableAbsent(t, stack.SQLDB, stack.Schema, "machine_tokens")
 	requireTableAbsent(t, stack.SQLDB, stack.Schema, "signing_keys")
 	requireTableAbsent(t, stack.SQLDB, stack.Schema, "bot_tokens")
-	requireTableExists(t, stack.SQLDB, stack.Schema, "platform_account_refs")
-	requireTableExists(t, stack.SQLDB, stack.Schema, "bot_account_grants")
+	requireTableAbsent(t, stack.SQLDB, stack.Schema, "platform_account_refs")
+	requireTableAbsent(t, stack.SQLDB, stack.Schema, "bot_account_grants")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "platform_services")
 
-	// Path D §10 Q5: bots stays as a thin identity table, without the
-	// legacy api_key/api_secret/scopes/metadata/last_active_at columns.
+	// Bots remain thin identity records without credential or activity state.
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "api_key")
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "api_secret")
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "scopes")
@@ -126,6 +127,42 @@ func TestIdentityCredentialUniqueIndexesExist(t *testing.T) {
 
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_provider_account")
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_user_provider")
+}
+
+func TestPlatformRegistryDeletionUsesCurrentBindings(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx := context.Background()
+
+	row := model.PlatformService{
+		PlatformKey:          "mihomo",
+		DisplayName:          "Mihomo",
+		ServiceKey:           "platform-mihomo-service",
+		ServiceAudience:      "platform-mihomo-service",
+		DiscoveryType:        "static",
+		Endpoint:             "127.0.0.1:9000",
+		Enabled:              true,
+		SupportedActionsJSON: `[]`,
+		CredentialSchemaJSON: `{}`,
+	}
+	require.NoError(t, stack.DB.Create(&row).Error)
+
+	ownerID := insertTestUser(t, ctx, stack.SQLDB)
+	binding := model.PlatformAccountBinding{
+		OwnerUserID:        ownerID,
+		Platform:           row.PlatformKey,
+		PlatformServiceKey: row.ServiceKey,
+		DisplayName:        "Traveler",
+		Status:             model.PlatformAccountBindingStatusActive,
+	}
+	require.NoError(t, stack.DB.Create(&binding).Error)
+
+	service := platformservice.NewServiceGroup(stack.DB).PlatformService
+	require.ErrorIs(t, service.DeletePlatformService(ctx, row.ID), platformservice.ErrPlatformServiceReferenced)
+
+	require.NoError(t, stack.DB.Delete(&binding).Error)
+	require.NoError(t, service.DeletePlatformService(ctx, row.ID))
+	var deleted model.PlatformService
+	require.ErrorIs(t, stack.DB.First(&deleted, row.ID).Error, gorm.ErrRecordNotFound)
 }
 
 func insertTestUser(t *testing.T, ctx context.Context, db *sql.DB) uint64 {
@@ -217,9 +254,8 @@ func requireForeignKeyExists(t *testing.T, db interface {
 	require.Equal(t, 1, count, "expected foreign key %s on %s to exist", constraint, table)
 }
 
-// requireTableAbsent confirms a Path D-deprecated table is not present
-// after the rewritten 000001 migration runs (Path D §2.2). The exact
-// counterpart to requireTableExists.
+// requireTableAbsent confirms a retired table is not present after the
+// baseline migration runs.
 func requireTableAbsent(t *testing.T, db interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, schema, table string) {
@@ -235,11 +271,10 @@ func requireTableAbsent(t *testing.T, db interface {
 		WHERE table_schema = $1 AND table_name = $2
 	`, schema, table).Scan(&count)
 	require.NoError(t, err)
-	require.Equal(t, 0, count, "expected Path-D-dropped table %s to be absent", table)
+	require.Equal(t, 0, count, "expected retired table %s to be absent", table)
 }
 
-// requireColumnAbsent verifies a Path D-dropped column is gone. Used to
-// confirm the thin bots schema (Path D §10 Q5).
+// requireColumnAbsent verifies that a retired column is gone.
 func requireColumnAbsent(t *testing.T, db interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, schema, table, column string) {
@@ -255,13 +290,11 @@ func requireColumnAbsent(t *testing.T, db interface {
 		WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
 	`, schema, table, column).Scan(&count)
 	require.NoError(t, err)
-	require.Equal(t, 0, count, "expected Path-D-dropped column %s.%s to be absent", table, column)
+	require.Equal(t, 0, count, "expected retired column %s.%s to be absent", table, column)
 }
 
-// requireServiceCredentialColumns verifies the column set added by the
-// Path D §2.1 service_credentials DDL. Catches stale migration files
-// before the gRPC interceptor + token service hit a column-mismatch
-// error at request time.
+// requireServiceCredentialColumns catches stale migration files before the
+// gRPC interceptor and token service encounter a column mismatch.
 func requireServiceCredentialColumns(t *testing.T, db interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, schema string) {

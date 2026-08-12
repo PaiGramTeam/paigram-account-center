@@ -5,29 +5,23 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
-	"database/sql"
 	"encoding/pem"
 	"net"
 	"strings"
 	"testing"
-	"time"
 
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
-	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
 	"paigram/internal/config"
 	"paigram/internal/model"
 	"paigram/internal/service/platformbinding"
-	internalticket "paigram/internal/serviceticket"
 	"paigram/internal/testutil"
 )
 
@@ -49,26 +43,6 @@ func testPlatformAuth(t *testing.T) (config.AuthConfig, ed25519.PublicKey) {
 		ServiceTicketKeyID:         "test-key",
 		ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
 	}, publicKey
-}
-
-type fakeSummaryProxy struct {
-	endpoint          string
-	ticket            string
-	platformAccountID string
-	summary           map[string]any
-	err               error
-	calls             int
-}
-
-func (f *fakeSummaryProxy) GetCredentialSummary(_ context.Context, endpoint, ticket, platformAccountID string) (map[string]any, error) {
-	f.calls++
-	f.endpoint = endpoint
-	f.ticket = ticket
-	f.platformAccountID = platformAccountID
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.summary, nil
 }
 
 func TestPlatformServiceGetEnabledPlatform(t *testing.T) {
@@ -146,80 +120,6 @@ func TestPlatformServiceBuildsBindingActorTicketClaims(t *testing.T) {
 	require.Equal(t, "platform-mihomo-service", claims.PlatformServiceKey)
 	require.Equal(t, "hoyo_ref_11_10001", claims.PlatformAccountID)
 	require.Equal(t, []string{"mihomo.credential.read_meta"}, claims.Scopes)
-}
-
-func TestIssueLegacyRefScopedTicketSupportsUserAdminAndConsumer(t *testing.T) {
-	svc := PlatformService{}
-	authConfig, publicKey := testPlatformAuth(t)
-	require.NoError(t, svc.ConfigureAuth(authConfig))
-
-	ref := &model.PlatformAccountRef{
-		ID:                11,
-		UserID:            7,
-		Platform:          "mihomo",
-		PlatformAccountID: "hoyo_ref_11_10001",
-		Status:            model.PlatformAccountRefStatusActive,
-	}
-
-	for _, tc := range []struct {
-		name    string
-		actor   string
-		actorID string
-		scopes  []string
-		typ     string
-	}{
-		{name: "user", actor: "user", actorID: "session:1", scopes: []string{"binding:write"}, typ: internalticket.TypeControl},
-		{name: "admin", actor: "admin", actorID: "user:1", scopes: []string{"binding:delete"}, typ: internalticket.TypeControl},
-		{name: "consumer", actor: "consumer", actorID: "paigram-bot", scopes: []string{"profile:read"}, typ: internalticket.TypeDelegation},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			tokenString, expiresAt, err := svc.IssueLegacyRefScopedTicket(tc.actor, tc.actorID, ref.UserID, ref, tc.scopes, "platform-mihomo-service")
-			require.NoError(t, err)
-			require.WithinDuration(t, time.Now().UTC().Add(5*time.Minute), expiresAt, 3*time.Second)
-
-			parsed := &ServiceTicketClaims{}
-			token, err := jwt.ParseWithClaims(tokenString, parsed, func(token *jwt.Token) (any, error) {
-				require.Equal(t, contractticket.AlgorithmEd25519, token.Method.Alg())
-				require.Equal(t, "test-key", token.Header["kid"])
-				require.Equal(t, tc.typ, token.Header["typ"])
-				return publicKey, nil
-			}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}))
-			require.NoError(t, err)
-			require.True(t, token.Valid)
-			require.Equal(t, tc.actor, parsed.ActorType)
-			require.Equal(t, tc.actorID, parsed.ActorID)
-			require.Equal(t, ref.UserID, parsed.OwnerUserID)
-			require.Equal(t, ref.Platform, parsed.Platform)
-			require.Equal(t, ref.ID, parsed.BindingID)
-			require.Equal(t, ref.PlatformAccountID, parsed.PlatformAccountID)
-			require.Equal(t, tc.scopes, parsed.AllowedActions)
-			require.Equal(t, "account-center", parsed.Issuer)
-			if tc.actor == "consumer" {
-				require.Equal(t, "consumer:paigram-bot", parsed.Subject)
-			} else {
-				require.Equal(t, "user:7", parsed.Subject)
-			}
-			require.Equal(t, []string{"platform-mihomo-service"}, []string(parsed.Audience))
-			require.WithinDuration(t, expiresAt, parsed.ExpiresAt.Time, time.Second)
-			require.NotEmpty(t, parsed.ID)
-		})
-	}
-}
-
-func TestIssueLegacyRefScopedTicketRejectsLegacyWebUserActor(t *testing.T) {
-	svc := PlatformService{}
-	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
-
-	ref := &model.PlatformAccountRef{
-		ID:                11,
-		UserID:            7,
-		Platform:          "mihomo",
-		PlatformAccountID: "hoyo_ref_11_10001",
-		Status:            model.PlatformAccountRefStatusActive,
-	}
-
-	_, _, err := svc.IssueLegacyRefScopedTicket("web_user", "session:1", ref.UserID, ref, []string{"binding:write"}, "platform-mihomo-service")
-	require.ErrorIs(t, err, ErrInvalidTicketConfig)
 }
 
 func TestPlatformServiceConfigureAuthRejectsMissingPrivateKey(t *testing.T) {
@@ -475,215 +375,4 @@ func TestPlatformServiceGetPlatformSchemaView(t *testing.T) {
 		SupportedActions: []string{"bind_credential"},
 		CredentialSchema: map[string]any{"type": "object", "required": []any{"cookie_bundle"}},
 	}, view)
-}
-
-func TestPlatformServiceGetPlatformAccountSummaryIssuesScopedTicketAndCallsProxy(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(
-		t,
-		"platform_registry_summary_proxy",
-		&model.PlatformService{},
-		&model.User{},
-		&model.PlatformAccountRef{},
-		&model.PlatformAccountBinding{},
-		&model.PlatformAccountProfile{},
-	)
-	require.NoError(t, db.Create(&model.PlatformService{
-		PlatformKey:          "mihomo",
-		DisplayName:          "Mihomo",
-		ServiceKey:           "platform-mihomo-service",
-		ServiceAudience:      "platform-mihomo-service",
-		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
-		Enabled:              true,
-		SupportedActionsJSON: `[]`,
-		CredentialSchemaJSON: `{}`,
-	}).Error)
-	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
-	require.NoError(t, db.Create(&owner).Error)
-	ref := model.PlatformAccountRef{
-		UserID:             owner.ID,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountID:  "hoyo_ref_11_10001",
-		DisplayName:        "Traveler",
-		Status:             model.PlatformAccountRefStatusActive,
-	}
-	require.NoError(t, db.Create(&ref).Error)
-
-	svc := NewServiceGroup(db).PlatformService
-	authConfig, publicKey := testPlatformAuth(t)
-	require.NoError(t, svc.ConfigureAuth(authConfig))
-	proxy := &fakeSummaryProxy{summary: map[string]any{"status": "active"}}
-	svc.SetGenericSummaryProxy(proxy)
-
-	summary, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
-	require.NoError(t, err)
-	require.Equal(t, map[string]any{"status": "active"}, summary)
-	require.Equal(t, "127.0.0.1:9000", proxy.endpoint)
-	require.Equal(t, ref.PlatformAccountID, proxy.platformAccountID)
-
-	parsed := &ServiceTicketClaims{}
-	token, err := jwt.ParseWithClaims(proxy.ticket, parsed, func(token *jwt.Token) (any, error) {
-		return publicKey, nil
-	})
-	require.NoError(t, err)
-	require.True(t, token.Valid)
-	require.Equal(t, "user", parsed.ActorType)
-	require.Equal(t, "session:99", parsed.ActorID)
-	require.Equal(t, owner.ID, parsed.OwnerUserID)
-	require.Equal(t, ref.ID, parsed.BindingID)
-	require.Equal(t, ref.PlatformAccountID, parsed.PlatformAccountID)
-	require.Equal(t, []string{"mihomo.credential.read_meta"}, parsed.Scopes)
-	require.Equal(t, []string{"platform-mihomo-service"}, []string(parsed.Audience))
-}
-
-func TestPlatformServiceGetPlatformAccountSummaryReturnsBindingProjectionWithoutLegacyRef(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_binding_summary", &model.User{}, &model.PlatformAccountBinding{}, &model.PlatformAccountProfile{})
-	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
-	require.NoError(t, db.Create(&owner).Error)
-	binding := model.PlatformAccountBinding{
-		OwnerUserID:        owner.ID,
-		Platform:           "mihomo",
-		ExternalAccountKey: sql.NullString{String: "cn:summary-binding", Valid: true},
-		PlatformServiceKey: "platform-mihomo-service",
-		DisplayName:        "Traveler",
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	require.NoError(t, db.Create(&binding).Error)
-	profiles := []model.PlatformAccountProfile{
-		{BindingID: binding.ID, PlatformProfileKey: "mihomo:10001", GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerUID: "10001", Nickname: "Traveler", IsPrimary: true},
-		{BindingID: binding.ID, PlatformProfileKey: "mihomo:10002", GameBiz: "hk4e_global", Region: "os_asia", PlayerUID: "10002", Nickname: "Lumine"},
-	}
-	require.NoError(t, db.Create(&profiles).Error)
-	require.NoError(t, db.Model(&binding).Update("primary_profile_id", profiles[0].ID).Error)
-
-	svc := NewServiceGroup(db).PlatformService
-	summary, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, binding.ID, []string{"mihomo.credential.read_meta"})
-	require.NoError(t, err)
-	require.Equal(t, binding.ID, summary["binding_id"])
-	require.Equal(t, binding.DisplayName, summary["display_name"])
-	require.Equal(t, int64(profiles[0].ID), summary["primary_profile_id"])
-	items, ok := summary["profiles"].([]map[string]any)
-	require.True(t, ok)
-	require.Len(t, items, 2)
-	require.Equal(t, profiles[0].PlayerUID, items[0]["player_uid"])
-}
-
-func TestPlatformServiceGetPlatformAccountSummaryReturnsServiceUnavailableWhenRegistryMissing(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(
-		t,
-		"platform_registry_missing_summary",
-		&model.PlatformService{},
-		&model.User{},
-		&model.PlatformAccountRef{},
-		&model.PlatformAccountBinding{},
-		&model.PlatformAccountProfile{},
-	)
-	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
-	require.NoError(t, db.Create(&owner).Error)
-	ref := model.PlatformAccountRef{
-		UserID:             owner.ID,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountID:  "hoyo_ref_11_10001",
-		DisplayName:        "Traveler",
-		Status:             model.PlatformAccountRefStatusActive,
-	}
-	require.NoError(t, db.Create(&ref).Error)
-
-	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
-	svc.SetGenericSummaryProxy(&fakeSummaryProxy{summary: map[string]any{"status": "active"}})
-
-	_, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
-	require.ErrorIs(t, err, ErrPlatformServiceUnavailable)
-}
-
-func TestPlatformServiceGetPlatformAccountSummaryUsesGenericProxy(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(
-		t,
-		"platform_registry_generic_summary_proxy",
-		&model.PlatformService{},
-		&model.User{},
-		&model.PlatformAccountRef{},
-		&model.PlatformAccountBinding{},
-		&model.PlatformAccountProfile{},
-	)
-	require.NoError(t, db.Create(&model.PlatformService{
-		PlatformKey:          "mihomo",
-		DisplayName:          "Mihomo",
-		ServiceKey:           "platform-mihomo-service",
-		ServiceAudience:      "platform-mihomo-service",
-		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
-		Enabled:              true,
-		SupportedActionsJSON: `[]`,
-		CredentialSchemaJSON: `{}`,
-	}).Error)
-	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
-	require.NoError(t, db.Create(&owner).Error)
-	ref := model.PlatformAccountRef{
-		UserID:             owner.ID,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountID:  "hoyo_ref_11_10001",
-		DisplayName:        "Traveler",
-		Status:             model.PlatformAccountRefStatusActive,
-	}
-	require.NoError(t, db.Create(&ref).Error)
-
-	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
-	genericProxy := &fakeSummaryProxy{summary: map[string]any{"path": "generic"}}
-	svc.SetGenericSummaryProxy(genericProxy)
-
-	summary, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
-	require.NoError(t, err)
-	require.Equal(t, map[string]any{"path": "generic"}, summary)
-	require.Equal(t, 1, genericProxy.calls)
-	require.Equal(t, "127.0.0.1:9000", genericProxy.endpoint)
-	require.Equal(t, ref.PlatformAccountID, genericProxy.platformAccountID)
-}
-
-func TestPlatformServiceGetPlatformAccountSummaryReturnsGenericProxyError(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(
-		t,
-		"platform_registry_generic_summary_error",
-		&model.PlatformService{},
-		&model.User{},
-		&model.PlatformAccountRef{},
-		&model.PlatformAccountBinding{},
-		&model.PlatformAccountProfile{},
-	)
-	require.NoError(t, db.Create(&model.PlatformService{
-		PlatformKey:          "mihomo",
-		DisplayName:          "Mihomo",
-		ServiceKey:           "platform-mihomo-service",
-		ServiceAudience:      "platform-mihomo-service",
-		DiscoveryType:        "static",
-		Endpoint:             "127.0.0.1:9000",
-		Enabled:              true,
-		SupportedActionsJSON: `[]`,
-		CredentialSchemaJSON: `{}`,
-	}).Error)
-	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
-	require.NoError(t, db.Create(&owner).Error)
-	ref := model.PlatformAccountRef{
-		UserID:             owner.ID,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountID:  "hoyo_ref_11_10001",
-		DisplayName:        "Traveler",
-		Status:             model.PlatformAccountRefStatusActive,
-	}
-	require.NoError(t, db.Create(&ref).Error)
-
-	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
-	genericProxy := &fakeSummaryProxy{err: grpcstatus.Error(codes.Unavailable, "downstream unavailable")}
-	svc.SetGenericSummaryProxy(genericProxy)
-
-	_, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
-	require.Error(t, err)
-	require.Equal(t, 1, genericProxy.calls)
 }

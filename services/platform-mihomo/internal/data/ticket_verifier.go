@@ -27,23 +27,22 @@ type GrantVersionLookup interface {
 }
 
 type serviceTicketJWTClaims struct {
-	ActorType            string   `json:"actor_type"`
-	ActorID              string   `json:"actor_id"`
-	OwnerUserID          uint64   `json:"owner_user_id"`
-	BindingID            uint64   `json:"binding_id"`
-	Platform             string   `json:"platform"`
-	PlatformAccountID    string   `json:"platform_account_id"`
-	Consumer             string   `json:"consumer"`
-	GrantVersion         uint64   `json:"grant_version"`
-	ProfileID            uint64   `json:"profile_id"`
-	Scopes               []string `json:"scopes"`
-	AllowedActions       []string `json:"allowed_actions"`
-	Audience             string   `json:"audience"`
-	BotID                string   `json:"bot_id"`
-	UserID               uint64   `json:"user_id"`
-	PlatformServiceKey   string   `json:"platform_service_key"`
-	PlatformAccountRefID uint64   `json:"platform_account_ref_id"`
-	TicketType           string   `json:"typ"`
+	ActorType          string   `json:"actor_type"`
+	ActorID            string   `json:"actor_id"`
+	OwnerUserID        uint64   `json:"owner_user_id"`
+	BindingID          uint64   `json:"binding_id"`
+	Platform           string   `json:"platform"`
+	PlatformAccountID  string   `json:"platform_account_id"`
+	Consumer           string   `json:"consumer"`
+	GrantVersion       uint64   `json:"grant_version"`
+	ProfileID          uint64   `json:"profile_id"`
+	Scopes             []string `json:"scopes"`
+	AllowedActions     []string `json:"allowed_actions"`
+	Audience           string   `json:"audience"`
+	BotID              string   `json:"bot_id"`
+	UserID             uint64   `json:"user_id"`
+	PlatformServiceKey string   `json:"platform_service_key"`
+	TicketType         string   `json:"typ"`
 	jwt.RegisteredClaims
 }
 
@@ -110,9 +109,6 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 	}
 	if claims.BindingID == 0 {
 		return nil, fmt.Errorf("service ticket missing binding_id")
-	}
-	if claims.PlatformAccountRefID != 0 && claims.PlatformAccountRefID != claims.BindingID {
-		return nil, fmt.Errorf("service ticket binding_id does not match platform_account_ref_id")
 	}
 	if claims.Platform == "" {
 		return nil, fmt.Errorf("service ticket missing platform")
@@ -181,8 +177,5 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 		BotID:              claims.BotID,
 		UserID:             userID,
 		PlatformServiceKey: claims.PlatformServiceKey,
-		// Keep the legacy alias available to downstream code while requiring
-		// any ticket-level platform_account_ref_id claim to match binding_id.
-		PlatformAccountRefID: claims.BindingID,
 	}, nil
 }

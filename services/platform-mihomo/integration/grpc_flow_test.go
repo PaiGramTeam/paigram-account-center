@@ -300,22 +300,21 @@ func testTicketForAccount(t *testing.T, platformAccountID string, scopes ...stri
 	now := time.Now().UTC()
 
 	claims := jwt.MapClaims{
-		"iss":                     integrationTicketIssuer,
-		"sub":                     "user:1",
-		"aud":                     []string{integrationTicketAudience},
-		"jti":                     "integration-ticket-1",
-		"actor_type":              "user",
-		"actor_id":                "integration-user-1",
-		"owner_user_id":           float64(1),
-		"binding_id":              float64(testBindingID),
-		"bot_id":                  "bot-paigram",
-		"platform":                "mihomo",
-		"user_id":                 float64(1),
-		"platform_service_key":    integrationTicketAudience,
-		"platform_account_ref_id": float64(testBindingID),
-		"iat":                     now.Unix(),
-		"nbf":                     now.Add(-time.Second).Unix(),
-		"exp":                     now.Add(time.Minute).Unix(),
+		"iss":                  integrationTicketIssuer,
+		"sub":                  "user:1",
+		"aud":                  []string{integrationTicketAudience},
+		"jti":                  "integration-ticket-1",
+		"actor_type":           "user",
+		"actor_id":             "integration-user-1",
+		"owner_user_id":        float64(1),
+		"binding_id":           float64(testBindingID),
+		"bot_id":               "bot-paigram",
+		"platform":             "mihomo",
+		"user_id":              float64(1),
+		"platform_service_key": integrationTicketAudience,
+		"iat":                  now.Unix(),
+		"nbf":                  now.Add(-time.Second).Unix(),
+		"exp":                  now.Add(time.Minute).Unix(),
 	}
 	if platformAccountID != "" {
 		claims["platform_account_id"] = platformAccountID

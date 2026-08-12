@@ -262,9 +262,9 @@ func mapBotAccessError(operation string, err error) error {
 		return status.Error(codes.NotFound, "bot identity not found")
 	case errors.Is(err, botaccess.ErrPlatformAccountMissing):
 		return status.Error(codes.NotFound, "platform account binding not found")
-	case errors.Is(err, botaccess.ErrBotGrantNotFound):
+	case errors.Is(err, botaccess.ErrConsumerGrantNotFound):
 		return status.Error(codes.PermissionDenied, "consumer grant required for binding")
-	case errors.Is(err, botaccess.ErrBotGrantRevoked):
+	case errors.Is(err, botaccess.ErrConsumerGrantRevoked):
 		return status.Error(codes.PermissionDenied, "consumer grant revoked for binding")
 	case errors.Is(err, botaccess.ErrConsumerNotSupported):
 		return status.Error(codes.InvalidArgument, "consumer is not supported")
@@ -329,9 +329,9 @@ func reasonCodeFromBotAccessErr(err error) string {
 		return "bot_identity_not_found"
 	case errors.Is(err, botaccess.ErrPlatformAccountMissing):
 		return "platform_account_missing"
-	case errors.Is(err, botaccess.ErrBotGrantNotFound):
+	case errors.Is(err, botaccess.ErrConsumerGrantNotFound):
 		return "bot_grant_not_found"
-	case errors.Is(err, botaccess.ErrBotGrantRevoked):
+	case errors.Is(err, botaccess.ErrConsumerGrantRevoked):
 		return "bot_grant_revoked"
 	case errors.Is(err, botaccess.ErrConsumerNotSupported):
 		return "consumer_not_supported"

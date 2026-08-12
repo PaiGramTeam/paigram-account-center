@@ -7,15 +7,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// PlatformAccountRefStatus represents the lifecycle state of a referenced platform account.
-type PlatformAccountRefStatus string
-
-const (
-	PlatformAccountRefStatusActive   PlatformAccountRefStatus = "active"
-	PlatformAccountRefStatusInactive PlatformAccountRefStatus = "inactive"
-	PlatformAccountRefStatusRevoked  PlatformAccountRefStatus = "revoked"
-)
-
 // BotIdentity links a bot-specific external user to a unified account-center user.
 type BotIdentity struct {
 	ID               uint64         `gorm:"primaryKey"`
@@ -34,51 +25,4 @@ type BotIdentity struct {
 
 func (BotIdentity) TableName() string {
 	return "bot_identities"
-}
-
-// PlatformAccountRef is a legacy compatibility model retained only for migration read paths.
-// Migration-only: do not use for new runtime platform binding flows.
-// New bot and consumer integrations must use PlatformAccountBinding instead.
-type PlatformAccountRef struct {
-	ID                 uint64                   `gorm:"primaryKey"`
-	UserID             uint64                   `gorm:"not null;index:idx_platform_account_refs_user_platform,priority:1"`
-	Platform           string                   `gorm:"size:64;not null;uniqueIndex:uk_platform_account_refs_platform_account,priority:1;index:idx_platform_account_refs_user_platform,priority:2"`
-	PlatformServiceKey string                   `gorm:"size:128;not null"`
-	PlatformAccountID  string                   `gorm:"size:191;not null;uniqueIndex:uk_platform_account_refs_platform_account,priority:2"`
-	DisplayName        string                   `gorm:"size:255;not null"`
-	Status             PlatformAccountRefStatus `gorm:"size:32;not null;default:'active';index"`
-	MetaJSON           sql.NullString           `gorm:"type:jsonb"`
-	CreatedAt          time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt          time.Time                `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	DeletedAt          gorm.DeletedAt           `gorm:"index"`
-
-	User User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-}
-
-func (PlatformAccountRef) TableName() string {
-	return "platform_account_refs"
-}
-
-// BotAccountGrant is a legacy compatibility model retained only for migration read paths.
-// Migration-only: do not use for new runtime platform binding flows.
-// New bot and consumer integrations must use ConsumerGrant with binding_id semantics instead.
-type BotAccountGrant struct {
-	ID                   uint64         `gorm:"primaryKey"`
-	UserID               uint64         `gorm:"not null;index"`
-	BotID                string         `gorm:"size:64;not null;uniqueIndex:uk_bot_account_grants_bot_account,priority:1"`
-	PlatformAccountRefID uint64         `gorm:"not null;uniqueIndex:uk_bot_account_grants_bot_account,priority:2;index:idx_bot_account_grants_platform_account_ref_id"`
-	Scopes               string         `gorm:"type:jsonb;not null"`
-	GrantedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	RevokedAt            sql.NullTime   `gorm:"type:timestamptz;index"`
-	CreatedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt            time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	DeletedAt            gorm.DeletedAt `gorm:"index"`
-
-	User               User               `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-	Bot                Bot                `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BotID;references:ID"`
-	PlatformAccountRef PlatformAccountRef `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
-}
-
-func (BotAccountGrant) TableName() string {
-	return "bot_account_grants"
 }
