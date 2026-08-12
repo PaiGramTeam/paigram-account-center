@@ -19,6 +19,7 @@ type healthcheckOptions struct {
 	Target     string
 	RootCAFile string
 	ServerName string
+	Service    string
 	Timeout    time.Duration
 }
 
@@ -27,6 +28,7 @@ func main() {
 	flag.StringVar(&options.Target, "target", "127.0.0.1:9001", "runtime gRPC target")
 	flag.StringVar(&options.RootCAFile, "root-ca", "", "runtime TLS root CA file")
 	flag.StringVar(&options.ServerName, "server-name", "", "runtime TLS server name")
+	flag.StringVar(&options.Service, "service", "", "gRPC health service name; empty checks readiness")
 	flag.DurationVar(&options.Timeout, "timeout", 3*time.Second, "health check timeout")
 	flag.Parse()
 
@@ -68,7 +70,7 @@ func checkRuntimeHealth(ctx context.Context, options healthcheckOptions) error {
 	}
 	defer connection.Close()
 
-	response, err := healthpb.NewHealthClient(connection).Check(checkCtx, &healthpb.HealthCheckRequest{})
+	response, err := healthpb.NewHealthClient(connection).Check(checkCtx, &healthpb.HealthCheckRequest{Service: options.Service})
 	if err != nil {
 		return fmt.Errorf("check runtime gRPC health: %w", err)
 	}

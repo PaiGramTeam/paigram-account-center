@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"testing"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/servicehealth"
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/health"
@@ -12,8 +14,14 @@ import (
 )
 
 func TestNewGRPCServersRequiresBothV2Services(t *testing.T) {
-	_, err := NewGRPCServers(testSecureBootstrap(t), nil, nil)
+	_, err := NewGRPCServersWithReadiness(testSecureBootstrap(t), nil, nil, testReadyChecker())
 	require.EqualError(t, err, "v2 control and runtime services are required")
+}
+
+func TestNewGRPCServersRequiresReadinessChecker(t *testing.T) {
+	controlService, runtimeService := testV2Services()
+	_, err := NewGRPCServersWithReadiness(testSecureBootstrap(t), controlService, runtimeService, nil)
+	require.EqualError(t, err, "readiness checker is required")
 }
 
 func TestRegisterHealthServerSkipsDuplicateRegistration(t *testing.T) {
@@ -31,4 +39,8 @@ func TestRegisterHealthServerSkipsDuplicateRegistration(t *testing.T) {
 func testV2Services() (*service.PlatformControlService, *service.MihomoRuntimeService) {
 	return service.NewPlatformControlService(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil),
 		service.NewMihomoRuntimeService(nil, nil, nil, nil, nil, nil)
+}
+
+func testReadyChecker() servicehealth.Checker {
+	return servicehealth.CheckFunc(func(context.Context) error { return nil })
 }

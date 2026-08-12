@@ -23,7 +23,7 @@ import (
 func TestProductionGRPCListenersEnforceIndependentTrustPolicies(t *testing.T) {
 	bootstrap, controlBundle, runtimeBundle := newSecureBootstrapFixture(t)
 	controlService, runtimeService := testV2Services()
-	servers, err := NewGRPCServers(bootstrap, controlService, runtimeService)
+	servers, err := NewGRPCServersWithReadiness(bootstrap, controlService, runtimeService, testReadyChecker())
 	require.NoError(t, err)
 	startTestGRPCServer(t, servers.Control)
 	startTestGRPCServer(t, servers.Runtime)
@@ -69,6 +69,8 @@ func TestProductionGRPCListenersExposeDynamicReadiness(t *testing.T) {
 	require.Error(t, servers.Health.Refresh(context.Background()))
 	assertHealthStatus(t, controlConnection, healthpb.HealthCheckResponse_NOT_SERVING)
 	assertHealthStatus(t, runtimeConnection, healthpb.HealthCheckResponse_NOT_SERVING)
+	assertNamedHealthStatus(t, controlConnection, livenessServiceName, healthpb.HealthCheckResponse_SERVING)
+	assertNamedHealthStatus(t, runtimeConnection, livenessServiceName, healthpb.HealthCheckResponse_SERVING)
 }
 
 func dialTestTLS(t *testing.T, server endpointServer, bundle tlstest.Bundle, includeClientCertificate bool) *grpc.ClientConn {
@@ -121,10 +123,14 @@ func assertServing(t *testing.T, connection *grpc.ClientConn) {
 }
 
 func assertHealthStatus(t *testing.T, connection *grpc.ClientConn, want healthpb.HealthCheckResponse_ServingStatus) {
+	assertNamedHealthStatus(t, connection, "", want)
+}
+
+func assertNamedHealthStatus(t *testing.T, connection *grpc.ClientConn, service string, want healthpb.HealthCheckResponse_ServingStatus) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	response, err := healthpb.NewHealthClient(connection).Check(ctx, &healthpb.HealthCheckRequest{})
+	response, err := healthpb.NewHealthClient(connection).Check(ctx, &healthpb.HealthCheckRequest{Service: service})
 	require.NoError(t, err)
 	require.Equal(t, want, response.GetStatus())
 }

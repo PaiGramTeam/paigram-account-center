@@ -22,16 +22,22 @@ func TestGRPCHealthCoordinatorTracksReadinessAndShutdown(t *testing.T) {
 	dependency.Set(errors.New("redis unavailable"))
 	require.Error(t, coordinator.Refresh(context.Background()))
 	require.Equal(t, healthpb.HealthCheckResponse_NOT_SERVING, platformCoordinatorStatus(t, coordinator))
+	require.Equal(t, healthpb.HealthCheckResponse_SERVING, platformCoordinatorServiceStatus(t, coordinator, livenessServiceName))
 
 	dependency.Set(nil)
 	require.NoError(t, coordinator.Refresh(context.Background()))
 	coordinator.Shutdown()
 	require.Equal(t, healthpb.HealthCheckResponse_NOT_SERVING, platformCoordinatorStatus(t, coordinator))
+	require.Equal(t, healthpb.HealthCheckResponse_NOT_SERVING, platformCoordinatorServiceStatus(t, coordinator, livenessServiceName))
 }
 
 func platformCoordinatorStatus(t *testing.T, coordinator *GRPCHealthCoordinator) healthpb.HealthCheckResponse_ServingStatus {
+	return platformCoordinatorServiceStatus(t, coordinator, "")
+}
+
+func platformCoordinatorServiceStatus(t *testing.T, coordinator *GRPCHealthCoordinator, service string) healthpb.HealthCheckResponse_ServingStatus {
 	t.Helper()
-	response, err := coordinator.Server().Check(context.Background(), &healthpb.HealthCheckRequest{})
+	response, err := coordinator.Server().Check(context.Background(), &healthpb.HealthCheckRequest{Service: service})
 	require.NoError(t, err)
 	return response.GetStatus()
 }

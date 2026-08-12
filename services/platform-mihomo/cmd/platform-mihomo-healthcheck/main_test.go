@@ -41,4 +41,7 @@ func TestCheckRuntimeHealthRequiresServingStatusOverTLS(t *testing.T) {
 
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 	require.Error(t, checkRuntimeHealth(context.Background(), options))
+	options.Service = "liveness"
+	healthServer.SetServingStatus("liveness", healthpb.HealthCheckResponse_SERVING)
+	require.NoError(t, checkRuntimeHealth(context.Background(), options))
 }

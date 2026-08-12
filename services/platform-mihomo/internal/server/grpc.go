@@ -28,14 +28,6 @@ type GRPCServers struct {
 	Health  *GRPCHealthCoordinator
 }
 
-func NewGRPCServers(
-	bc *conf.Bootstrap,
-	controlSvc *service.PlatformControlService,
-	runtimeSvc *service.MihomoRuntimeService,
-) (*GRPCServers, error) {
-	return NewGRPCServersWithReadiness(bc, controlSvc, runtimeSvc, servicehealth.CheckFunc(func(context.Context) error { return nil }))
-}
-
 func NewGRPCServersWithReadiness(
 	bc *conf.Bootstrap,
 	controlSvc *service.PlatformControlService,
@@ -44,6 +36,9 @@ func NewGRPCServersWithReadiness(
 ) (*GRPCServers, error) {
 	if controlSvc == nil || runtimeSvc == nil {
 		return nil, errors.New("v2 control and runtime services are required")
+	}
+	if readiness == nil {
+		return nil, errors.New("readiness checker is required")
 	}
 	controlConf := bc.GetServer().GetControl()
 	runtimeConf := bc.GetServer().GetRuntime()

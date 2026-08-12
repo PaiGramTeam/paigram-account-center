@@ -3,6 +3,7 @@ package servicehealth
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,4 +29,28 @@ func TestCoordinatorPreservesDependencyFailure(t *testing.T) {
 	coordinator := NewCoordinator(CheckFunc(func(context.Context) error { return want }))
 
 	require.ErrorIs(t, coordinator.Check(context.Background()), want)
+}
+
+func TestCoordinatorDoesNotReportReadyWhenShutdownOverlapsCheck(t *testing.T) {
+	checkStarted := make(chan struct{})
+	releaseCheck := make(chan struct{})
+	coordinator := NewCoordinator(CheckFunc(func(context.Context) error {
+		close(checkStarted)
+		<-releaseCheck
+		return nil
+	}))
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	var checkErr error
+	go func() {
+		defer wg.Done()
+		checkErr = coordinator.Check(context.Background())
+	}()
+	<-checkStarted
+	coordinator.Shutdown()
+	close(releaseCheck)
+	wg.Wait()
+
+	require.ErrorIs(t, checkErr, ErrShuttingDown)
 }

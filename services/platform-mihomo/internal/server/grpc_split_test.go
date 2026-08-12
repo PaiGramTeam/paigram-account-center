@@ -12,7 +12,7 @@ import (
 
 func TestGRPCServersSeparateControlAndRuntimeSurfaces(t *testing.T) {
 	controlService, runtimeService := testV2Services()
-	servers, err := NewGRPCServers(testSecureBootstrap(t), controlService, runtimeService)
+	servers, err := NewGRPCServersWithReadiness(testSecureBootstrap(t), controlService, runtimeService, testReadyChecker())
 	require.NoError(t, err)
 
 	controlServices := servers.Control.GetServiceInfo()

@@ -25,7 +25,11 @@ func (c *Coordinator) Check(ctx context.Context) error {
 	if c.readiness == nil {
 		return errors.New("readiness checker is required")
 	}
-	return c.readiness.Check(ctx)
+	err := c.readiness.Check(ctx)
+	if c.shuttingDown.Load() {
+		return ErrShuttingDown
+	}
+	return err
 }
 
 // Shutdown makes future readiness checks fail before transport draining begins.

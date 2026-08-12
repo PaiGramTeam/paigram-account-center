@@ -6,6 +6,8 @@ Create the shared private network once, then provision every value under `secret
 
 The control listener is available only as `platform-mihomo:9000` on the shared network and requires an Account Center client certificate. The runtime listener publishes TLS port `9001` through the loopback binding configured in `.env`. Its certificate SAN must match the runtime server name distributed to Bot operators.
 
+Both listeners expose standard gRPC Health. The empty service name reports readiness and becomes `NOT_SERVING` when PostgreSQL or Redis is unavailable. The `liveness` service remains `SERVING` during dependency outages and changes to `NOT_SERVING` only during process shutdown. The Podman health check intentionally probes readiness.
+
 ## Secret formats
 
 The Platform public ticket keyring must use the same `kid` and public key as the Account Center signing secret:
