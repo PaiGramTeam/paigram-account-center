@@ -86,7 +86,6 @@ type ConsumerGrant struct {
 	BindingID         uint64              `gorm:"not null;uniqueIndex:uk_consumer_grants_binding_consumer,priority:1;index:idx_consumer_grants_binding_id"`
 	Consumer          string              `gorm:"size:64;not null;uniqueIndex:uk_consumer_grants_binding_consumer,priority:2"`
 	Status            ConsumerGrantStatus `gorm:"size:32;not null;default:'active';index:idx_consumer_grants_status"`
-	ScopesJSON        string              `gorm:"type:text;not null"`
 	TicketVersion     uint64              `gorm:"not null;default:1"`
 	GrantedBy         sql.NullInt64       `gorm:"type:bigint;index:idx_consumer_grants_granted_by"`
 	GrantedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP"`
@@ -97,8 +96,19 @@ type ConsumerGrant struct {
 
 	Binding PlatformAccountBinding `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BindingID;references:ID"`
 	Grantor *User                  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;foreignKey:GrantedBy;references:ID"`
+	Actions []ConsumerGrantAction  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:GrantID;references:ID"`
 }
 
 func (ConsumerGrant) TableName() string {
 	return "consumer_grants"
+}
+
+type ConsumerGrantAction struct {
+	GrantID   uint64    `gorm:"primaryKey"`
+	Action    string    `gorm:"primaryKey;size:128"`
+	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+func (ConsumerGrantAction) TableName() string {
+	return "consumer_grant_actions"
 }

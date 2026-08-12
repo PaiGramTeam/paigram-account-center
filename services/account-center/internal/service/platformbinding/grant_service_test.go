@@ -33,11 +33,11 @@ func TestListGrantsPaginatesResults(t *testing.T) {
 	require.NoError(t, db.Create(&binding).Error)
 
 	for _, consumer := range []string{ConsumerPaiGramBot, ConsumerPamgram, "mihomo.sync"} {
-		require.NoError(t, db.Create(&model.ConsumerGrant{
+		seedConsumerGrant(t, db, model.ConsumerGrant{
 			BindingID: binding.ID,
 			Consumer:  consumer,
 			Status:    model.ConsumerGrantStatusActive,
-		}).Error)
+		}, "mihomo.status.read")
 	}
 
 	items, total, err := service.ListGrants(binding.ID, ListParams{Page: 2, PageSize: 1})
@@ -87,9 +87,7 @@ func TestGrantServiceSupportsRegistryConsumers(t *testing.T) {
 		assert.Equal(t, consumer, grant.Consumer)
 		assert.Equal(t, model.ConsumerGrantStatusActive, grant.Status)
 		assert.False(t, grant.RevokedAt.Valid)
-		var actions []string
-		require.NoError(t, json.Unmarshal([]byte(grant.ScopesJSON), &actions))
-		assert.Equal(t, defaultConsumerActions, actions)
+		assert.Equal(t, defaultConsumerActions, grantActionNames(grant.Actions))
 	}
 }
 
@@ -152,7 +150,7 @@ func TestGrantServiceNormalizesActionsAndIncrementsVersionOnChange(t *testing.T)
 	require.NoError(t, err)
 	require.True(t, created)
 	require.Equal(t, uint64(1), grant.TicketVersion)
-	require.JSONEq(t, `["mihomo.profile.read","mihomo.status.read"]`, grant.ScopesJSON)
+	require.Equal(t, []string{"mihomo.profile.read", "mihomo.status.read"}, grantActionNames(grant.Actions))
 
 	updated, created, err := service.UpsertGrant(UpsertGrantInput{
 		BindingID: binding.ID,
@@ -162,7 +160,7 @@ func TestGrantServiceNormalizesActionsAndIncrementsVersionOnChange(t *testing.T)
 	require.NoError(t, err)
 	require.False(t, created)
 	require.Equal(t, uint64(2), updated.TicketVersion)
-	require.JSONEq(t, `["mihomo.status.read"]`, updated.ScopesJSON)
+	require.Equal(t, []string{"mihomo.status.read"}, grantActionNames(updated.Actions))
 }
 
 func TestGrantServiceUpsertRejectsUnsupportedConsumer(t *testing.T) {
@@ -246,14 +244,13 @@ func TestGrantServiceRevokeGrantIncrementsTicketVersion(t *testing.T) {
 	service := NewGrantService(db)
 	binding := seedGrantServiceBinding(t, db, "cn:grant-version")
 	revokedAt := time.Now().UTC()
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:     binding.ID,
 		Consumer:      ConsumerPaiGramBot,
 		Status:        model.ConsumerGrantStatusActive,
-		ScopesJSON:    "[]",
 		TicketVersion: 1,
 		GrantedAt:     time.Now().UTC(),
-	}).Error)
+	}, "mihomo.status.read")
 
 	revoked, err := service.RevokeGrant(RevokeGrantInput{
 		BindingID: binding.ID,
@@ -274,16 +271,15 @@ func TestGrantServiceRevokeGrantAlreadyRevokedDoesNotIncrementTicketVersion(t *t
 	service := NewGrantService(db)
 	binding := seedGrantServiceBinding(t, db, "cn:grant-already-revoked")
 	revokedAt := time.Now().UTC().Add(-time.Hour)
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:         binding.ID,
 		Consumer:          ConsumerPaiGramBot,
 		Status:            model.ConsumerGrantStatusRevoked,
-		ScopesJSON:        "[]",
 		TicketVersion:     3,
 		GrantedAt:         time.Now().UTC(),
 		RevokedAt:         sql.NullTime{Time: revokedAt, Valid: true},
 		LastInvalidatedAt: sql.NullTime{Time: revokedAt, Valid: true},
-	}).Error)
+	})
 
 	revoked, err := service.RevokeGrant(RevokeGrantInput{
 		BindingID: binding.ID,
@@ -302,16 +298,15 @@ func TestGrantServiceUpsertGrantReactivationPreservesTicketVersion(t *testing.T)
 	db := setupPlatformBindingTestDB(t)
 	service := NewGrantService(db)
 	binding := seedGrantServiceBinding(t, db, "cn:grant-reactivate")
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:         binding.ID,
 		Consumer:          ConsumerPaiGramBot,
 		Status:            model.ConsumerGrantStatusRevoked,
-		ScopesJSON:        `["mihomo.authkey.issue","mihomo.credential.read_meta","mihomo.credential.validate","mihomo.device.update","mihomo.profile.read","mihomo.status.read"]`,
 		TicketVersion:     4,
 		GrantedAt:         time.Now().UTC(),
 		RevokedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},
 		LastInvalidatedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
-	}).Error)
+	}, defaultConsumerActions...)
 
 	grant, created, err := service.UpsertGrant(UpsertGrantInput{
 		BindingID: binding.ID,
@@ -332,14 +327,13 @@ func TestGrantServiceRevokeGrantInvalidatorFailureLeavesRetryableRevocation(t *t
 	invalidationErr := errors.New("platform down")
 	service := NewGrantService(db, failingGrantInvalidator{err: invalidationErr})
 	binding := seedGrantServiceBinding(t, db, "cn:grant-invalid-failure")
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:     binding.ID,
 		Consumer:      ConsumerPaiGramBot,
 		Status:        model.ConsumerGrantStatusActive,
-		ScopesJSON:    "[]",
 		TicketVersion: 2,
 		GrantedAt:     time.Now().UTC(),
-	}).Error)
+	}, "mihomo.status.read")
 
 	grant, err := service.RevokeGrant(RevokeGrantInput{
 		Context:     context.Background(),
@@ -367,15 +361,14 @@ func TestGrantServiceRevokeGrantRetriesMissingInvalidationForRevokedGrant(t *tes
 	binding := seedGrantServiceBinding(t, db, "cn:grant-retry-invalid")
 	revokedAt := time.Now().UTC().Add(-time.Hour)
 	retryAt := time.Now().UTC()
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:     binding.ID,
 		Consumer:      ConsumerPaiGramBot,
 		Status:        model.ConsumerGrantStatusRevoked,
-		ScopesJSON:    "[]",
 		TicketVersion: 5,
 		GrantedAt:     time.Now().UTC(),
 		RevokedAt:     sql.NullTime{Time: revokedAt, Valid: true},
-	}).Error)
+	})
 
 	revoked, err := service.RevokeGrant(RevokeGrantInput{
 		BindingID: binding.ID,
@@ -396,14 +389,13 @@ func TestGrantServiceRevokeGrantCallsInvalidatorWithExpectedInput(t *testing.T) 
 	invalidator := &capturingGrantInvalidator{}
 	service := NewGrantService(db, invalidator)
 	binding := seedGrantServiceBinding(t, db, "cn:grant-invalid-input")
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:     binding.ID,
 		Consumer:      ConsumerPaiGramBot,
 		Status:        model.ConsumerGrantStatusActive,
-		ScopesJSON:    "[]",
 		TicketVersion: 7,
 		GrantedAt:     time.Now().UTC(),
-	}).Error)
+	}, "mihomo.status.read")
 	ctx := context.WithValue(context.Background(), grantInvalidatorContextKey{}, "request-context")
 
 	_, err := service.RevokeGrant(RevokeGrantInput{
@@ -433,14 +425,13 @@ func TestGrantServiceRevokeGrantAuditFailureIsBestEffort(t *testing.T) {
 	db := setupPlatformBindingTestDB(t)
 	service := NewGrantService(db)
 	binding := seedGrantServiceBinding(t, db, "cn:grant-audit-best-effort")
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID:     binding.ID,
 		Consumer:      ConsumerPaiGramBot,
 		Status:        model.ConsumerGrantStatusActive,
-		ScopesJSON:    "[]",
 		TicketVersion: 1,
 		GrantedAt:     time.Now().UTC(),
-	}).Error)
+	}, "mihomo.status.read")
 	require.NoError(t, db.Exec(`
 		CREATE FUNCTION fail_audit_event_insert() RETURNS trigger AS $$
 		BEGIN
@@ -519,13 +510,13 @@ func TestGrantServiceRevokeWritesAdminActorAttribution(t *testing.T) {
 		Status:             model.PlatformAccountBindingStatusActive,
 	}
 	require.NoError(t, db.Create(&binding).Error)
-	require.NoError(t, db.Create(&model.ConsumerGrant{
+	seedConsumerGrant(t, db, model.ConsumerGrant{
 		BindingID: binding.ID,
 		Consumer:  ConsumerPaiGramBot,
 		Status:    model.ConsumerGrantStatusActive,
 		GrantedBy: sql.NullInt64{Int64: int64(owner.ID), Valid: true},
 		GrantedAt: time.Now().UTC(),
-	}).Error)
+	}, "mihomo.status.read")
 
 	_, err := service.RevokeGrant(RevokeGrantInput{
 		BindingID:   binding.ID,
@@ -572,6 +563,28 @@ func seedGrantServiceBinding(t *testing.T, db *gorm.DB, externalAccountKey strin
 	}
 	require.NoError(t, db.Create(&binding).Error)
 	return binding
+}
+
+func seedConsumerGrant(t *testing.T, db *gorm.DB, grant model.ConsumerGrant, actions ...string) model.ConsumerGrant {
+	t.Helper()
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit("Actions").Create(&grant).Error; err != nil {
+			return err
+		}
+		rows := make([]model.ConsumerGrantAction, 0, len(actions))
+		for _, action := range actions {
+			rows = append(rows, model.ConsumerGrantAction{GrantID: grant.ID, Action: action})
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	}))
+	grant.Actions = make([]model.ConsumerGrantAction, 0, len(actions))
+	for _, action := range actions {
+		grant.Actions = append(grant.Actions, model.ConsumerGrantAction{GrantID: grant.ID, Action: action})
+	}
+	return grant
 }
 
 type failingGrantInvalidator struct {

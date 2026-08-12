@@ -57,8 +57,10 @@ func TestUnifiedUserPlatformSchema(t *testing.T) {
 	requireTableExists(t, stack.SQLDB, stack.Schema, "platform_account_bindings")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "platform_account_profiles")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "consumer_grants")
+	requireTableExists(t, stack.SQLDB, stack.Schema, "consumer_grant_actions")
 	requireColumnExists(t, stack.SQLDB, stack.Schema, "platform_account_bindings", "active_external_account_marker")
 	requireColumnExists(t, stack.SQLDB, stack.Schema, "platform_account_profiles", "primary_profile_marker")
+	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "consumer_grants", "scopes_json")
 
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "users", "idx_users_primary_role_id")
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "platform_account_bindings", "uk_platform_account_bindings_active_external_account")
@@ -69,6 +71,7 @@ func TestUnifiedUserPlatformSchema(t *testing.T) {
 	requireForeignKeyExists(t, stack.SQLDB, stack.Schema, "platform_account_profiles", "fk_platform_account_profiles_binding")
 	requireForeignKeyExists(t, stack.SQLDB, stack.Schema, "consumer_grants", "fk_consumer_grants_binding")
 	requireForeignKeyExists(t, stack.SQLDB, stack.Schema, "consumer_grants", "fk_consumer_grants_granted_by")
+	requireForeignKeyExists(t, stack.SQLDB, stack.Schema, "consumer_grant_actions", "fk_consumer_grant_actions_grant")
 
 	runMigrations(t, stack.SQLDB, stack.DatabaseCfg)
 }
@@ -127,6 +130,51 @@ func TestIdentityCredentialUniqueIndexesExist(t *testing.T) {
 
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_provider_account")
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_user_provider")
+}
+
+func TestConsumerGrantActionsAreDeferredAndRequired(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx := context.Background()
+	ownerID := insertTestUser(t, ctx, stack.SQLDB)
+	bindingID := insertTestBinding(t, ctx, stack.SQLDB, ownerID, "mihomo", "cn:grant-actions")
+
+	tx, err := stack.SQLDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = tx.Rollback() })
+
+	var grantID uint64
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO consumer_grants (binding_id, consumer, status, ticket_version, granted_at)
+		VALUES ($1, 'paigram-bot', 'active', 1, CURRENT_TIMESTAMP)
+		RETURNING id
+	`, bindingID).Scan(&grantID)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO consumer_grant_actions (grant_id, action)
+		VALUES ($1, 'mihomo.status.read')
+	`, grantID)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM consumer_grant_actions WHERE grant_id = $1`, grantID)
+	require.Error(t, err, "active grant must retain at least one action")
+
+	tx, err = stack.SQLDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `DELETE FROM consumer_grant_actions WHERE grant_id = $1`, grantID)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO consumer_grant_actions (grant_id, action)
+		VALUES ($1, 'mihomo.profile.read')
+	`, grantID)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	var action string
+	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `
+		SELECT action FROM consumer_grant_actions WHERE grant_id = $1
+	`, grantID).Scan(&action))
+	require.Equal(t, "mihomo.profile.read", action)
 }
 
 func TestPlatformRegistryDeletionUsesCurrentBindings(t *testing.T) {

@@ -3,7 +3,6 @@ package platformbinding
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
@@ -42,10 +41,6 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 	if err != nil {
 		return nil, false, err
 	}
-	actionsJSON, err := json.Marshal(actions)
-	if err != nil {
-		return nil, false, err
-	}
 
 	binding, err := s.getBinding(input.BindingID)
 	if err != nil {
@@ -60,7 +55,7 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 	var grant model.ConsumerGrant
 	created := false
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		lookup := tx.Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
+		lookup := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant)
 		if lookup.Error != nil {
 			if !errors.Is(lookup.Error, gorm.ErrRecordNotFound) {
 				return lookup.Error
@@ -70,7 +65,6 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 				BindingID:     input.BindingID,
 				Consumer:      input.Consumer,
 				Status:        model.ConsumerGrantStatusActive,
-				ScopesJSON:    string(actionsJSON),
 				TicketVersion: 1,
 				GrantedBy:     input.GrantedBy,
 				GrantedAt:     grantedAt,
@@ -79,22 +73,30 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 			if err := tx.Create(&grant).Error; err != nil {
 				return err
 			}
+			if err := replaceGrantActions(tx, &grant, actions); err != nil {
+				return err
+			}
 			return writeGrantAudit(tx, binding, input.BindingID, input.Consumer, auditActorUserID(input.GrantedBy), true, created)
 		}
 
 		grant.Status = model.ConsumerGrantStatusActive
-		if grant.ScopesJSON != string(actionsJSON) {
+		actionsChanged := !slices.Equal(grantActionNames(grant.Actions), actions)
+		if actionsChanged {
 			grant.TicketVersion = nextTicketVersion(grant.TicketVersion)
 		}
 		if grant.TicketVersion == 0 {
 			grant.TicketVersion = 1
 		}
-		grant.ScopesJSON = string(actionsJSON)
 		grant.GrantedBy = input.GrantedBy
 		grant.GrantedAt = grantedAt
 		grant.RevokedAt = sql.NullTime{}
 		if err := tx.Save(&grant).Error; err != nil {
 			return err
+		}
+		if actionsChanged {
+			if err := replaceGrantActions(tx, &grant, actions); err != nil {
+				return err
+			}
 		}
 		return writeGrantAudit(tx, binding, input.BindingID, input.Consumer, auditActorUserID(input.GrantedBy), true, created)
 	})
@@ -103,6 +105,31 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 	}
 
 	return &grant, created, nil
+}
+
+func grantActionNames(rows []model.ConsumerGrantAction) []string {
+	actions := make([]string, 0, len(rows))
+	for _, row := range rows {
+		actions = append(actions, row.Action)
+	}
+	slices.Sort(actions)
+	return actions
+}
+
+func replaceGrantActions(tx *gorm.DB, grant *model.ConsumerGrant, actions []string) error {
+	if err := tx.Where("grant_id = ?", grant.ID).Delete(&model.ConsumerGrantAction{}).Error; err != nil {
+		return err
+	}
+
+	rows := make([]model.ConsumerGrantAction, 0, len(actions))
+	for _, action := range actions {
+		rows = append(rows, model.ConsumerGrantAction{GrantID: grant.ID, Action: action})
+	}
+	if err := tx.Create(&rows).Error; err != nil {
+		return err
+	}
+	grant.Actions = rows
+	return nil
 }
 
 func normalizeGrantActions(actions []string) ([]string, error) {
@@ -160,7 +187,7 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 	shouldInvalidate := false
 	minimumGrantVersion := uint64(0)
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
+		if err := tx.Preload("Actions").Where("binding_id = ? AND consumer = ?", input.BindingID, input.Consumer).First(&grant).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				grant = model.ConsumerGrant{
 					BindingID:         input.BindingID,
@@ -249,7 +276,7 @@ func (s *GrantService) ListGrants(bindingID uint64, params ListParams) ([]model.
 	}
 
 	var grants []model.ConsumerGrant
-	if err := query.Order("id ASC").Offset(pageOffset(params)).Limit(params.PageSize).Find(&grants).Error; err != nil {
+	if err := query.Preload("Actions").Order("id ASC").Offset(pageOffset(params)).Limit(params.PageSize).Find(&grants).Error; err != nil {
 		return nil, 0, err
 	}
 

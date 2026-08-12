@@ -1,7 +1,7 @@
 package platformbinding
 
 import (
-	"encoding/json"
+	"slices"
 	"time"
 
 	"paigram/internal/model"
@@ -108,8 +108,11 @@ func buildGrantViews(items []model.ConsumerGrant) []ConsumerGrantView {
 }
 
 func buildGrantView(item *model.ConsumerGrant) ConsumerGrantView {
-	actions := make([]string, 0)
-	_ = json.Unmarshal([]byte(item.ScopesJSON), &actions)
+	actions := make([]string, 0, len(item.Actions))
+	for _, action := range item.Actions {
+		actions = append(actions, action.Action)
+	}
+	slices.Sort(actions)
 	view := ConsumerGrantView{
 		BindingID: item.BindingID, Consumer: item.Consumer, Status: item.Status, Actions: actions, RevokedAt: nullableTime(item.RevokedAt),
 	}

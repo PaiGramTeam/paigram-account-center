@@ -223,13 +223,21 @@ func TestBindingAccessService_GetGrantedScopesForConsumerReadsGrantScopes(t *tes
 	}
 	require.NoError(t, db.Create(&binding).Error)
 	consumer := "paigram-client"
-	require.NoError(t, db.Create(&model.ConsumerGrant{
-		BindingID:  binding.ID,
-		Consumer:   consumer,
-		Status:     model.ConsumerGrantStatusActive,
-		ScopesJSON: `["messages:read","messages:write"]`,
-		GrantedAt:  time.Now().UTC(),
-	}).Error)
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		grant := model.ConsumerGrant{
+			BindingID: binding.ID,
+			Consumer:  consumer,
+			Status:    model.ConsumerGrantStatusActive,
+			GrantedAt: time.Now().UTC(),
+		}
+		if err := tx.Create(&grant).Error; err != nil {
+			return err
+		}
+		return tx.Create(&[]model.ConsumerGrantAction{
+			{GrantID: grant.ID, Action: "messages:read"},
+			{GrantID: grant.ID, Action: "messages:write"},
+		}).Error
+	}))
 
 	scopes, err := service.GetGrantedScopesForConsumer(consumer, binding.ID)
 	require.NoError(t, err)

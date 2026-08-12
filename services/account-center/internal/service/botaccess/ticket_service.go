@@ -1,7 +1,7 @@
 package botaccess
 
 import (
-	"encoding/json"
+	"slices"
 	"time"
 
 	"paigram/internal/config"
@@ -60,17 +60,11 @@ func (s *TicketService) Issue(botID, consumer string, binding *model.PlatformAcc
 	return s.signer.Issue(serviceticket.TypeDelegation, "consumer:"+consumer, audience, claims)
 }
 
-// DecodeGrantScopes parses a consumer_grants.scopes_json column value
-// into a string slice. Returns an empty slice when the JSON is empty.
-func DecodeGrantScopes(grant model.ConsumerGrant) ([]string, error) {
-	if grant.ScopesJSON == "" {
-		return []string{}, nil
+func GrantActions(grant model.ConsumerGrant) []string {
+	scopes := make([]string, 0, len(grant.Actions))
+	for _, action := range grant.Actions {
+		scopes = append(scopes, action.Action)
 	}
-
-	var scopes []string
-	if err := json.Unmarshal([]byte(grant.ScopesJSON), &scopes); err != nil {
-		return nil, err
-	}
-
-	return scopes, nil
+	slices.Sort(scopes)
+	return scopes
 }

@@ -103,7 +103,7 @@ func (s *BindingAccessService) GetGrantedScopesForConsumer(consumer string, bind
 	}
 
 	var grant model.ConsumerGrant
-	if err := s.db.Where("binding_id = ? AND consumer = ?", bindingID, consumer).First(&grant).Error; err != nil {
+	if err := s.db.Preload("Actions").Where("binding_id = ? AND consumer = ?", bindingID, consumer).First(&grant).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, ErrConsumerGrantNotFound
 		}
@@ -113,12 +113,7 @@ func (s *BindingAccessService) GetGrantedScopesForConsumer(consumer string, bind
 		return nil, ErrConsumerGrantRevoked
 	}
 
-	scopes, err := DecodeGrantScopes(grant)
-	if err != nil {
-		return nil, fmt.Errorf("decode consumer grant scopes: %w", err)
-	}
-
-	return scopes, nil
+	return GrantActions(grant), nil
 }
 
 func nullableBindingExternalAccountKey(value sql.NullString) string {

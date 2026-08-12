@@ -50,14 +50,13 @@ func TestMePlatformAccountRoutesEnforceOwnership(t *testing.T) {
 		IsPrimary:          true,
 	}
 	require.NoError(t, stack.DB.Create(&profile).Error)
-	grant := model.ConsumerGrant{
+	_, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
 		BindingID: binding.ID,
 		Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
-		Status:    model.ConsumerGrantStatusActive,
 		GrantedBy: sql.NullInt64{Int64: int64(ownerID), Valid: true},
 		GrantedAt: time.Now().UTC(),
-	}
-	require.NoError(t, stack.DB.Create(&grant).Error)
+	})
+	require.NoError(t, err)
 
 	t.Run("owner can access self-service endpoints", func(t *testing.T) {
 		for _, tc := range []struct {
@@ -144,14 +143,13 @@ func TestPlatformBindingRoutes(t *testing.T) {
 	binding.PrimaryProfileID = sql.NullInt64{Int64: int64(profiles[0].ID), Valid: true}
 	require.NoError(t, stack.DB.Model(&binding).Update("primary_profile_id", binding.PrimaryProfileID).Error)
 
-	grant := model.ConsumerGrant{
+	_, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
 		BindingID: binding.ID,
 		Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
-		Status:    model.ConsumerGrantStatusActive,
 		GrantedBy: sql.NullInt64{Int64: int64(ownerID), Valid: true},
 		GrantedAt: time.Now().UTC(),
-	}
-	require.NoError(t, stack.DB.Create(&grant).Error)
+	})
+	require.NoError(t, err)
 
 	createStub := &platformBindingRouteStub{
 		summaryResponse: &platformv1.GetCredentialSummaryResponse{
@@ -738,13 +736,13 @@ func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneSta
 		Nickname:           "Traveler",
 		IsPrimary:          true,
 	}).Error)
-	require.NoError(t, stack.DB.Create(&model.ConsumerGrant{
+	grant, _, err := serviceplatformbinding.NewGrantService(stack.DB).UpsertGrant(serviceplatformbinding.UpsertGrantInput{
 		BindingID: binding.ID,
 		Consumer:  serviceplatformbinding.ConsumerPaiGramBot,
-		Status:    model.ConsumerGrantStatusActive,
 		GrantedBy: sql.NullInt64{Int64: int64(ownerID), Valid: true},
 		GrantedAt: time.Now().UTC(),
-	}).Error)
+	})
+	require.NoError(t, err)
 	stub := &platformBindingRouteStub{}
 	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, stub))
 
@@ -762,6 +760,9 @@ func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneSta
 	var grantCount int64
 	require.NoError(t, stack.DB.Model(&model.ConsumerGrant{}).Where("binding_id = ?", binding.ID).Count(&grantCount).Error)
 	assert.Zero(t, grantCount)
+	var actionCount int64
+	require.NoError(t, stack.DB.Model(&model.ConsumerGrantAction{}).Where("grant_id = ?", grant.ID).Count(&actionCount).Error)
+	assert.Zero(t, actionCount)
 }
 
 func TestAdminDeletePlatformBindingRouteDeletesProviderCredential(t *testing.T) {

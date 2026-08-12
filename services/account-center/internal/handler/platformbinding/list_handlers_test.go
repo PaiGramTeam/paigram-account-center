@@ -188,7 +188,7 @@ func TestAdminListConsumerGrantsReturnsCanonicalPaginationPayload(t *testing.T) 
 	})
 	require.NoError(t, err)
 	for _, consumer := range []string{"paigram-bot", "pamgram", "mihomo.sync"} {
-		require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: binding.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive}).Error)
+		seedHandlerConsumerGrant(t, db, binding.ID, consumer)
 	}
 
 	w := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestMeListConsumerGrantsReturnsCanonicalPaginationPayload(t *testing.T) {
 	})
 	require.NoError(t, err)
 	for _, consumer := range []string{"paigram-bot", "pamgram"} {
-		require.NoError(t, db.Create(&model.ConsumerGrant{BindingID: binding.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive}).Error)
+		seedHandlerConsumerGrant(t, db, binding.ID, consumer)
 	}
 
 	w := httptest.NewRecorder()
@@ -390,6 +390,17 @@ func setupPlatformBindingHandlerTestDB(t *testing.T) *gorm.DB {
 	db := testutil.OpenPostgreSQLTestDB(t, "platformbinding_handler")
 	require.NoError(t, db.Exec(readPlatformBindingHandlerMigration(t, "000001_init_schema.up.sql")).Error)
 	return db
+}
+
+func seedHandlerConsumerGrant(t *testing.T, db *gorm.DB, bindingID uint64, consumer string) {
+	t.Helper()
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		grant := model.ConsumerGrant{BindingID: bindingID, Consumer: consumer, Status: model.ConsumerGrantStatusActive}
+		if err := tx.Create(&grant).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.ConsumerGrantAction{GrantID: grant.ID, Action: "mihomo.status.read"}).Error
+	}))
 }
 
 func assertCanonicalPaginationPayload(t *testing.T, body []byte, expectedItems, expectedTotal, expectedPage, expectedPageSize, expectedTotalPages int) {

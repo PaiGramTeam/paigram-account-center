@@ -422,7 +422,6 @@ CREATE TABLE consumer_grants (
     binding_id BIGINT NOT NULL,
     consumer VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
-    scopes_json TEXT NOT NULL,
     ticket_version BIGINT NOT NULL DEFAULT 1,
     granted_by BIGINT,
     granted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -437,6 +436,61 @@ CREATE TABLE consumer_grants (
 CREATE INDEX idx_consumer_grants_binding_id ON consumer_grants (binding_id);
 CREATE INDEX idx_consumer_grants_status ON consumer_grants (status);
 CREATE INDEX idx_consumer_grants_granted_by ON consumer_grants (granted_by);
+
+CREATE TABLE consumer_grant_actions (
+    grant_id BIGINT NOT NULL,
+    action VARCHAR(128) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (grant_id, action),
+    CONSTRAINT fk_consumer_grant_actions_grant FOREIGN KEY (grant_id) REFERENCES consumer_grants (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX idx_consumer_grant_actions_action ON consumer_grant_actions (action);
+
+CREATE FUNCTION validate_consumer_grant_actions(target_grant_id BIGINT) RETURNS VOID AS $$
+DECLARE
+    grant_status VARCHAR(32);
+BEGIN
+    SELECT status INTO grant_status FROM consumer_grants WHERE id = target_grant_id;
+    IF grant_status = 'active' AND NOT EXISTS (
+        SELECT 1 FROM consumer_grant_actions WHERE grant_id = target_grant_id
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23514',
+            MESSAGE = 'active consumer grant requires at least one action';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION enforce_consumer_grant_actions_from_grant() RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM validate_consumer_grant_actions(NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION enforce_consumer_grant_actions_from_action() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM validate_consumer_grant_actions(OLD.grant_id);
+        RETURN OLD;
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.grant_id <> NEW.grant_id THEN
+        PERFORM validate_consumer_grant_actions(OLD.grant_id);
+    END IF;
+    PERFORM validate_consumer_grant_actions(NEW.grant_id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER consumer_grants_require_actions
+    AFTER INSERT OR UPDATE ON consumer_grants
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_consumer_grant_actions_from_grant();
+
+CREATE CONSTRAINT TRIGGER consumer_grant_actions_preserve_active_grant
+    AFTER INSERT OR UPDATE OR DELETE ON consumer_grant_actions
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_consumer_grant_actions_from_action();
 
 CREATE TABLE system_config_entries (
     id BIGSERIAL PRIMARY KEY,

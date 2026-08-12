@@ -1,7 +1,11 @@
 DROP TABLE IF EXISTS audit_events CASCADE;
 DROP TABLE IF EXISTS legal_documents CASCADE;
 DROP TABLE IF EXISTS system_config_entries CASCADE;
+DROP TABLE IF EXISTS consumer_grant_actions CASCADE;
 DROP TABLE IF EXISTS consumer_grants CASCADE;
+DROP FUNCTION IF EXISTS enforce_consumer_grant_actions_from_action();
+DROP FUNCTION IF EXISTS enforce_consumer_grant_actions_from_grant();
+DROP FUNCTION IF EXISTS validate_consumer_grant_actions(BIGINT);
 DROP TABLE IF EXISTS platform_account_profiles CASCADE;
 DROP TABLE IF EXISTS platform_account_bindings CASCADE;
 DROP TABLE IF EXISTS platform_services CASCADE;

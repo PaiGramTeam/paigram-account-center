@@ -185,9 +185,10 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 
 	signingKey := botAccessTestSigningKey(t)
 	bot, _, ref := seedBotAccessGRPCTestData(t, db)
-	grantJSON, err := json.Marshal([]string{"daily.sign"})
-	require.NoError(t, err)
-	require.NoError(t, db.Model(&model.ConsumerGrant{}).Where("binding_id = ? AND consumer = ?", ref.ID, bot.ID).Update("scopes_json", string(grantJSON)).Error)
+	var grant model.ConsumerGrant
+	require.NoError(t, db.Where("binding_id = ? AND consumer = ?", ref.ID, bot.ID).First(&grant).Error)
+	require.NoError(t, db.Where("grant_id = ?", grant.ID).Delete(&model.ConsumerGrantAction{}).Error)
+	require.NoError(t, db.Create(&model.ConsumerGrantAction{GrantID: grant.ID, Action: "daily.sign"}).Error)
 
 	conn := newBotAccessBufconnClient(t, db, signingKey)
 	defer conn.Close()
@@ -195,7 +196,7 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+accessToken))
 	accessClient := pb.NewBotAccessServiceClient(conn)
 
-	_, err = accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
+	_, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId:  "tg-123",
 		BindingId:       ref.ID,
 		RequestedScopes: []string{"daily.sign", "notes.write"},
@@ -398,13 +399,21 @@ func seedBotAccessGRPCTestData(t *testing.T, db *gorm.DB) (model.Bot, model.User
 	}
 	require.NoError(t, db.Create(&ref).Error)
 	// Seed the grant under the calling credential's client ID.
-	require.NoError(t, db.Create(&model.ConsumerGrant{
-		BindingID:  ref.ID,
-		Consumer:   bot.ID,
-		Status:     model.ConsumerGrantStatusActive,
-		ScopesJSON: `["daily.sign","daily.note.read"]`,
-		GrantedAt:  time.Now().UTC(),
-	}).Error)
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		grant := model.ConsumerGrant{
+			BindingID: ref.ID,
+			Consumer:  bot.ID,
+			Status:    model.ConsumerGrantStatusActive,
+			GrantedAt: time.Now().UTC(),
+		}
+		if err := tx.Create(&grant).Error; err != nil {
+			return err
+		}
+		return tx.Create(&[]model.ConsumerGrantAction{
+			{GrantID: grant.ID, Action: "daily.sign"},
+			{GrantID: grant.ID, Action: "daily.note.read"},
+		}).Error
+	}))
 
 	return bot, identityUser, ref
 }
