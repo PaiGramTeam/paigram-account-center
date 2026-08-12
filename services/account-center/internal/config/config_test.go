@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,19 @@ func TestSetDefaultsIncludesSentry(t *testing.T) {
 	require.Equal(t, 0.0, v.GetFloat64("sentry.traces_sample_rate"))
 	require.Equal(t, 2, v.GetInt("sentry.flush_timeout"))
 	require.False(t, v.GetBool("auth.session_cookie_secure"))
+}
+
+func TestTrustedProxiesCanBeConfiguredFromEnvironment(t *testing.T) {
+	t.Setenv("PAI_APP_TRUSTED_PROXIES", "10.77.20.10")
+	v := viper.New()
+	setDefaults(v)
+	v.SetEnvPrefix("PAI")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	loaded := &Config{}
+	require.NoError(t, v.Unmarshal(loaded))
+	require.Equal(t, []string{"10.77.20.10"}, loaded.App.TrustedProxies)
 }
 
 func TestSetDefaultsIncludesServiceTicketSettings(t *testing.T) {

@@ -2,6 +2,8 @@
 
 This project deploys Platform Mihomo independently from Account Center. It owns its PostgreSQL database, Redis instance, image, configuration, and lifecycle.
 
+Set `PAI_PLATFORM_IMAGE` to a canonical `registry/repository@sha256:<64 hex characters>` reference built and pushed from the checked-in Containerfile with `--build-arg VCS_REF=<full source commit>`. The build rejects a missing or malformed revision and stores it in `org.opencontainers.image.revision`. Production Compose never builds from the current working tree, and `deploy.ps1` rejects tag-only images. Base images are pinned the same way; update tags and digests together during reviewed dependency updates. See [Docker's digest-pinning guidance](https://docs.docker.com/build/building/best-practices/#pin-base-image-versions).
+
 Create the shared private network once, then provision every value under `secrets:` with `podman secret create`. Secret contents must not be placed in `.env`, Compose environment entries, command-line arguments, or logs. The Account Center project must join the same network.
 
 The control listener is available only as `platform-mihomo:9000` on the shared network and requires an Account Center client certificate. The runtime listener publishes TLS port `9001` through the loopback binding configured in `.env`. Its certificate SAN must match the runtime server name distributed to Bot operators.

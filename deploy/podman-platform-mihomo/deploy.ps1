@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$NoBuild)
+param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -25,6 +25,14 @@ if (-not $instance) { $instance = "paigram-platform-mihomo" }
 if ($instance -notmatch '^[a-z0-9][a-z0-9-]*$') {
     throw "PAI_PLATFORM_INSTANCE must contain only lowercase letters, digits, and hyphens"
 }
+$platformImage = Get-EnvValue -Name "PAI_PLATFORM_IMAGE"
+if ($platformImage -notmatch '^\S+@sha256:[a-f0-9]{64}$') {
+    throw "PAI_PLATFORM_IMAGE must be an immutable image reference containing a 64-character sha256 digest"
+}
+& podman pull $platformImage
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not pull PAI_PLATFORM_IMAGE"
+}
 $network = Get-EnvValue -Name "PAI_PLATFORM_NETWORK"
 if (-not $network) { $network = "paigram-platform-backplane" }
 & podman network inspect $network *> $null
@@ -34,8 +42,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $composeArguments = @("compose", "--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
-$upArguments = if ($NoBuild) { @("--no-build", "-d") } else { @("--build", "-d") }
-& podman @composeArguments up @upArguments
+& podman @composeArguments up --no-build -d
 if ($LASTEXITCODE -ne 0) { throw "Platform Mihomo deployment failed" }
 
 for ($attempt = 1; $attempt -le 60; $attempt++) {

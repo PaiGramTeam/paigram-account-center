@@ -95,26 +95,13 @@ func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncac
 		log.Printf("[SECURITY] CORS enabled for %v", appCfg.CORS.AllowOrigins)
 	}
 
-	// SECURITY: Configure trusted proxies to prevent IP spoofing.
-	// V21: trusted_proxies defaults to empty (fail-safe). Operators
-	// behind a reverse proxy MUST configure their proxy IP/CIDR or
-	// X-Forwarded-For-based rate limiting will be spoofable.
+	if err := configureTrustedProxies(engine, appCfg.TrustedProxies); err != nil {
+		return nil, err
+	}
 	if len(appCfg.TrustedProxies) > 0 {
-		if err := engine.SetTrustedProxies(appCfg.TrustedProxies); err != nil {
-			log.Printf("[SECURITY WARNING] Failed to set trusted proxies: %v", err)
-			log.Printf("Rate limiting by IP may be vulnerable to spoofing!")
-		} else {
-			log.Printf("[security] app.trusted_proxies = %v", appCfg.TrustedProxies)
-		}
+		log.Printf("[security] app.trusted_proxies = %v", appCfg.TrustedProxies)
 	} else {
-		// No trusted proxies — gin will use the direct connection IP.
-		// Correct for direct deployments; operators behind a reverse
-		// proxy must set app.trusted_proxies explicitly.
-		if err := engine.SetTrustedProxies(nil); err != nil {
-			log.Printf("[SECURITY WARNING] Failed to disable trusted proxies: %v", err)
-		}
-		log.Printf("[security] app.trusted_proxies is empty — gin will trust only the direct client connection IP. " +
-			"If running behind a reverse proxy, set app.trusted_proxies to its real IP/CIDR.")
+		log.Printf("[security] app.trusted_proxies is empty; forwarded client addresses are ignored")
 	}
 
 	runtime, err := httpserver.Attach(engine, httpserver.Options{

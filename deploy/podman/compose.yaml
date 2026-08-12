@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: public.ecr.aws/docker/library/postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     container_name: "${PAI_INSTANCE:-paigram-account-center}-postgres"
     restart: unless-stopped
     environment:
@@ -17,7 +17,7 @@ services:
     networks: [account-center]
 
   redis:
-    image: public.ecr.aws/docker/library/redis:7-alpine
+    image: docker.io/library/redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     container_name: "${PAI_INSTANCE:-paigram-account-center}-redis"
     restart: unless-stopped
     command: ["redis-server", "/run/secrets/account_redis_config", "--appendonly", "yes"]
@@ -31,10 +31,7 @@ services:
     networks: [account-center]
 
   account-center:
-    build:
-      context: ../..
-      dockerfile: deploy/podman/account-center.Containerfile
-    image: "localhost/${PAI_INSTANCE:-paigram-account-center}:${PAI_IMAGE_TAG:-latest}"
+    image: "${PAI_ACCOUNT_IMAGE:?set PAI_ACCOUNT_IMAGE to an immutable image reference containing @sha256}"
     container_name: "${PAI_INSTANCE:-paigram-account-center}"
     restart: unless-stopped
     depends_on:
@@ -43,6 +40,7 @@ services:
     environment:
       PAI_AUTH_REQUIRE_VERIFIED_EMAIL_LOGIN: "${PAI_REQUIRE_EMAIL_VERIFICATION:-false}"
       PAI_FRONTEND_BASE_URL: "${PAI_FRONTEND_BASE_URL:?set PAI_FRONTEND_BASE_URL to the public HTTPS origin}"
+      PAI_APP_TRUSTED_PROXIES: "10.77.20.10"
       ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
       ADMIN_PASSWORD_FILE: /run/secrets/account_admin_password
       ADMIN_NAME: "${PAI_ADMIN_NAME:-Administrator}"
@@ -79,10 +77,7 @@ services:
     networks: [account-center, platform-backplane]
 
   frontend:
-    build:
-      context: ../..
-      dockerfile: deploy/podman/frontend.Containerfile
-    image: "localhost/${PAI_INSTANCE:-paigram-account-center}-frontend:${PAI_IMAGE_TAG:-latest}"
+    image: "${PAI_FRONTEND_IMAGE:?set PAI_FRONTEND_IMAGE to an immutable image reference containing @sha256}"
     container_name: "${PAI_INSTANCE:-paigram-account-center}-frontend"
     restart: unless-stopped
     depends_on:
@@ -97,11 +92,17 @@ services:
     tmpfs: ["/tmp:size=32m,mode=1777"]
     cap_drop: [ALL]
     security_opt: [no-new-privileges]
-    networks: [account-center]
+    networks:
+      account-center:
+        ipv4_address: 10.77.20.10
 
 networks:
   account-center:
     name: "${PAI_INSTANCE:-paigram-account-center}"
+    ipam:
+      config:
+        - subnet: 10.77.20.0/24
+          gateway: 10.77.20.1
   platform-backplane:
     name: "${PAI_PLATFORM_NETWORK:-paigram-platform-backplane}"
     external: true

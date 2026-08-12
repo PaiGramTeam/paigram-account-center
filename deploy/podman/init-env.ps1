@@ -3,7 +3,13 @@ param(
     [ValidateRange(1, 65535)]
     [int]$HttpPort = 18080,
     [Parameter(Mandatory)]
-    [string]$FrontendBaseUrl
+    [string]$FrontendBaseUrl,
+    [Parameter(Mandatory)]
+    [ValidatePattern('^\S+@sha256:[a-f0-9]{64}$')]
+    [string]$AccountImage,
+    [Parameter(Mandatory)]
+    [ValidatePattern('^\S+@sha256:[a-f0-9]{64}$')]
+    [string]$FrontendImage
 )
 
 Set-StrictMode -Version Latest
@@ -27,7 +33,8 @@ if (-not [Uri]::TryCreate($FrontendBaseUrl, [UriKind]::Absolute, [ref]$publicFro
 $values = @(
     "PAI_INSTANCE=paigram-account-center"
     "PAI_PLATFORM_NETWORK=paigram-platform-backplane"
-    "PAI_IMAGE_TAG=latest"
+    "PAI_ACCOUNT_IMAGE=$AccountImage"
+    "PAI_FRONTEND_IMAGE=$FrontendImage"
     "PAI_HTTP_BIND=127.0.0.1"
     "PAI_HTTP_PORT=$HttpPort"
     "PAI_ACCOUNT_GRPC_BIND=127.0.0.1"

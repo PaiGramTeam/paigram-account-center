@@ -1,7 +1,5 @@
 [CmdletBinding()]
-param(
-    [switch]$NoBuild
-)
+param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -29,6 +27,20 @@ $instance = Get-EnvValue -Name "PAI_INSTANCE"
 if (-not $instance) {
     $instance = "paigram-account-center"
 }
+
+$immutableImages = @(
+    @{ Name = "PAI_ACCOUNT_IMAGE"; Value = Get-EnvValue -Name "PAI_ACCOUNT_IMAGE" }
+    @{ Name = "PAI_FRONTEND_IMAGE"; Value = Get-EnvValue -Name "PAI_FRONTEND_IMAGE" }
+)
+foreach ($image in $immutableImages) {
+    if ($image.Value -notmatch '^\S+@sha256:[a-f0-9]{64}$') {
+        throw "$($image.Name) must be an immutable image reference containing a 64-character sha256 digest"
+    }
+    & podman pull $image.Value
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not pull $($image.Name)"
+    }
+}
 if ($instance -notmatch '^[a-z0-9][a-z0-9-]*$') {
     throw "PAI_INSTANCE must contain only lowercase letters, digits, and hyphens"
 }
@@ -43,8 +55,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $composeArguments = @("compose", "--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
-$upArguments = if ($NoBuild) { @("--no-build", "-d") } else { @("--build", "-d") }
-& podman @composeArguments up @upArguments
+& podman @composeArguments up --no-build -d
 if ($LASTEXITCODE -ne 0) {
     throw "Podman Compose deployment failed"
 }
