@@ -107,6 +107,9 @@ func newTestConfig(t testing.TB, redisPrefix string) *config.Config {
 		},
 		OpenAPI: config.OpenAPIConfig{Enabled: true, Path: "/openapi"},
 		Auth:    authConfig,
+		Frontend: config.FrontendConfig{
+			BaseURL: integrationBrowserOrigin,
+		},
 		Redis: config.RedisConfig{
 			Enabled: true,
 			Addr:    testenv.MustShared().RedisAddr,

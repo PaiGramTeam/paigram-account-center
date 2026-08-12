@@ -11,6 +11,7 @@ import {
   useAppStore,
 } from '@paigram/shared-components'
 import type { RouterGuardConfig } from '@paigram/shared-components'
+import { useAuthStore } from '@/stores/auth'
 
 import './style.css'
 import '@arco-design/web-vue/es/message/style/index.css'
@@ -27,6 +28,8 @@ async function bootstrap(): Promise<void> {
   appStore.initTheme()
 
   setupI18n(app)
+
+  await useAuthStore().bootstrapSession()
 
   const routerGuardConfig: RouterGuardConfig = {
     getUserStore: () => useUserStore(),

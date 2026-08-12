@@ -39,10 +39,17 @@ type Contract struct {
 	errors               []int
 	errorTypes           map[int]reflect.Type
 	parameters           []Parameter
+	securitySchemes      []string
 	validateBody         bool
 	handlerManagedBody   bool
 	maxBodyBytes         int64
 	bodyReadTimeout      time.Duration
+}
+
+// WithSecuritySchemes documents alternative OpenAPI security schemes for a public route.
+func (c Contract) WithSecuritySchemes(schemes ...string) Contract {
+	c.securitySchemes = append([]string(nil), schemes...)
+	return c
 }
 
 func (c Contract) WithSuccessResponseAlternatives(responses ...any) Contract {
@@ -206,6 +213,12 @@ func (c Contract) apply(op *huma.Operation) {
 	op.MaxBodyBytes = c.maxBodyBytes
 	op.BodyReadTimeout = c.bodyReadTimeout
 	op.SkipValidateParams = false
+	if len(c.securitySchemes) > 0 {
+		op.Security = make([]map[string][]string, 0, len(c.securitySchemes))
+		for _, scheme := range c.securitySchemes {
+			op.Security = append(op.Security, map[string][]string{scheme: {}})
+		}
+	}
 }
 
 func (c Contract) document(op *huma.Operation) {

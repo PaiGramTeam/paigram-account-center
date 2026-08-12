@@ -66,7 +66,7 @@ func registerAndLogin(t *testing.T, stack *integrationStack, email, password str
 
 	userID := uint64(loginData["user_id"].(float64))
 	accessToken := loginData["access_token"].(string)
-	refreshToken := loginData["refresh_token"].(string)
+	refreshToken := requireBrowserRefreshToken(t, loginRes)
 
 	return userID, accessToken, refreshToken, email, password
 }

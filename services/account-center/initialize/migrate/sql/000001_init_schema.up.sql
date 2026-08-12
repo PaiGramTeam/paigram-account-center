@@ -88,6 +88,7 @@ CREATE INDEX idx_user_oauth_states_user_id ON user_oauth_states (user_id);
 CREATE TABLE user_sessions (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
+    family_id VARCHAR(36) NOT NULL,
     access_token_hash VARCHAR(64) NOT NULL,
     refresh_token_hash VARCHAR(64) NOT NULL,
     access_expiry TIMESTAMPTZ NOT NULL,
@@ -103,8 +104,24 @@ CREATE TABLE user_sessions (
     CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX idx_user_sessions_user ON user_sessions (user_id);
+CREATE INDEX idx_user_sessions_family ON user_sessions (family_id);
 CREATE INDEX idx_refresh_expiry ON user_sessions (refresh_expiry);
 CREATE INDEX idx_access_expiry ON user_sessions (access_expiry);
+
+CREATE TABLE user_refresh_token_histories (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    family_id VARCHAR(36) NOT NULL,
+    token_hash VARCHAR(64) NOT NULL,
+    used_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_user_refresh_token_histories_token_hash UNIQUE (token_hash),
+    CONSTRAINT fk_user_refresh_token_histories_session FOREIGN KEY (session_id) REFERENCES user_sessions (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX idx_user_refresh_token_histories_session ON user_refresh_token_histories (session_id);
+CREATE INDEX idx_user_refresh_token_histories_family ON user_refresh_token_histories (family_id);
+CREATE INDEX idx_user_refresh_token_histories_expiry ON user_refresh_token_histories (expires_at);
 
 CREATE TABLE login_audits (
     id BIGSERIAL PRIMARY KEY,

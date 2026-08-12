@@ -27,6 +27,7 @@ openapi:
   path: "/openapi"
 
 auth:
+  session_cookie_secure: true
   service_ticket_ttl: 300
   service_ticket_issuer: "paigram-account-center"
   service_ticket_key_id: "account-center-ed25519-2026-01"
@@ -55,7 +56,7 @@ security:
   encryption_key: ""
   require_redis_for_2fa: true
   security_headers:
-    assume_https: false
+    assume_https: true
 
 sentry:
   enabled: false

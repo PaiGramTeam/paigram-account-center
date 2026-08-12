@@ -11,7 +11,6 @@ test('signs in through the routed API contract', async ({ page }) => {
         message: 'OK',
         data: {
           access_token: 'routed-access-token',
-          refresh_token: 'routed-refresh-token',
           access_expiry: '2026-08-09T01:00:00Z',
           refresh_expiry: '2026-09-08T00:00:00Z',
           user_id: 1,

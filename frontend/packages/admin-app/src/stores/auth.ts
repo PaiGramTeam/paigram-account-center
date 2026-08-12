@@ -71,7 +71,6 @@ export const useAuthStore = defineStore('auth', {
 
         userStore.setAuthData({
           accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
         })
 
         await this.fetchUserProfile(response.data.user_id)
@@ -141,13 +140,12 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await authApi.handleOAuthCallback(provider, callbackData)
 
-        if (!response.data.access_token || !response.data.refresh_token || !response.data.user_id) {
+        if (!response.data.access_token || !response.data.user_id) {
           throw new Error('OAuth login response is incomplete')
         }
 
         userStore.setAuthData({
           accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
         })
 
         await this.fetchUserProfile(response.data.user_id)
@@ -172,6 +170,21 @@ export const useAuthStore = defineStore('auth', {
         await userStore.logout()
       } finally {
         this.loginType = null
+      }
+    },
+
+    async bootstrapSession(): Promise<boolean> {
+      const userStore = useUserStore()
+      const sessionEpoch = userStore.sessionEpoch
+      try {
+        const response = await authApi.refreshToken()
+        if (userStore.sessionEpoch !== sessionEpoch) return false
+        userStore.setAuthData({ accessToken: response.data.access_token })
+        await this.fetchUserProfile(response.data.user_id)
+        return true
+      } catch (_error) {
+        userStore.reset()
+        return false
       }
     },
   },

@@ -1000,9 +1000,6 @@
           "refresh_expiry": {
             "type": "string"
           },
-          "refresh_token": {
-            "type": "string"
-          },
           "user_id": {
             "format": "int64",
             "minimum": 0,
@@ -1012,7 +1009,6 @@
         "required": [
           "user_id",
           "access_token",
-          "refresh_token",
           "access_expiry",
           "refresh_expiry"
         ],
@@ -1089,9 +1085,6 @@
             "type": "string"
           },
           "refresh_expiry": {
-            "type": "string"
-          },
-          "refresh_token": {
             "type": "string"
           },
           "user_id": {
@@ -2475,10 +2468,16 @@
     },
     "securitySchemes": {
       "bearerAuth": {
-        "bearerFormat": "JWT",
-        "description": "Paigram access token.",
+        "bearerFormat": "opaque",
+        "description": "Paigram opaque access token.",
         "scheme": "bearer",
         "type": "http"
+      },
+      "refreshCookie": {
+        "description": "HttpOnly browser refresh credential managed by the Account Center.",
+        "in": "cookie",
+        "name": "ac_refresh",
+        "type": "apiKey"
       }
     }
   },
@@ -24062,26 +24061,6 @@
     "/api/v1/auth/logout": {
       "post": {
         "operationId": "post-api-v1-auth-logout",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "token": {
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "token"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -24111,7 +24090,7 @@
             },
             "description": "OK"
           },
-          "400": {
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -24151,133 +24130,7 @@
                 }
               }
             },
-            "description": "Bad Request"
-          },
-          "408": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "format": "int64",
-                          "type": "integer"
-                        },
-                        "data": {},
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "data",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "error": {
-                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Request Timeout"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "format": "int64",
-                          "type": "integer"
-                        },
-                        "data": {},
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "data",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "error": {
-                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "format": "int64",
-                          "type": "integer"
-                        },
-                        "data": {},
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "data",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "error": {
-                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -24322,6 +24175,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "refreshCookie": []
+          }
+        ],
         "tags": [
           "auth"
         ],
@@ -25068,26 +24929,6 @@
     "/api/v1/auth/refresh": {
       "post": {
         "operationId": "post-api-v1-auth-refresh",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": false,
-                "properties": {
-                  "refresh_token": {
-                    "minLength": 1,
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "refresh_token"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "content": {
@@ -25116,48 +24957,6 @@
               }
             },
             "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "format": "int64",
-                          "type": "integer"
-                        },
-                        "data": {},
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "data",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "error": {
-                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Bad Request"
           },
           "401": {
             "content": {
@@ -25201,7 +25000,7 @@
             },
             "description": "Unauthorized"
           },
-          "408": {
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -25241,91 +25040,7 @@
                 }
               }
             },
-            "description": "Request Timeout"
-          },
-          "413": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "format": "int64",
-                          "type": "integer"
-                        },
-                        "data": {},
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "data",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "error": {
-                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Request Entity Too Large"
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "format": "int64",
-                          "type": "integer"
-                        },
-                        "data": {},
-                        "message": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "data",
-                        "message"
-                      ],
-                      "type": "object"
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "error": {
-                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
-                        }
-                      },
-                      "required": [
-                        "error"
-                      ],
-                      "type": "object"
-                    }
-                  ]
-                }
-              }
-            },
-            "description": "Unsupported Media Type"
+            "description": "Forbidden"
           },
           "500": {
             "content": {
@@ -25370,6 +25085,11 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "refreshCookie": []
+          }
+        ],
         "tags": [
           "auth"
         ],

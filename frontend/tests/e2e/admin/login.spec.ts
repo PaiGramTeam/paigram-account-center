@@ -21,7 +21,6 @@ test('signs in to the administration dashboard through routed responses', async 
         message: 'OK',
         data: {
           access_token: 'routed-admin-access-token',
-          refresh_token: 'routed-admin-refresh-token',
           access_expiry: '2026-08-09T01:00:00Z',
           refresh_expiry: '2026-09-08T00:00:00Z',
           user_id: admin.id,

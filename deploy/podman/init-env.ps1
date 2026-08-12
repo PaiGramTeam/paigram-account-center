@@ -2,7 +2,8 @@
 param(
     [ValidateRange(1, 65535)]
     [int]$HttpPort = 18080,
-    [string]$FrontendBaseUrl = ""
+    [Parameter(Mandatory)]
+    [string]$FrontendBaseUrl
 )
 
 Set-StrictMode -Version Latest
@@ -13,9 +14,19 @@ $target = Join-Path $deployDirectory ".env"
 if (Test-Path -LiteralPath $target) {
     throw "$target already exists"
 }
-if (-not $FrontendBaseUrl) {
-    $FrontendBaseUrl = "http://localhost:$HttpPort"
+$publicFrontendUri = $null
+if (-not [Uri]::TryCreate($FrontendBaseUrl, [UriKind]::Absolute, [ref]$publicFrontendUri) -or
+    $publicFrontendUri.Scheme -ne "https" -or
+    -not $publicFrontendUri.Host -or
+    $publicFrontendUri.UserInfo -or
+    $publicFrontendUri.Query -or
+    $publicFrontendUri.Fragment) {
+    throw "FrontendBaseUrl must be a public HTTPS origin without credentials, path parameters, query, or fragment"
 }
+if ($publicFrontendUri.AbsolutePath -ne "/") {
+    throw "FrontendBaseUrl must be an origin without a path"
+}
+$FrontendBaseUrl = $publicFrontendUri.GetLeftPart([UriPartial]::Authority)
 
 function New-HexSecret {
     param([Parameter(Mandatory)][int]$ByteCount)

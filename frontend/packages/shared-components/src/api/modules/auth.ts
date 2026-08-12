@@ -3,8 +3,6 @@ import type {
   LoginEmailRequest,
   LoginEmailResponse,
   LoginResponse,
-  RefreshTokenRequest,
-  LogoutRequest,
   LogoutResponse,
   RegisterEmailRequest,
   RegisterEmailResponse,
@@ -22,12 +20,12 @@ export function createAuthApi(request: ReturnType<typeof createRequest>) {
       return request.post('/auth/login', data, { skipErrorToast: true })
     },
 
-    async refreshToken(data: RefreshTokenRequest): Promise<LoginResponse> {
-      return request.post('/auth/refresh', data)
+    async refreshToken(): Promise<LoginResponse> {
+      return request.post('/auth/refresh', undefined, { skipErrorToast: true })
     },
 
-    async logout(data: LogoutRequest): Promise<LogoutResponse> {
-      return request.post('/auth/logout', data)
+    async logout(): Promise<LogoutResponse> {
+      return request.post('/auth/logout', undefined, { skipErrorToast: true })
     },
 
     async register(data: RegisterEmailRequest): Promise<RegisterEmailResponse> {

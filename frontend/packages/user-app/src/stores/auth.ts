@@ -49,7 +49,6 @@ export const useAuthStore = defineStore('auth', {
 
         userStore.setAuthData({
           accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
         })
 
         await this.fetchUserProfile(response.data.user_id)
@@ -129,18 +128,11 @@ export const useAuthStore = defineStore('auth', {
     async refreshToken(): Promise<void> {
       const userStore = useUserStore()
 
-      if (!userStore.refreshToken) {
-        throw new Error('No refresh token available')
-      }
-
       try {
-        const response = await authApi.refreshToken({
-          refresh_token: userStore.refreshToken,
-        })
+        const response = await authApi.refreshToken()
 
         userStore.setAuthData({
           accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
         })
       } catch (error) {
         userStore.reset()
@@ -190,13 +182,12 @@ export const useAuthStore = defineStore('auth', {
           return { status: 'bound' }
         }
 
-        if (!response.data.access_token || !response.data.refresh_token || !response.data.user_id) {
+        if (!response.data.access_token || !response.data.user_id) {
           throw new Error('OAuth login response is incomplete')
         }
 
         userStore.setAuthData({
           accessToken: response.data.access_token,
-          refreshToken: response.data.refresh_token,
         })
 
         await this.fetchUserProfile(response.data.user_id)
@@ -213,6 +204,21 @@ export const useAuthStore = defineStore('auth', {
         throw error
       } finally {
         this.loading = false
+      }
+    },
+
+    async bootstrapSession(): Promise<boolean> {
+      const userStore = useUserStore()
+      const sessionEpoch = userStore.sessionEpoch
+      try {
+        const response = await authApi.refreshToken()
+        if (userStore.sessionEpoch !== sessionEpoch) return false
+        userStore.setAuthData({ accessToken: response.data.access_token })
+        await this.fetchUserProfile(response.data.user_id)
+        return true
+      } catch (_error) {
+        userStore.reset()
+        return false
       }
     },
   },

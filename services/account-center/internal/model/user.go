@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/google/uuid"
 	"paigram/internal/crypto"
 
 	"gorm.io/datatypes"
@@ -137,6 +138,7 @@ type UserOAuthState struct {
 type UserSession struct {
 	ID               uint64    `gorm:"primaryKey"`
 	UserID           uint64    `gorm:"index;not null"`
+	FamilyID         string    `gorm:"size:36;not null;index"`
 	AccessTokenHash  string    `gorm:"size:64;uniqueIndex;not null"` // SHA-256 hash of access token
 	RefreshTokenHash string    `gorm:"size:64;uniqueIndex;not null"` // SHA-256 hash of refresh token
 	AccessExpiry     time.Time `gorm:"index"`
@@ -147,6 +149,25 @@ type UserSession struct {
 	UpdatedAt        time.Time
 	RevokedAt        sql.NullTime `gorm:"type:timestamptz"`
 	RevokedReason    string       `gorm:"size:255"`
+}
+
+// UserRefreshTokenHistory records rotated refresh-token hashes so replay can
+// revoke the token family without retaining plaintext browser credentials.
+type UserRefreshTokenHistory struct {
+	ID        uint64    `gorm:"primaryKey"`
+	SessionID uint64    `gorm:"not null;index"`
+	FamilyID  string    `gorm:"size:36;not null;index"`
+	TokenHash string    `gorm:"size:64;not null;uniqueIndex"`
+	UsedAt    time.Time `gorm:"not null"`
+	ExpiresAt time.Time `gorm:"not null;index"`
+	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP"`
+}
+
+func (s *UserSession) BeforeCreate(_ *gorm.DB) error {
+	if s.FamilyID == "" {
+		s.FamilyID = uuid.NewString()
+	}
+	return nil
 }
 
 // LoginAudit captures login attempts for monitoring.

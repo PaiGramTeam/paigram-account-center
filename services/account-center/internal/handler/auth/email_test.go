@@ -59,6 +59,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&model.UserCredential{},
 		&model.UserEmail{},
 		&model.UserSession{},
+		&model.UserRefreshTokenHistory{},
 		&model.PasswordResetToken{},
 		&model.UserTwoFactor{},
 		&model.UserDevice{},
@@ -499,8 +500,141 @@ func TestLoginWithEmail_Without2FA_Success(t *testing.T) {
 
 	data := response["data"].(map[string]interface{})
 	assert.NotEmpty(t, data["access_token"])
-	assert.NotEmpty(t, data["refresh_token"])
+	_, exposesRefreshToken := data["refresh_token"]
+	assert.False(t, exposesRefreshToken)
 	assert.Equal(t, float64(user.ID), data["user_id"])
+
+	cookies := w.Result().Cookies()
+	require.Len(t, cookies, 1)
+	assert.Equal(t, "ac_refresh", cookies[0].Name)
+	assert.NotEmpty(t, cookies[0].Value)
+	assert.True(t, cookies[0].HttpOnly)
+	assert.Equal(t, http.SameSiteLaxMode, cookies[0].SameSite)
+	assert.Equal(t, "/api/v1/auth", cookies[0].Path)
+}
+
+func TestRefreshToken_RotatesHttpOnlyCookieAndRevokesFamilyOnReplay(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+	createTestUser(t, db, "rotate@example.com", "password123", true)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/auth/login", handler.LoginWithEmail)
+	router.POST("/auth/refresh", handler.RefreshToken)
+
+	loginBody, err := json.Marshal(loginEmailRequest{Email: "rotate@example.com", Password: "password123"})
+	require.NoError(t, err)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(loginBody))
+	loginRequest.Header.Set("Content-Type", "application/json")
+	loginRecorder := httptest.NewRecorder()
+	router.ServeHTTP(loginRecorder, loginRequest)
+	require.Equal(t, http.StatusOK, loginRecorder.Code, loginRecorder.Body.String())
+	require.Len(t, loginRecorder.Result().Cookies(), 1)
+	originalCookie := loginRecorder.Result().Cookies()[0]
+
+	refreshRequest := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader([]byte(`{}`)))
+	refreshRequest.Header.Set("Content-Type", "application/json")
+	refreshRequest.Header.Set("Origin", "https://app.example.com")
+	refreshRequest.AddCookie(originalCookie)
+	refreshRecorder := httptest.NewRecorder()
+	router.ServeHTTP(refreshRecorder, refreshRequest)
+	require.Equal(t, http.StatusOK, refreshRecorder.Code, refreshRecorder.Body.String())
+	require.Len(t, refreshRecorder.Result().Cookies(), 1)
+	rotatedCookie := refreshRecorder.Result().Cookies()[0]
+	assert.NotEqual(t, originalCookie.Value, rotatedCookie.Value)
+
+	var refreshedResponse map[string]interface{}
+	require.NoError(t, json.Unmarshal(refreshRecorder.Body.Bytes(), &refreshedResponse))
+	refreshedData := refreshedResponse["data"].(map[string]interface{})
+	assert.NotEmpty(t, refreshedData["access_token"])
+	_, exposesRefreshToken := refreshedData["refresh_token"]
+	assert.False(t, exposesRefreshToken)
+
+	replayRequest := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader([]byte(`{}`)))
+	replayRequest.Header.Set("Content-Type", "application/json")
+	replayRequest.Header.Set("Origin", "https://app.example.com")
+	replayRequest.AddCookie(originalCookie)
+	replayRecorder := httptest.NewRecorder()
+	router.ServeHTTP(replayRecorder, replayRequest)
+	require.Equal(t, http.StatusUnauthorized, replayRecorder.Code, replayRecorder.Body.String())
+	assert.Contains(t, replayRecorder.Body.String(), "TOKEN_REUSE_DETECTED")
+
+	rotatedRequest := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader([]byte(`{}`)))
+	rotatedRequest.Header.Set("Content-Type", "application/json")
+	rotatedRequest.Header.Set("Origin", "https://app.example.com")
+	rotatedRequest.AddCookie(rotatedCookie)
+	rotatedRecorder := httptest.NewRecorder()
+	router.ServeHTTP(rotatedRecorder, rotatedRequest)
+	require.Equal(t, http.StatusUnauthorized, rotatedRecorder.Code, rotatedRecorder.Body.String())
+}
+
+func TestRefreshToken_RejectsUntrustedOrigin(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+	createTestUser(t, db, "origin@example.com", "password123", true)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/auth/login", handler.LoginWithEmail)
+	router.POST("/auth/refresh", handler.RefreshToken)
+
+	loginBody, err := json.Marshal(loginEmailRequest{Email: "origin@example.com", Password: "password123"})
+	require.NoError(t, err)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(loginBody))
+	loginRequest.Header.Set("Content-Type", "application/json")
+	loginRecorder := httptest.NewRecorder()
+	router.ServeHTTP(loginRecorder, loginRequest)
+	require.Equal(t, http.StatusOK, loginRecorder.Code, loginRecorder.Body.String())
+	require.Len(t, loginRecorder.Result().Cookies(), 1)
+
+	refreshRequest := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader([]byte(`{}`)))
+	refreshRequest.Header.Set("Content-Type", "application/json")
+	refreshRequest.Header.Set("Origin", "https://attacker.example")
+	refreshRequest.AddCookie(loginRecorder.Result().Cookies()[0])
+	refreshRecorder := httptest.NewRecorder()
+	router.ServeHTTP(refreshRecorder, refreshRequest)
+	require.Equal(t, http.StatusForbidden, refreshRecorder.Code, refreshRecorder.Body.String())
+}
+
+func TestLogout_RevokesCookieSessionAndClearsCookie(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+	createTestUser(t, db, "logout@example.com", "password123", true)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/auth/login", handler.LoginWithEmail)
+	router.POST("/auth/refresh", handler.RefreshToken)
+	router.POST("/auth/logout", handler.Logout)
+
+	loginBody, err := json.Marshal(loginEmailRequest{Email: "logout@example.com", Password: "password123"})
+	require.NoError(t, err)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(loginBody))
+	loginRequest.Header.Set("Content-Type", "application/json")
+	loginRecorder := httptest.NewRecorder()
+	router.ServeHTTP(loginRecorder, loginRequest)
+	require.Equal(t, http.StatusOK, loginRecorder.Code, loginRecorder.Body.String())
+	require.Len(t, loginRecorder.Result().Cookies(), 1)
+	refreshCookie := loginRecorder.Result().Cookies()[0]
+
+	logoutRequest := httptest.NewRequest(http.MethodPost, "/auth/logout", bytes.NewReader([]byte(`{}`)))
+	logoutRequest.Header.Set("Content-Type", "application/json")
+	logoutRequest.Header.Set("Origin", "https://app.example.com")
+	logoutRequest.AddCookie(refreshCookie)
+	logoutRecorder := httptest.NewRecorder()
+	router.ServeHTTP(logoutRecorder, logoutRequest)
+	require.Equal(t, http.StatusOK, logoutRecorder.Code, logoutRecorder.Body.String())
+	require.Len(t, logoutRecorder.Result().Cookies(), 1)
+	assert.Equal(t, -1, logoutRecorder.Result().Cookies()[0].MaxAge)
+
+	refreshRequest := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader([]byte(`{}`)))
+	refreshRequest.Header.Set("Content-Type", "application/json")
+	refreshRequest.Header.Set("Origin", "https://app.example.com")
+	refreshRequest.AddCookie(refreshCookie)
+	refreshRecorder := httptest.NewRecorder()
+	router.ServeHTTP(refreshRecorder, refreshRequest)
+	require.Equal(t, http.StatusUnauthorized, refreshRecorder.Code, refreshRecorder.Body.String())
 }
 
 func TestLoginWithEmail_RequiresVerifiedEmail_ReturnsForbidden(t *testing.T) {
@@ -925,7 +1059,9 @@ func TestLoginWithEmail_With2FA_ValidTOTPCode_Success(t *testing.T) {
 
 	data := response["data"].(map[string]interface{})
 	assert.NotEmpty(t, data["access_token"])
-	assert.NotEmpty(t, data["refresh_token"])
+	_, exposesRefreshToken := data["refresh_token"]
+	assert.False(t, exposesRefreshToken)
+	assert.Equal(t, "ac_refresh", w.Result().Cookies()[0].Name)
 	assert.Equal(t, float64(user.ID), data["user_id"])
 
 	// Verify LastUsedAt was updated
@@ -1001,7 +1137,9 @@ func TestLoginWithEmail_With2FA_ValidBackupCode_Success(t *testing.T) {
 
 	data := response["data"].(map[string]interface{})
 	assert.NotEmpty(t, data["access_token"])
-	assert.NotEmpty(t, data["refresh_token"])
+	_, exposesRefreshToken := data["refresh_token"]
+	assert.False(t, exposesRefreshToken)
+	assert.Equal(t, "ac_refresh", w.Result().Cookies()[0].Name)
 
 	// Verify backup code was removed
 	var twoFactor model.UserTwoFactor

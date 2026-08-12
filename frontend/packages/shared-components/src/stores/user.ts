@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { UserInfo } from '../api/types'
 
-type RemoteLogout = (token: string) => Promise<void>
+type RemoteLogout = () => Promise<void>
 
 let remoteLogout: RemoteLogout | undefined
 
@@ -12,14 +12,14 @@ export function configureUserLogout(handler: RemoteLogout): void {
 export interface UserState {
   userInfo: UserInfo | null
   token: string
-  refreshToken: string
+  sessionEpoch: number
 }
 
 export const useUserStore = defineStore('user', {
   state: (): UserState => ({
     userInfo: null,
     token: '',
-    refreshToken: '',
+    sessionEpoch: 0,
   }),
 
   getters: {
@@ -39,23 +39,18 @@ export const useUserStore = defineStore('user', {
       this.userInfo = userInfo
     },
 
-    setAuthData(data: { accessToken: string; refreshToken: string }) {
+    setAuthData(data: { accessToken: string }) {
       this.token = data.accessToken
-      this.refreshToken = data.refreshToken
     },
 
-    setToken(token: string, refreshToken?: string) {
+    setToken(token: string) {
       this.token = token
-      if (refreshToken) {
-        this.refreshToken = refreshToken
-      }
     },
 
     async logout() {
-      const accessToken = this.token
       try {
-        if (accessToken && remoteLogout) {
-          await remoteLogout(accessToken)
+        if (remoteLogout) {
+          await remoteLogout()
         }
       } finally {
         this.reset()
@@ -98,12 +93,7 @@ export const useUserStore = defineStore('user', {
     reset() {
       this.userInfo = null
       this.token = ''
-      this.refreshToken = ''
+      this.sessionEpoch += 1
     },
-  },
-
-  persist: {
-    key: 'paigram-user-store',
-    pick: ['token', 'refreshToken', 'userInfo'],
   },
 })

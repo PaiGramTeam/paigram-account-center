@@ -57,6 +57,7 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 			} `json:"content"`
 		} `json:"requestBody"`
 		Responses map[string]json.RawMessage `json:"responses"`
+		Security  []map[string][]string      `json:"security"`
 		Access    struct {
 			Public             bool     `json:"public"`
 			Authenticated      bool     `json:"authenticated"`
@@ -95,10 +96,14 @@ func TestOpenAPICoversEveryBusinessRoute(t *testing.T) {
 	var refreshOperation operation
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/auth/refresh"]["post"], &refreshOperation))
 	require.Contains(t, refreshOperation.Responses, "429")
+	require.Nil(t, refreshOperation.RequestBody)
+	require.Equal(t, []map[string][]string{{"refreshCookie": {}}}, refreshOperation.Security)
 
 	var logoutOperation operation
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/auth/logout"]["post"], &logoutOperation))
 	require.NotContains(t, logoutOperation.Responses, "429")
+	require.Nil(t, logoutOperation.RequestBody)
+	require.Equal(t, []map[string][]string{{"bearerAuth": {}}, {"refreshCookie": {}}}, logoutOperation.Security)
 
 	var tokenOperation operation
 	require.NoError(t, json.Unmarshal(document.Paths["/api/v1/oauth/token"]["post"], &tokenOperation))

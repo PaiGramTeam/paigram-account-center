@@ -8,10 +8,10 @@
 
 ```powershell
 cd deploy/podman
-./init-env.ps1
+./init-env.ps1 -FrontendBaseUrl https://account.example.com
 ```
 
-脚本生成被 Git 忽略的 `.env`，其中包含两套数据库/Redis 凭据、匹配的 Ed25519 票据密钥对、两套数据加密密钥和初始管理员凭据。部署前必须把 `PAI_MIHOMO_UPSTREAM_BASE_URL` 改成真实 HTTPS 上游，并检查 `PAI_HTTP_BIND`、`PAI_HTTP_PORT`、`PAI_FRONTEND_BASE_URL` 和管理员信息。默认 HTTP 与 Platform gRPC 分别只监听 `127.0.0.1:18080` 和 `127.0.0.1:19000`。
+脚本要求显式提供无路径的外部 HTTPS origin，并生成被 Git 忽略的 `.env`，其中包含两套数据库/Redis 凭据、匹配的 Ed25519 票据密钥对、两套数据加密密钥和初始管理员凭据。浏览器 refresh cookie 带 `Secure`、`HttpOnly` 和 `SameSite=Lax`，因此必须由外部 TLS 反向代理把该 origin 转发到回环入口；不要把 `127.0.0.1:18080` 作为面向用户的 HTTP 地址。部署前还必须把 `PAI_MIHOMO_UPSTREAM_BASE_URL` 改成真实 HTTPS 上游，并检查 `PAI_HTTP_BIND`、`PAI_HTTP_PORT` 和管理员信息。默认 HTTP 与 Platform gRPC 分别只监听 `127.0.0.1:18080` 和 `127.0.0.1:19000`。
 
 Platform 启动后，管理员需在“服务注册”中幂等创建 `mihomo` registry 项，内部端点填写 `platform-mihomo:9000`，service audience 填写 `platform-mihomo-service`，支持动作以 Platform `DescribePlatform` 返回值为准。当前单机 Compose 仅用于预发布联调；在向不可信网络开放 gRPC 前，仍必须完成计划中的 control/runtime 双入口 TLS/mTLS 切分。
 

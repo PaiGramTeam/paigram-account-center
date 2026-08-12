@@ -1608,7 +1608,6 @@ export interface components {
             access_expiry: string;
             access_token: string;
             refresh_expiry: string;
-            refresh_token: string;
             /** Format: int64 */
             user_id: number;
         };
@@ -1631,7 +1630,6 @@ export interface components {
             provider_account_id?: string;
             purpose?: string;
             refresh_expiry?: string;
-            refresh_token?: string;
             /** Format: int64 */
             user_id?: number;
         };
@@ -10307,13 +10305,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": {
-                    token: string;
-                };
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -10329,56 +10321,8 @@ export interface operations {
                     };
                 };
             };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        code: number;
-                        data: unknown;
-                        message: string;
-                    } | {
-                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
-                    };
-                };
-            };
-            /** @description Request Timeout */
-            408: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        code: number;
-                        data: unknown;
-                        message: string;
-                    } | {
-                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
-                    };
-                };
-            };
-            /** @description Request Entity Too Large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        code: number;
-                        data: unknown;
-                        message: string;
-                    } | {
-                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
-                    };
-                };
-            };
-            /** @description Unsupported Media Type */
-            415: {
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10709,13 +10653,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": {
-                    refresh_token: string;
-                };
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -10728,22 +10666,6 @@ export interface operations {
                         code: number;
                         data: components["schemas"]["LoginResponseDataStruct"];
                         message: string;
-                    };
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        code: number;
-                        data: unknown;
-                        message: string;
-                    } | {
-                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
                     };
                 };
             };
@@ -10763,40 +10685,8 @@ export interface operations {
                     };
                 };
             };
-            /** @description Request Timeout */
-            408: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        code: number;
-                        data: unknown;
-                        message: string;
-                    } | {
-                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
-                    };
-                };
-            };
-            /** @description Request Entity Too Large */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        code: number;
-                        data: unknown;
-                        message: string;
-                    } | {
-                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
-                    };
-                };
-            };
-            /** @description Unsupported Media Type */
-            415: {
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

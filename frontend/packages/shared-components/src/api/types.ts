@@ -186,10 +186,6 @@ export interface UserLoginLogItem {
 
 export type ActivityLogItem = components['schemas']['ActivityLogView']
 
-export type RefreshTokenRequest = operations['post-api-v1-auth-refresh']['requestBody']['content']['application/json']
-
-export type LogoutRequest = operations['post-api-v1-auth-logout']['requestBody']['content']['application/json']
-
 export interface LogoutResponse {
   data: {
     message: string

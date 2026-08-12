@@ -110,9 +110,6 @@ type LoginResponse struct {
 		// JWT access token
 		// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 		AccessToken string `json:"access_token"`
-		// JWT refresh token
-		// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-		RefreshToken string `json:"refresh_token"`
 		// Access token expiration
 		// example: 2024-01-23T12:15:00Z
 		AccessExpiry string `json:"access_expiry"`
@@ -138,36 +135,10 @@ type swaggerLoginResponse struct {
 }
 
 // swagger:parameters refreshToken
-type swaggerRefreshTokenParams struct {
-	// Refresh token details
-	// in: body
-	// required: true
-	Body RefreshTokenRequest
-}
-
-// swagger:model refreshTokenRequest
-type RefreshTokenRequest struct {
-	// JWT refresh token
-	// required: true
-	// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-	RefreshToken string `json:"refresh_token" binding:"required" minLength:"1"`
-}
+type swaggerRefreshTokenParams struct{}
 
 // swagger:parameters logout
-type swaggerLogoutParams struct {
-	// Token to revoke
-	// in: body
-	// required: true
-	Body LogoutRequest
-}
-
-// swagger:model logoutRequest
-type LogoutRequest struct {
-	// Access or refresh token to revoke
-	// required: true
-	// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-	Token string `json:"token" binding:"required" minLength:"1"`
-}
+type swaggerLogoutParams struct{}
 
 // swagger:model logoutResponse
 type LogoutResponse struct {
@@ -308,9 +279,6 @@ type OAuthCallbackResponse struct {
 		// Login callback JWT access token.
 		// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 		AccessToken string `json:"access_token,omitempty"`
-		// Login callback JWT refresh token.
-		// example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-		RefreshToken string `json:"refresh_token,omitempty"`
 		// Login callback access token expiration.
 		// example: 2024-01-23T12:15:00Z
 		AccessExpiry string `json:"access_expiry,omitempty"`

@@ -14,6 +14,11 @@ import (
 	"paigram/internal/response"
 )
 
+const (
+	integrationBrowserOrigin = "https://account.test"
+	integrationRefreshCookie = "ac_refresh"
+)
+
 func performJSONRequest(t *testing.T, handler http.Handler, method, path string, body any, headers map[string]string) *httptest.ResponseRecorder {
 	return performJSONRequestFromIP(t, handler, method, path, body, headers, "192.0.2.1:12345")
 }
@@ -52,4 +57,23 @@ func decodeResponseData(t *testing.T, recorder *httptest.ResponseRecorder) map[s
 	data, ok := resp.Data.(map[string]any)
 	require.True(t, ok, "expected map response data, got %T", resp.Data)
 	return data
+}
+
+func requireBrowserRefreshToken(t *testing.T, recorder *httptest.ResponseRecorder) string {
+	t.Helper()
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == integrationRefreshCookie && cookie.Value != "" && cookie.MaxAge >= 0 {
+			return cookie.Value
+		}
+	}
+	t.Fatalf("response did not set a browser refresh cookie: status=%d body=%s", recorder.Code, recorder.Body.String())
+	return ""
+}
+
+func browserSessionHeaders(refreshToken string) map[string]string {
+	cookie := (&http.Cookie{Name: integrationRefreshCookie, Value: refreshToken}).String()
+	return map[string]string{
+		"Cookie": cookie,
+		"Origin": integrationBrowserOrigin,
+	}
 }

@@ -20,8 +20,8 @@ export interface RequestConfig {
   baseURL?: string
   timeout?: number
   getToken?: () => string
-  getRefreshToken?: () => string
-  setAuthData?: (data: { accessToken: string; refreshToken: string }) => void
+  getSessionEpoch?: () => number
+  setAuthData?: (data: { accessToken: string }) => void
   onUnauthorized?: () => void
 }
 
@@ -30,7 +30,7 @@ export function createRequest(config: RequestConfig = {}) {
     baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
     timeout = 30000,
     getToken,
-    getRefreshToken,
+    getSessionEpoch,
     setAuthData,
     onUnauthorized,
   } = config
@@ -38,6 +38,7 @@ export function createRequest(config: RequestConfig = {}) {
   const instance: AxiosInstance = axios.create({
     baseURL,
     timeout,
+    withCredentials: true,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -45,7 +46,6 @@ export function createRequest(config: RequestConfig = {}) {
 
   const refreshCoordinator = new AuthRefreshCoordinator<{
     accessToken: string
-    refreshToken: string
   }>()
 
   instance.interceptors.request.use(
@@ -75,26 +75,20 @@ export function createRequest(config: RequestConfig = {}) {
         const { status, data } = response
 
         if (status === 401 && config.url !== '/auth/refresh' && !requestConfig.authRetryAttempted) {
-          const refreshToken = getRefreshToken?.()
-
-          if (refreshToken && setAuthData) {
+          if (setAuthData) {
             try {
               requestConfig.authRetryAttempted = true
+              const sessionEpoch = getSessionEpoch?.()
               const authData = await refreshCoordinator.run(
                 async () => {
-                  const refreshResponse = await instance.post(
-                    '/auth/refresh',
-                    {
-                      refresh_token: refreshToken,
-                    },
-                    { skipErrorToast: true } as RequestOptions
-                  )
+                  const refreshResponse = await instance.post('/auth/refresh', undefined, {
+                    skipErrorToast: true,
+                  } as RequestOptions)
                   const refreshed = {
                     accessToken: refreshResponse.data.access_token,
-                    refreshToken: refreshResponse.data.refresh_token,
                   }
 
-                  if (getRefreshToken?.() !== refreshToken) {
+                  if (sessionEpoch !== undefined && getSessionEpoch?.() !== sessionEpoch) {
                     throw new Error('Session changed while refreshing')
                   }
 

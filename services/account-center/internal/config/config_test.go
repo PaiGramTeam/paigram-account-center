@@ -24,6 +24,7 @@ func TestSetDefaultsIncludesSentry(t *testing.T) {
 	require.Equal(t, 1.0, v.GetFloat64("sentry.sample_rate"))
 	require.Equal(t, 0.0, v.GetFloat64("sentry.traces_sample_rate"))
 	require.Equal(t, 2, v.GetInt("sentry.flush_timeout"))
+	require.False(t, v.GetBool("auth.session_cookie_secure"))
 }
 
 func TestSetDefaultsIncludesServiceTicketSettings(t *testing.T) {
@@ -104,6 +105,29 @@ func TestValidateEmailDeliveryConfigAllowsExplicitPreproductionOptOut(t *testing
 	err := validateEmailDeliveryConfig(&Config{
 		App:  AppConfig{Mode: "release"},
 		Auth: AuthConfig{RequireEmailVerificationLogin: false},
+	})
+	require.NoError(t, err)
+}
+
+func TestValidateBrowserSessionConfigFailsClosedInRelease(t *testing.T) {
+	err := validateBrowserSessionConfig(&Config{
+		App:      AppConfig{Mode: "release"},
+		Auth:     AuthConfig{SessionCookieSecure: false},
+		Frontend: FrontendConfig{BaseURL: "https://account.example.com"},
+	})
+	require.Error(t, err)
+
+	err = validateBrowserSessionConfig(&Config{
+		App:      AppConfig{Mode: "release"},
+		Auth:     AuthConfig{SessionCookieSecure: true},
+		Frontend: FrontendConfig{BaseURL: "http://account.example.com"},
+	})
+	require.Error(t, err)
+
+	err = validateBrowserSessionConfig(&Config{
+		App:      AppConfig{Mode: "release"},
+		Auth:     AuthConfig{SessionCookieSecure: true},
+		Frontend: FrontendConfig{BaseURL: "https://account.example.com"},
 	})
 	require.NoError(t, err)
 }

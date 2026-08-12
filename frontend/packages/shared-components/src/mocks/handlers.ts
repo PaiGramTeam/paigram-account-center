@@ -108,7 +108,6 @@ export function createMockHandlers(options: MockOptions) {
 
       const response = ok({
         access_token: 'mock-access-token',
-        refresh_token: 'mock-refresh-token',
         access_expiry: '2026-08-09T01:00:00Z',
         refresh_expiry: '2026-09-08T00:00:00Z',
         user_id: currentUser.id,
@@ -119,7 +118,6 @@ export function createMockHandlers(options: MockOptions) {
       HttpResponse.json(
         ok({
           access_token: 'mock-refreshed-access-token',
-          refresh_token: 'mock-refreshed-refresh-token',
           access_expiry: '2026-08-09T01:00:00Z',
           refresh_expiry: '2026-09-08T00:00:00Z',
           user_id: currentUser.id,
@@ -146,7 +144,6 @@ export function createMockHandlers(options: MockOptions) {
       HttpResponse.json(
         ok({
           access_token: 'mock-access-token',
-          refresh_token: 'mock-refresh-token',
           access_expiry: '2026-08-09T01:00:00Z',
           refresh_expiry: '2026-09-08T00:00:00Z',
           user_id: currentUser.id,

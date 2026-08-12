@@ -5,11 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
@@ -51,6 +51,7 @@ func (h *Handler) issueSession(tx *gorm.DB, userID uint64, clientIP, userAgent s
 	// Hash the tokens before storing
 	session := &model.UserSession{
 		UserID:           userID,
+		FamilyID:         uuid.NewString(),
 		AccessTokenHash:  hashToken(accessToken),
 		RefreshTokenHash: hashToken(refreshToken),
 		AccessExpiry:     now.Add(accessTTL),
@@ -301,10 +302,6 @@ func (h *Handler) clearCurrentAccessHashMarker(sessionID uint64) {
 	if err := h.sessionCache.Delete(context.Background(), sessioncache.CurrentAccessTokenHashKey(sessionID)); err != nil && !errorsIsRedisNil(err) {
 		log.Printf("failed to clear current access token hash marker: %v", err)
 	}
-}
-
-func rapidRefreshGuardKey(sessionID uint64) string {
-	return fmt.Sprintf("session:refresh-guard:%d", sessionID)
 }
 
 func errorsIsRedisNil(err error) bool {

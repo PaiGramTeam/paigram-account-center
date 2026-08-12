@@ -410,10 +410,10 @@ func (h *Handler) HandleOAuthCallback(c *gin.Context) {
 		return
 	}
 
+	h.setBrowserRefreshCookie(c, result.sessionWithTokens.RefreshToken, result.sessionWithTokens.Session.RefreshExpiry)
 	responseData := map[string]interface{}{
 		"user_id":        result.user.ID,
 		"access_token":   result.sessionWithTokens.AccessToken,
-		"refresh_token":  result.sessionWithTokens.RefreshToken,
 		"access_expiry":  result.sessionWithTokens.Session.AccessExpiry.Format(time.RFC3339),
 		"refresh_expiry": result.sessionWithTokens.Session.RefreshExpiry.Format(time.RFC3339),
 		"email":          emailValue(result.emailRecord),

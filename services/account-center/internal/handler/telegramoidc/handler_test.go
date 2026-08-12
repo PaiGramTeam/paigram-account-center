@@ -205,6 +205,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 		CREATE TABLE IF NOT EXISTS user_sessions (
 			id                  INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id             INTEGER NOT NULL,
+			family_id           TEXT    NOT NULL DEFAULT '',
 			access_token_hash   TEXT    NOT NULL,
 			refresh_token_hash  TEXT    NOT NULL,
 			access_expiry       DATETIME NOT NULL,

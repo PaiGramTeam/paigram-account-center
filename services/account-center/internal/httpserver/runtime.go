@@ -50,8 +50,14 @@ func Attach(engine *gin.Engine, options Options) (*Runtime, error) {
 		"bearerAuth": {
 			Type:         "http",
 			Scheme:       "bearer",
-			BearerFormat: "JWT",
-			Description:  "Paigram access token.",
+			BearerFormat: "opaque",
+			Description:  "Paigram opaque access token.",
+		},
+		"refreshCookie": {
+			Type:        "apiKey",
+			In:          "cookie",
+			Name:        "ac_refresh",
+			Description: "HttpOnly browser refresh credential managed by the Account Center.",
 		},
 	}
 	if options.OpenAPI.Enabled {

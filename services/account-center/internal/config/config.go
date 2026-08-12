@@ -135,6 +135,7 @@ type AuthConfig struct {
 	RefreshTokenTTLSeconds        int                            `mapstructure:"refresh_token_ttl"`
 	SessionUpdateAgeSeconds       int                            `mapstructure:"session_update_age"` // Auto-refresh threshold
 	SessionFreshAgeSeconds        int                            `mapstructure:"session_fresh_age"`  // Freshness requirement for sensitive ops
+	SessionCookieSecure           bool                           `mapstructure:"session_cookie_secure"`
 	EmailVerificationTTLSeconds   int                            `mapstructure:"email_verification_ttl"`
 	OAuthStateTTLSeconds          int                            `mapstructure:"oauth_state_ttl"`
 	AllowedOAuthProviders         []string                       `mapstructure:"allowed_providers"`
@@ -360,6 +361,10 @@ func Load(paths ...string) (*Config, error) {
 			err = validateErr
 			return
 		}
+		if validateErr := validateBrowserSessionConfig(localCfg); validateErr != nil {
+			err = validateErr
+			return
+		}
 		warnIfFrontendBaseURLMissing(localCfg)
 
 		cfg = localCfg
@@ -415,6 +420,23 @@ func validateEmailDeliveryConfig(cfg *Config) error {
 	frontendURL, err := url.Parse(strings.TrimSpace(cfg.Frontend.BaseURL))
 	if err != nil || frontendURL.Scheme != "https" || frontendURL.Host == "" {
 		return fmt.Errorf("frontend.base_url must be an absolute HTTPS URL when release mode requires email verification")
+	}
+	return nil
+}
+
+func validateBrowserSessionConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.App.Mode), "release") {
+		return nil
+	}
+	if !cfg.Auth.SessionCookieSecure {
+		return fmt.Errorf("auth.session_cookie_secure must be true in release mode")
+	}
+	frontendURL, err := url.Parse(strings.TrimSpace(cfg.Frontend.BaseURL))
+	if err != nil || frontendURL.Scheme != "https" || frontendURL.Host == "" {
+		return fmt.Errorf("frontend.base_url must be an absolute HTTPS URL in release mode")
 	}
 	return nil
 }
@@ -523,6 +545,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("auth.access_token_ttl", 900)
 	v.SetDefault("auth.refresh_token_ttl", 604800)
+	v.SetDefault("auth.session_cookie_secure", false)
 	v.SetDefault("auth.email_verification_ttl", 86400)
 	v.SetDefault("auth.oauth_state_ttl", 300)
 	v.SetDefault("auth.allowed_providers", []string{"github", "google", "telegram"})

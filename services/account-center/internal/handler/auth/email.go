@@ -496,10 +496,10 @@ func (h *Handler) LoginWithEmail(c *gin.Context) {
 		return
 	}
 
+	h.setBrowserRefreshCookie(c, sessionWithTokens.RefreshToken, sessionWithTokens.Session.RefreshExpiry)
 	responseData := map[string]interface{}{
 		"user_id":        user.ID,
 		"access_token":   sessionWithTokens.AccessToken,
-		"refresh_token":  sessionWithTokens.RefreshToken,
 		"access_expiry":  sessionWithTokens.Session.AccessExpiry.Format(time.RFC3339),
 		"refresh_expiry": sessionWithTokens.Session.RefreshExpiry.Format(time.RFC3339),
 	}
@@ -510,7 +510,7 @@ func (h *Handler) LoginWithEmail(c *gin.Context) {
 //
 // Refresh access token.
 //
-// Exchange a valid refresh token for a new access/refresh token pair.
+// Exchange the browser refresh cookie for a rotated session.
 //
 // Produces:
 //   - application/json
@@ -522,34 +522,42 @@ func (h *Handler) LoginWithEmail(c *gin.Context) {
 //	401: authErrorResponse
 //	500: authErrorResponse
 //
-// RefreshToken exchanges a refresh token for a new pair.
+// RefreshToken rotates the browser session and returns a new access token.
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req RefreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logging.Error("refresh token: invalid request body", zap.Error(err))
-		response.BadRequest(c, "invalid request body")
+	refreshToken, err := h.browserRefreshToken(c)
+	if err != nil {
+		h.clearBrowserRefreshCookie(c)
+		if errors.Is(err, errInvalidBrowserOrigin) {
+			response.Forbidden(c, "invalid browser origin")
+			return
+		}
+		response.Unauthorized(c, "refresh session required")
 		return
 	}
 
 	ctx := context.Background()
-	if revoked, err := h.sessionCache.IsRevoked(ctx, sessioncache.TokenTypeRefresh, req.RefreshToken); err != nil && !errorsIsRedisNil(err) {
+	if revoked, err := h.sessionCache.IsRevoked(ctx, sessioncache.TokenTypeRefresh, refreshToken); err != nil && !errorsIsRedisNil(err) {
 		log.Printf("failed to query refresh token revocation: %v", err)
 	} else if revoked {
+		if h.rejectRefreshReplay(c, hashToken(refreshToken), time.Now().UTC()) {
+			return
+		}
+		h.clearBrowserRefreshCookie(c)
 		response.Unauthorized(c, "token revoked")
 		return
 	}
 
 	var session model.UserSession
 	var sessionID uint64
-	if id, err := h.sessionCache.GetSessionID(ctx, sessioncache.TokenTypeRefresh, req.RefreshToken); err == nil {
+	if id, err := h.sessionCache.GetSessionID(ctx, sessioncache.TokenTypeRefresh, refreshToken); err == nil {
 		sessionID = id
 	} else if err != nil && !errorsIsRedisNil(err) {
 		log.Printf("failed to get session id from cache: %v", err)
 	}
 
 	now := time.Now().UTC()
-	var err error
-	refreshTokenHash := hashToken(req.RefreshToken)
+	err = nil
+	refreshTokenHash := hashToken(refreshToken)
 	if sessionID > 0 {
 		err = h.db.First(&session, sessionID).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -562,6 +570,10 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if h.rejectRefreshReplay(c, refreshTokenHash, now) {
+				return
+			}
+			h.clearBrowserRefreshCookie(c)
 			response.Unauthorized(c, "invalid refresh token")
 			return
 		}
@@ -570,36 +582,16 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	if session.RevokedAt.Valid {
-		// A revoked token may indicate a replay attack.
-		// Revoke every session owned by the user as a safety measure.
-		log.Printf("[security] Attempt to use revoked refresh token detected for user %d - revoking all sessions", session.UserID)
-
-		var activeSessions []model.UserSession
-		if err := h.db.Where("user_id = ? AND revoked_at IS NULL", session.UserID).Find(&activeSessions).Error; err != nil {
-			response.InternalServerError(c, "failed to revoke reused token sessions")
+		if !h.revokeRefreshFamily(c, session.FamilyID, "token_reuse_detected", now) {
 			return
 		}
-
-		if err := h.db.Transaction(func(tx *gorm.DB) error {
-			return tx.Model(&model.UserSession{}).
-				Where("user_id = ? AND revoked_at IS NULL", session.UserID).
-				Updates(map[string]interface{}{
-					"revoked_at":     now,
-					"revoked_reason": "token_reuse_detected",
-				}).Error
-		}); err != nil {
-			response.InternalServerError(c, "failed to revoke reused token sessions")
-			return
-		}
-		for i := range activeSessions {
-			h.clearCurrentAccessHashMarker(activeSessions[i].ID)
-		}
-
+		h.clearBrowserRefreshCookie(c)
 		response.UnauthorizedWithCode(c, "TOKEN_REUSE_DETECTED", "security violation: token reuse detected, all sessions revoked", nil)
 		return
 	}
 
 	if now.After(session.RefreshExpiry) {
+		h.clearBrowserRefreshCookie(c)
 		response.Unauthorized(c, "refresh token expired")
 		return
 	}
@@ -609,41 +601,17 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		response.InternalServerError(c, "failed to load user")
 		return
 	}
+	if user.Status != model.UserStatusActive {
+		if !h.revokeRefreshFamily(c, session.FamilyID, "user_inactive", now) {
+			return
+		}
+		h.clearBrowserRefreshCookie(c)
+		response.Unauthorized(c, "user is not active")
+		return
+	}
 
 	prevSession := session
 	var newAccessToken, newRefreshToken string
-
-	// Detect rapid repeat refreshes only after a successful refresh has already occurred.
-	if _, err := h.sessionCache.Get(ctx, rapidRefreshGuardKey(session.ID)); err == nil {
-		log.Printf("[security] Refresh token used too quickly after last refresh for session %d - possible replay attack", session.ID)
-
-		// Revoke this session and all user sessions as a security measure
-		var userSessions []model.UserSession
-		if err := h.db.Where("user_id = ? AND revoked_at IS NULL", session.UserID).Find(&userSessions).Error; err != nil {
-			response.InternalServerError(c, "failed to revoke rapid refresh sessions")
-			return
-		}
-
-		if err := h.db.Transaction(func(tx *gorm.DB) error {
-			return tx.Model(&model.UserSession{}).
-				Where("user_id = ?", session.UserID).
-				Updates(map[string]interface{}{
-					"revoked_at":     now,
-					"revoked_reason": "rapid_refresh_detected",
-				}).Error
-		}); err != nil {
-			response.InternalServerError(c, "failed to revoke rapid refresh sessions")
-			return
-		}
-		for i := range userSessions {
-			h.clearCurrentAccessHashMarker(userSessions[i].ID)
-		}
-
-		response.UnauthorizedWithCode(c, "RAPID_REFRESH_DETECTED", "security violation: rapid token refresh detected", nil)
-		return
-	} else if err != nil && !errorsIsRedisNil(err) {
-		log.Printf("failed to read rapid refresh guard: %v", err)
-	}
 
 	err = h.db.Transaction(func(tx *gorm.DB) error {
 		accessToken, err := randomToken(48)
@@ -655,7 +623,6 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 			return err
 		}
 
-		// Store for later use
 		newAccessToken = accessToken
 		newRefreshToken = refreshToken
 
@@ -668,7 +635,6 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 			refreshTTL = 7 * 24 * time.Hour
 		}
 
-		// Update session with hashed tokens
 		updates := map[string]interface{}{
 			"access_token_hash":  hashToken(accessToken),
 			"refresh_token_hash": hashToken(refreshToken),
@@ -686,12 +652,25 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		if result.RowsAffected != 1 {
 			return errRefreshTokenRotated
 		}
+		if err := tx.Create(&model.UserRefreshTokenHistory{
+			SessionID: session.ID,
+			FamilyID:  session.FamilyID,
+			TokenHash: refreshTokenHash,
+			UsedAt:    now,
+			ExpiresAt: session.RefreshExpiry,
+		}).Error; err != nil {
+			return err
+		}
 
 		return nil
 	})
 
 	if err != nil {
 		if errors.Is(err, errRefreshTokenRotated) {
+			if h.rejectRefreshReplay(c, refreshTokenHash, now) {
+				return
+			}
+			h.clearBrowserRefreshCookie(c)
 			response.Unauthorized(c, "invalid refresh token")
 			return
 		}
@@ -700,7 +679,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	// Revoke old tokens from cache
-	h.cacheRevokeSessionTokens(&prevSession, "", req.RefreshToken)
+	h.cacheRevokeSessionTokens(&prevSession, "", refreshToken)
 
 	// Reload updated session
 	var newSession model.UserSession
@@ -711,14 +690,11 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 	// Cache new tokens
 	h.cacheStoreSessionWithTokens(&newSession, newAccessToken, newRefreshToken)
-	if err := h.sessionCache.Set(ctx, rapidRefreshGuardKey(newSession.ID), []byte("1"), 5*time.Second); err != nil && !errorsIsRedisNil(err) {
-		log.Printf("failed to store rapid refresh guard: %v", err)
-	}
+	h.setBrowserRefreshCookie(c, newRefreshToken, newSession.RefreshExpiry)
 
 	responseData := map[string]interface{}{
 		"user_id":        newSession.UserID,
 		"access_token":   newAccessToken,
-		"refresh_token":  newRefreshToken,
 		"access_expiry":  newSession.AccessExpiry.Format(time.RFC3339),
 		"refresh_expiry": newSession.RefreshExpiry.Format(time.RFC3339),
 	}
@@ -729,7 +705,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 //
 // Logout and revoke token.
 //
-// Revokes an access or refresh token, preventing further use.
+// Revokes the bearer or browser session, preventing further use.
 //
 // Produces:
 //   - application/json
@@ -742,36 +718,40 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 //
 // Logout revokes an access or refresh token.
 func (h *Handler) Logout(c *gin.Context) {
-	var req LogoutRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		logging.Error("logout: invalid request body", zap.Error(err))
-		response.BadRequest(c, "invalid request body")
+	token, cookieAuth, err := h.logoutToken(c)
+	if err != nil {
+		h.clearBrowserRefreshCookie(c)
+		if errors.Is(err, errInvalidBrowserOrigin) {
+			response.Forbidden(c, "invalid browser origin")
+			return
+		}
+		response.SuccessWithMessage(c, response.NewMessageData("already logged out"), "already logged out")
 		return
 	}
 
 	var session model.UserSession
-	tokenHash := hashToken(req.Token)
-	err := h.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("access_token_hash = ? OR refresh_token_hash = ?", tokenHash, tokenHash).First(&session).Error; err != nil {
-			return err
-		}
-		if session.RevokedAt.Valid {
-			return nil
-		}
-		return h.revokeSession(tx, &session, "user_logout")
-	})
+	tokenHash := hashToken(token)
+	err = h.db.Where("access_token_hash = ? OR refresh_token_hash = ?", tokenHash, tokenHash).First(&session).Error
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if cookieAuth {
+				h.revokeHistoricalRefreshToken(tokenHash, "user_logout", time.Now().UTC())
+			}
+			h.clearBrowserRefreshCookie(c)
 			response.SuccessWithMessage(c, response.NewMessageData("already logged out"), "already logged out")
 			return
 		}
 		response.InternalServerError(c, "failed to logout")
 		return
 	}
+	if !h.revokeRefreshFamily(c, session.FamilyID, "user_logout", time.Now().UTC()) {
+		return
+	}
 
-	// Revoke from cache (we have the original token from request)
-	h.cacheRevokeSessionTokens(&session, req.Token, req.Token)
+	h.cacheRevokeSessionTokens(&session, token, token)
+	h.clearCurrentAccessHashMarker(session.ID)
+	h.clearBrowserRefreshCookie(c)
 
 	response.SuccessWithMessage(c, response.NewMessageData("logout successful"), "logout successful")
 }

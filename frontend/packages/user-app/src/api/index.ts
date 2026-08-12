@@ -17,11 +17,8 @@ export const request = createRequest({
     const userStore = useUserStore()
     return userStore.token
   },
-  getRefreshToken: () => {
-    const userStore = useUserStore()
-    return userStore.refreshToken
-  },
-  setAuthData: (data: { accessToken: string; refreshToken: string }) => {
+  getSessionEpoch: () => useUserStore().sessionEpoch,
+  setAuthData: (data: { accessToken: string }) => {
     const userStore = useUserStore()
     userStore.setAuthData(data)
   },
@@ -33,8 +30,8 @@ export const request = createRequest({
 })
 
 export const authApi = createAuthApi(request)
-configureUserLogout(async (token) => {
-  await authApi.logout({ token })
+configureUserLogout(async () => {
+  await authApi.logout()
 })
 export const userApi = createUserApi(request)
 export const profileApi = createProfileApi(request)
