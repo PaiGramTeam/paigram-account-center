@@ -171,7 +171,11 @@ type fakeRefreshGateway struct {
 	binding  *model.PlatformAccountBinding
 }
 
-func (f *fakeRefreshGateway) PutCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (f *fakeRefreshGateway) BindCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+	panic("unexpected call")
+}
+
+func (f *fakeRefreshGateway) ReplaceCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	panic("unexpected call")
 }
 
@@ -201,6 +205,7 @@ type fakeCredentialGateway struct {
 	summary          map[string]any
 	err              error
 	called           bool
+	lastMutation     string
 	deleteCalled     bool
 	deleteCallCount  int
 	deleteErr        error
@@ -281,8 +286,18 @@ func (f *fakeGrantCleaner) DeleteGrants(bindingID uint64) error {
 	return f.err
 }
 
-func (f *fakeCredentialGateway) PutCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (f *fakeCredentialGateway) BindCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	f.called = true
+	f.lastMutation = "bind"
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.summary, nil
+}
+
+func (f *fakeCredentialGateway) ReplaceCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+	f.called = true
+	f.lastMutation = "replace"
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -684,6 +699,7 @@ func TestPutCredentialForOwnerPersistsResolvedRuntimeState(t *testing.T) {
 	assert.Equal(t, "cn:resolved-account", reader.persistedSummary.PlatformAccountID)
 	assert.Equal(t, "active", reader.persistedSummary.Status)
 	assert.Equal(t, []string{"mihomo.credential.bind"}, platformSvc.lastScope)
+	assert.Equal(t, "bind", gateway.lastMutation)
 }
 
 func TestPutCredentialForOwnerCompensatesOnResolvedBindingConflict(t *testing.T) {

@@ -367,6 +367,9 @@ func mapTicketVerificationError(err error) error {
 }
 
 func mapUsecaseError(err error) error {
+	if errors.Is(err, biz.ErrCredentialAlreadyBound) {
+		return status.Error(codes.AlreadyExists, "credential already exists for binding")
+	}
 	if errors.Is(err, usecase.ErrCredentialNotFound) {
 		return status.Error(codes.NotFound, "credential not found")
 	}

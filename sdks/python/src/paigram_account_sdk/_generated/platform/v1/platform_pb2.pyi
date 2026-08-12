@@ -206,7 +206,19 @@ class UpsertDeviceResponse(_message.Message):
     success: bool
     def __init__(self, success: _Optional[bool] = ...) -> None: ...
 
-class PutCredentialRequest(_message.Message):
+class BindCredentialRequest(_message.Message):
+    __slots__ = ("credential_payload_json",)
+    CREDENTIAL_PAYLOAD_JSON_FIELD_NUMBER: _ClassVar[int]
+    credential_payload_json: str
+    def __init__(self, credential_payload_json: _Optional[str] = ...) -> None: ...
+
+class BindCredentialResponse(_message.Message):
+    __slots__ = ("summary",)
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    summary: GetCredentialSummaryResponse
+    def __init__(self, summary: _Optional[_Union[GetCredentialSummaryResponse, _Mapping]] = ...) -> None: ...
+
+class ReplaceCredentialRequest(_message.Message):
     __slots__ = ("platform_account_id", "credential_payload_json")
     PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
     CREDENTIAL_PAYLOAD_JSON_FIELD_NUMBER: _ClassVar[int]
@@ -214,7 +226,7 @@ class PutCredentialRequest(_message.Message):
     credential_payload_json: str
     def __init__(self, platform_account_id: _Optional[str] = ..., credential_payload_json: _Optional[str] = ...) -> None: ...
 
-class PutCredentialResponse(_message.Message):
+class ReplaceCredentialResponse(_message.Message):
     __slots__ = ("summary",)
     SUMMARY_FIELD_NUMBER: _ClassVar[int]
     summary: GetCredentialSummaryResponse

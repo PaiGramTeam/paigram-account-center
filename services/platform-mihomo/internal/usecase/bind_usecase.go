@@ -67,6 +67,14 @@ func NewBindUsecase(
 }
 
 func (uc *BindUsecase) BindCredential(ctx context.Context, input BindCredentialInput) (*BindCredentialOutput, error) {
+	return uc.bindCredential(ctx, input, false)
+}
+
+func (uc *BindUsecase) BindCredentialIfAbsent(ctx context.Context, input BindCredentialInput) (*BindCredentialOutput, error) {
+	return uc.bindCredential(ctx, input, true)
+}
+
+func (uc *BindUsecase) bindCredential(ctx context.Context, input BindCredentialInput, createOnly bool) (*BindCredentialOutput, error) {
 	prepared, err := uc.prepareBindCredential(ctx, input)
 	if err != nil {
 		return nil, err
@@ -74,7 +82,7 @@ func (uc *BindUsecase) BindCredential(ctx context.Context, input BindCredentialI
 
 	var output *BindCredentialOutput
 	err = uc.runInTransaction(ctx, func(txCtx context.Context) error {
-		result, err := uc.bindPreparedCredential(txCtx, input, prepared)
+		result, err := uc.bindPreparedCredential(txCtx, input, prepared, createOnly)
 		if err != nil {
 			return err
 		}
@@ -119,7 +127,7 @@ func (uc *BindUsecase) prepareBindCredential(ctx context.Context, input BindCred
 	}, nil
 }
 
-func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCredentialInput, prepared *bindCredentialPreparation) (*BindCredentialOutput, error) {
+func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCredentialInput, prepared *bindCredentialPreparation, createOnly bool) (*BindCredentialOutput, error) {
 	if prepared == nil {
 		return nil, errors.New("bind preparation is required")
 	}
@@ -128,6 +136,9 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 	if err != nil {
 		return nil, err
 	}
+	if createOnly && existingCredential != nil {
+		return nil, biz.ErrCredentialAlreadyBound
+	}
 	if uc.artifactRepo != nil {
 		if err := uc.artifactRepo.DeleteByBindingID(ctx, input.BindingID); err != nil {
 			return nil, err
@@ -135,7 +146,7 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 	}
 
 	now := time.Now().UTC()
-	if err := uc.credentialRepo.Save(ctx, &biz.Credential{
+	credential := &biz.Credential{
 		BindingID:         input.BindingID,
 		PlatformAccountID: prepared.platformAccountID,
 		Platform:          "mihomo",
@@ -145,7 +156,8 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		CredentialVersion: "v1",
 		Status:            "active",
 		LastValidatedAt:   &now,
-	}); err != nil {
+	}
+	if err := uc.persistCredential(ctx, credential, createOnly); err != nil {
 		return nil, err
 	}
 	previousPlatformAccountID := ""
@@ -227,6 +239,13 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		Profiles:          outputProfiles,
 		Status:            v1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 	}, nil
+}
+
+func (uc *BindUsecase) persistCredential(ctx context.Context, credential *biz.Credential, createOnly bool) error {
+	if createOnly {
+		return uc.credentialRepo.Create(ctx, credential)
+	}
+	return uc.credentialRepo.Save(ctx, credential)
 }
 
 func (uc *BindUsecase) UpsertDevice(ctx context.Context, platformAccountID string, deviceID string, deviceFP string, deviceName string) error {

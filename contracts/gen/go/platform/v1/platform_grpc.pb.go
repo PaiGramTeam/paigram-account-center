@@ -28,7 +28,8 @@ const (
 	PlatformService_ConfirmPrimaryProfile_FullMethodName   = "/paigram.platform.v1.PlatformService/ConfirmPrimaryProfile"
 	PlatformService_GetAuthKey_FullMethodName              = "/paigram.platform.v1.PlatformService/GetAuthKey"
 	PlatformService_UpsertDevice_FullMethodName            = "/paigram.platform.v1.PlatformService/UpsertDevice"
-	PlatformService_PutCredential_FullMethodName           = "/paigram.platform.v1.PlatformService/PutCredential"
+	PlatformService_BindCredential_FullMethodName          = "/paigram.platform.v1.PlatformService/BindCredential"
+	PlatformService_ReplaceCredential_FullMethodName       = "/paigram.platform.v1.PlatformService/ReplaceCredential"
 	PlatformService_RefreshCredential_FullMethodName       = "/paigram.platform.v1.PlatformService/RefreshCredential"
 	PlatformService_DeleteCredential_FullMethodName        = "/paigram.platform.v1.PlatformService/DeleteCredential"
 	PlatformService_InvalidateConsumerGrant_FullMethodName = "/paigram.platform.v1.PlatformService/InvalidateConsumerGrant"
@@ -47,7 +48,8 @@ type PlatformServiceClient interface {
 	ConfirmPrimaryProfile(ctx context.Context, in *ConfirmPrimaryProfileRequest, opts ...grpc.CallOption) (*ConfirmPrimaryProfileResponse, error)
 	GetAuthKey(ctx context.Context, in *GetAuthKeyRequest, opts ...grpc.CallOption) (*GetAuthKeyResponse, error)
 	UpsertDevice(ctx context.Context, in *UpsertDeviceRequest, opts ...grpc.CallOption) (*UpsertDeviceResponse, error)
-	PutCredential(ctx context.Context, in *PutCredentialRequest, opts ...grpc.CallOption) (*PutCredentialResponse, error)
+	BindCredential(ctx context.Context, in *BindCredentialRequest, opts ...grpc.CallOption) (*BindCredentialResponse, error)
+	ReplaceCredential(ctx context.Context, in *ReplaceCredentialRequest, opts ...grpc.CallOption) (*ReplaceCredentialResponse, error)
 	RefreshCredential(ctx context.Context, in *RefreshCredentialRequest, opts ...grpc.CallOption) (*RefreshCredentialResponse, error)
 	DeleteCredential(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error)
 	InvalidateConsumerGrant(ctx context.Context, in *InvalidateConsumerGrantRequest, opts ...grpc.CallOption) (*InvalidateConsumerGrantResponse, error)
@@ -151,10 +153,20 @@ func (c *platformServiceClient) UpsertDevice(ctx context.Context, in *UpsertDevi
 	return out, nil
 }
 
-func (c *platformServiceClient) PutCredential(ctx context.Context, in *PutCredentialRequest, opts ...grpc.CallOption) (*PutCredentialResponse, error) {
+func (c *platformServiceClient) BindCredential(ctx context.Context, in *BindCredentialRequest, opts ...grpc.CallOption) (*BindCredentialResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PutCredentialResponse)
-	err := c.cc.Invoke(ctx, PlatformService_PutCredential_FullMethodName, in, out, cOpts...)
+	out := new(BindCredentialResponse)
+	err := c.cc.Invoke(ctx, PlatformService_BindCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ReplaceCredential(ctx context.Context, in *ReplaceCredentialRequest, opts ...grpc.CallOption) (*ReplaceCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceCredentialResponse)
+	err := c.cc.Invoke(ctx, PlatformService_ReplaceCredential_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +216,8 @@ type PlatformServiceServer interface {
 	ConfirmPrimaryProfile(context.Context, *ConfirmPrimaryProfileRequest) (*ConfirmPrimaryProfileResponse, error)
 	GetAuthKey(context.Context, *GetAuthKeyRequest) (*GetAuthKeyResponse, error)
 	UpsertDevice(context.Context, *UpsertDeviceRequest) (*UpsertDeviceResponse, error)
-	PutCredential(context.Context, *PutCredentialRequest) (*PutCredentialResponse, error)
+	BindCredential(context.Context, *BindCredentialRequest) (*BindCredentialResponse, error)
+	ReplaceCredential(context.Context, *ReplaceCredentialRequest) (*ReplaceCredentialResponse, error)
 	RefreshCredential(context.Context, *RefreshCredentialRequest) (*RefreshCredentialResponse, error)
 	DeleteCredential(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error)
 	InvalidateConsumerGrant(context.Context, *InvalidateConsumerGrantRequest) (*InvalidateConsumerGrantResponse, error)
@@ -245,8 +258,11 @@ func (UnimplementedPlatformServiceServer) GetAuthKey(context.Context, *GetAuthKe
 func (UnimplementedPlatformServiceServer) UpsertDevice(context.Context, *UpsertDeviceRequest) (*UpsertDeviceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpsertDevice not implemented")
 }
-func (UnimplementedPlatformServiceServer) PutCredential(context.Context, *PutCredentialRequest) (*PutCredentialResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PutCredential not implemented")
+func (UnimplementedPlatformServiceServer) BindCredential(context.Context, *BindCredentialRequest) (*BindCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BindCredential not implemented")
+}
+func (UnimplementedPlatformServiceServer) ReplaceCredential(context.Context, *ReplaceCredentialRequest) (*ReplaceCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReplaceCredential not implemented")
 }
 func (UnimplementedPlatformServiceServer) RefreshCredential(context.Context, *RefreshCredentialRequest) (*RefreshCredentialResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshCredential not implemented")
@@ -440,20 +456,38 @@ func _PlatformService_UpsertDevice_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PlatformService_PutCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PutCredentialRequest)
+func _PlatformService_BindCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PlatformServiceServer).PutCredential(ctx, in)
+		return srv.(PlatformServiceServer).BindCredential(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PlatformService_PutCredential_FullMethodName,
+		FullMethod: PlatformService_BindCredential_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlatformServiceServer).PutCredential(ctx, req.(*PutCredentialRequest))
+		return srv.(PlatformServiceServer).BindCredential(ctx, req.(*BindCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ReplaceCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplaceCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ReplaceCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ReplaceCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ReplaceCredential(ctx, req.(*ReplaceCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -556,8 +590,12 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformService_UpsertDevice_Handler,
 		},
 		{
-			MethodName: "PutCredential",
-			Handler:    _PlatformService_PutCredential_Handler,
+			MethodName: "BindCredential",
+			Handler:    _PlatformService_BindCredential_Handler,
+		},
+		{
+			MethodName: "ReplaceCredential",
+			Handler:    _PlatformService_ReplaceCredential_Handler,
 		},
 		{
 			MethodName: "RefreshCredential",

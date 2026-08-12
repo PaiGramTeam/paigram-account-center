@@ -28,7 +28,7 @@ func NewPlatformBindingDeleteRepairHandler(db *gorm.DB, platformService *service
 	bindingService := serviceplatformbinding.NewBindingService(db)
 	profileService := serviceplatformbinding.NewProfileProjectionService(db)
 	grantService := serviceplatformbinding.NewGrantService(db)
-	orchestrationService := serviceplatformbinding.NewOrchestrationService(bindingService, platformService, serviceplatform.NewGRPCGenericCredentialGateway(nil), profileService, grantService)
+	orchestrationService := serviceplatformbinding.NewOrchestrationService(bindingService, platformService, serviceplatformbinding.NewGRPCGenericCredentialGateway(nil), profileService, grantService)
 	return &PlatformBindingDeleteRepairHandler{repairer: orchestrationService}
 }
 

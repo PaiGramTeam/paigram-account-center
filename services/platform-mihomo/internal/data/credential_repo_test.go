@@ -53,6 +53,23 @@ func TestCredentialRepoGetByBindingIDUsesUniqueBindingRecord(t *testing.T) {
 	require.Equal(t, int64(1), count)
 }
 
+func TestCredentialRepoCreateRejectsExistingBinding(t *testing.T) {
+	repo := NewCredentialRepo(newRepoTestDB(t))
+	credential := &biz.Credential{
+		BindingID:         42,
+		PlatformAccountID: "binding_42_10001",
+		Platform:          "mihomo",
+		AccountID:         "10001",
+		Region:            "cn_gf01",
+		CredentialBlob:    "blob-1",
+		CredentialVersion: "v1",
+		Status:            "active",
+	}
+
+	require.NoError(t, repo.Create(context.Background(), credential))
+	require.ErrorIs(t, repo.Create(context.Background(), credential), biz.ErrCredentialAlreadyBound)
+}
+
 func newRepoTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

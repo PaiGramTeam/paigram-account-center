@@ -176,10 +176,10 @@ func TestPlatformBindingRoutes(t *testing.T) {
 				},
 			},
 		},
-		putResponse: &platformv1.PutCredentialResponse{Summary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
 			PlatformAccountId: "cn:new-account",
 			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		}},
+		},
 	}
 	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, createStub))
 
@@ -477,7 +477,7 @@ func TestCreatePlatformBindingRouteBindsImmediately(t *testing.T) {
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-create-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 
 	stub := &platformBindingRouteStub{
-		putResponse: &platformv1.PutCredentialResponse{Summary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
 			PlatformAccountId: "cn:route-success",
 			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 			LastValidatedAt:   timestamppb.New(time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)),
@@ -492,7 +492,7 @@ func TestCreatePlatformBindingRouteBindsImmediately(t *testing.T) {
 				Level:             60,
 				IsDefault:         true,
 			}},
-		}},
+		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
@@ -519,8 +519,9 @@ func TestCreatePlatformBindingRouteBindsImmediately(t *testing.T) {
 	assert.Equal(t, "Traveler", profiles[0].Nickname)
 	assert.True(t, profiles[0].IsPrimary)
 	assert.Equal(t, int64(profiles[0].ID), binding.PrimaryProfileID.Int64)
-	assert.Empty(t, stub.lastPut.GetPlatformAccountId())
-	assert.JSONEq(t, `{"cookie_bundle":"abc"}`, stub.lastPut.GetCredentialPayloadJson())
+	require.NotNil(t, stub.lastBind)
+	assert.JSONEq(t, `{"cookie_bundle":"abc"}`, stub.lastBind.GetCredentialPayloadJson())
+	assert.Nil(t, stub.lastReplace)
 	assert.Empty(t, stub.deleteRequests)
 	assert.Empty(t, data["status_reason_code"])
 	assert.Empty(t, data["status_reason_message"])
@@ -542,10 +543,10 @@ func TestCreatePlatformBindingRouteHandlesDuplicateOwnerConflict(t *testing.T) {
 	}).Error)
 
 	stub := &platformBindingRouteStub{
-		putResponse: &platformv1.PutCredentialResponse{Summary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
 			PlatformAccountId: "cn:duplicate-owner",
 			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		}},
+		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
@@ -572,7 +573,7 @@ func TestCreatePlatformBindingRouteMarksDraftInvalidOnProviderValidationFailure(
 	stack := newIntegrationStack(t)
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-invalid-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 
-	stub := &platformBindingRouteStub{putErr: grpcstatus.Error(codes.InvalidArgument, "credential rejected")}
+	stub := &platformBindingRouteStub{credentialMutationErr: grpcstatus.Error(codes.InvalidArgument, "credential rejected")}
 	endpoint := startPlatformBindingRouteServer(t, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
 
@@ -608,10 +609,10 @@ func TestCreatePlatformBindingRouteMarksDeleteFailedWhenCleanupFails(t *testing.
 	}).Error)
 
 	stub := &platformBindingRouteStub{
-		putResponse: &platformv1.PutCredentialResponse{Summary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
 			PlatformAccountId: "cn:cleanup-failed",
 			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		}},
+		},
 		deleteErr: grpcstatus.Error(codes.Unavailable, "cleanup down"),
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
@@ -647,10 +648,10 @@ func TestCreatePlatformBindingRouteReturnsExistingBindingForSameOwnerRetry(t *te
 	require.NoError(t, stack.DB.Create(&existing).Error)
 
 	stub := &platformBindingRouteStub{
-		putResponse: &platformv1.PutCredentialResponse{Summary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
 			PlatformAccountId: "cn:same-owner",
 			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		}},
+		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
@@ -687,10 +688,10 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 	require.NoError(t, stack.DB.Create(&binding).Error)
 
 	stub := &platformBindingRouteStub{
-		putResponse: &platformv1.PutCredentialResponse{Summary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
 			PlatformAccountId: "cn:update-path",
 			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		}},
+		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
 	seedEnabledPlatformService(t, stack, endpoint)
@@ -701,8 +702,10 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 	require.Equal(t, http.StatusOK, meResp.Code, meResp.Body.String())
 	meData := decodeResponseData(t, meResp)
 	assert.Equal(t, "cn:update-path", meData["platform_account_id"])
-	assert.Equal(t, "cn:update-path", stub.lastPut.GetPlatformAccountId())
-	assert.JSONEq(t, `{"cookie_bundle":"owner-update"}`, stub.lastPut.GetCredentialPayloadJson())
+	require.NotNil(t, stub.lastReplace)
+	assert.Equal(t, "cn:update-path", stub.lastReplace.GetPlatformAccountId())
+	assert.JSONEq(t, `{"cookie_bundle":"owner-update"}`, stub.lastReplace.GetCredentialPayloadJson())
+	assert.Nil(t, stub.lastBind)
 
 	adminResp := performJSONRequest(t, stack.Router, http.MethodPut, fmt.Sprintf("/api/v1/admin/platform-accounts/%d/credential", binding.ID), map[string]any{
 		"cookie_bundle": "admin-update",
@@ -710,8 +713,8 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 	require.Equal(t, http.StatusOK, adminResp.Code, adminResp.Body.String())
 	adminData := decodeResponseData(t, adminResp)
 	assert.Equal(t, "cn:update-path", adminData["platform_account_id"])
-	assert.Equal(t, "cn:update-path", stub.lastPut.GetPlatformAccountId())
-	assert.JSONEq(t, `{"cookie_bundle":"admin-update"}`, stub.lastPut.GetCredentialPayloadJson())
+	assert.Equal(t, "cn:update-path", stub.lastReplace.GetPlatformAccountId())
+	assert.JSONEq(t, `{"cookie_bundle":"admin-update"}`, stub.lastReplace.GetCredentialPayloadJson())
 }
 
 func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneState(t *testing.T) {

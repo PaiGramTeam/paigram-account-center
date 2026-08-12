@@ -43,7 +43,8 @@ type orchestrationPlatformService interface {
 }
 
 type credentialGateway interface {
-	PutCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
+	BindCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
+	ReplaceCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
 	RefreshCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error
 	DeleteCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error
 }
@@ -376,8 +377,9 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 		return nil, nil, err
 	}
 
+	hasResolvedAccount := binding.ExternalAccountKey.Valid && binding.ExternalAccountKey.String != ""
 	scopes := []string{"mihomo.credential.bind"}
-	if binding.ExternalAccountKey.Valid {
+	if hasResolvedAccount {
 		scopes = []string{"mihomo.credential.update"}
 	}
 
@@ -386,7 +388,12 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 		return nil, nil, err
 	}
 
-	summary, err := s.gateway.PutCredential(ctx, platformRow.Endpoint, ticket, binding, input.CredentialPayload)
+	var summary map[string]any
+	if hasResolvedAccount {
+		summary, err = s.gateway.ReplaceCredential(ctx, platformRow.Endpoint, ticket, binding, input.CredentialPayload)
+	} else {
+		summary, err = s.gateway.BindCredential(ctx, platformRow.Endpoint, ticket, binding, input.CredentialPayload)
+	}
 	if err != nil {
 		return nil, nil, s.handlePutCredentialError(binding, err)
 	}
@@ -570,7 +577,11 @@ func nullableLevel(value any) sql.NullInt64 {
 
 type unavailableCredentialGateway struct{}
 
-func (unavailableCredentialGateway) PutCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (unavailableCredentialGateway) BindCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+	return nil, ErrCredentialGatewayUnavailable
+}
+
+func (unavailableCredentialGateway) ReplaceCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	return nil, ErrCredentialGatewayUnavailable
 }
 

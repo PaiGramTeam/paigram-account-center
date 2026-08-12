@@ -17,7 +17,8 @@ service PlatformService {
   rpc ConfirmPrimaryProfile(ConfirmPrimaryProfileRequest) returns (ConfirmPrimaryProfileResponse);
   rpc GetAuthKey(GetAuthKeyRequest) returns (GetAuthKeyResponse);
   rpc UpsertDevice(UpsertDeviceRequest) returns (UpsertDeviceResponse);
-  rpc PutCredential(PutCredentialRequest) returns (PutCredentialResponse);
+  rpc BindCredential(BindCredentialRequest) returns (BindCredentialResponse);
+  rpc ReplaceCredential(ReplaceCredentialRequest) returns (ReplaceCredentialResponse);
   rpc RefreshCredential(RefreshCredentialRequest) returns (RefreshCredentialResponse);
   rpc DeleteCredential(DeleteCredentialRequest) returns (DeleteCredentialResponse);
   rpc InvalidateConsumerGrant(InvalidateConsumerGrantRequest) returns (InvalidateConsumerGrantResponse);
@@ -158,14 +159,26 @@ message UpsertDeviceResponse {
   bool success = 1;
 }
 
-message PutCredentialRequest {
+message BindCredentialRequest {
+  reserved 1;
+  reserved "service_ticket";
+  reserved 2;
+  reserved "platform_account_id";
+  string credential_payload_json = 3;
+}
+
+message BindCredentialResponse {
+  GetCredentialSummaryResponse summary = 1;
+}
+
+message ReplaceCredentialRequest {
   reserved 1;
   reserved "service_ticket";
   string platform_account_id = 2;
   string credential_payload_json = 3;
 }
 
-message PutCredentialResponse {
+message ReplaceCredentialResponse {
   GetCredentialSummaryResponse summary = 1;
 }
 

@@ -236,68 +236,6 @@ func (s *GenericPlatformService) authorizePlatformAccount(ctx context.Context, p
 	return guard, nil
 }
 
-func (s *GenericPlatformService) PutCredential(ctx context.Context, req *platformv1.PutCredentialRequest) (*platformv1.PutCredentialResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "request is required")
-	}
-
-	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
-	if err != nil {
-		return nil, err
-	}
-	guard, err := scopedGuard(claims)
-	if err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	if err := guard.RequireBindingWide(); err != nil {
-		return nil, mapUsecaseError(err)
-	}
-
-	payload, err := decodeGenericCredentialPayload(req.GetCredentialPayloadJson())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "credential payload must be valid JSON")
-	}
-	bindInput := usecase.BindCredentialInput{
-		BindingID:        claims.BindingID,
-		CookieBundleJSON: payload.CookieBundle,
-		DeviceID:         payload.DeviceID,
-		DeviceFP:         payload.DeviceFP,
-		DeviceName:       payload.DeviceName,
-		RegionHint:       payload.RegionHint,
-	}
-
-	platformAccountID := req.GetPlatformAccountId()
-	if platformAccountID != "" {
-		if err := guard.RequireAction(usecase.ActionCredentialUpdate); err != nil {
-			return nil, mapUsecaseError(err)
-		}
-		if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
-			return nil, mapUsecaseError(err)
-		}
-		summary, err := s.managementUC.UpdateCredentialWithScope(ctx, guard, usecase.UpdateCredentialInput{
-			PlatformAccountID:   platformAccountID,
-			BindCredentialInput: bindInput,
-		})
-		if err != nil {
-			return nil, mapUsecaseError(err)
-		}
-		return &platformv1.PutCredentialResponse{Summary: toGenericCredentialSummary(summary)}, nil
-	}
-	if err := guard.RequireAction(usecase.ActionCredentialBind); err != nil {
-		return nil, mapUsecaseError(err)
-	}
-
-	bound, err := s.bindUC.BindCredential(ctx, bindInput)
-	if err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	summary, err := s.managementUC.GetCredentialSummaryWithScope(ctx, guard, bound.PlatformAccountID)
-	if err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	return &platformv1.PutCredentialResponse{Summary: toGenericCredentialSummary(summary)}, nil
-}
-
 func (s *GenericPlatformService) RefreshCredential(ctx context.Context, req *platformv1.RefreshCredentialRequest) (*platformv1.RefreshCredentialResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")

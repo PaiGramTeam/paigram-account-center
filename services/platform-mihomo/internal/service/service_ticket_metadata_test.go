@@ -23,7 +23,8 @@ func TestPlatformRequestContractDoesNotExposeServiceTicket(t *testing.T) {
 		(&platformv1.ConfirmPrimaryProfileRequest{}).ProtoReflect().Descriptor(),
 		(&platformv1.GetAuthKeyRequest{}).ProtoReflect().Descriptor(),
 		(&platformv1.UpsertDeviceRequest{}).ProtoReflect().Descriptor(),
-		(&platformv1.PutCredentialRequest{}).ProtoReflect().Descriptor(),
+		(&platformv1.BindCredentialRequest{}).ProtoReflect().Descriptor(),
+		(&platformv1.ReplaceCredentialRequest{}).ProtoReflect().Descriptor(),
 		(&platformv1.RefreshCredentialRequest{}).ProtoReflect().Descriptor(),
 		(&platformv1.DeleteCredentialRequest{}).ProtoReflect().Descriptor(),
 		(&platformv1.InvalidateConsumerGrantRequest{}).ProtoReflect().Descriptor(),
@@ -31,6 +32,18 @@ func TestPlatformRequestContractDoesNotExposeServiceTicket(t *testing.T) {
 	for _, message := range messages {
 		require.Nil(t, message.Fields().ByName("service_ticket"), string(message.FullName()))
 	}
+}
+
+func TestPlatformCredentialMutationContractUsesDedicatedRPCs(t *testing.T) {
+	methods := platformv1.PlatformService_ServiceDesc.Methods
+	methodNames := make(map[string]struct{}, len(methods))
+	for _, method := range methods {
+		methodNames[method.MethodName] = struct{}{}
+	}
+
+	require.NotContains(t, methodNames, "PutCredential")
+	require.Contains(t, methodNames, "BindCredential")
+	require.Contains(t, methodNames, "ReplaceCredential")
 }
 
 func TestGenericPlatformServiceAcceptsServiceTicketFromAuthorizationMetadata(t *testing.T) {

@@ -2,8 +2,11 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrCredentialAlreadyBound = errors.New("credential already exists for binding")
 
 type Credential struct {
 	BindingID         uint64
@@ -20,6 +23,7 @@ type Credential struct {
 }
 
 type CredentialRepository interface {
+	Create(ctx context.Context, credential *Credential) error
 	Save(ctx context.Context, credential *Credential) error
 	GetByBindingID(ctx context.Context, bindingID uint64) (*Credential, error)
 	GetByPlatformAccountID(ctx context.Context, platformAccountID string) (*Credential, error)

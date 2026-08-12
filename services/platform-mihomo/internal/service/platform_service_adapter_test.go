@@ -388,11 +388,11 @@ func TestGenericPlatformServiceGetCredentialSummaryRejectsMachineAccessToken(t *
 	require.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
-func TestGenericPlatformServicePutCredentialRejectsMachineAccessToken(t *testing.T) {
+func TestGenericPlatformServiceBindCredentialRejectsMachineAccessToken(t *testing.T) {
 	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
 
 	ctx := incomingServiceTicketContext(signedAdapterMachineAccessToken(t, adapterTicketOptions{Scopes: []string{"mihomo.credential.bind"}}))
-	_, err := adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
+	_, err := adapter.BindCredential(ctx, &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 
@@ -532,7 +532,7 @@ func TestGenericPlatformServiceRegisteredOnGRPCServer(t *testing.T) {
 	require.Equal(t, "mihomo", resp.PlatformKey)
 }
 
-func TestGenericPlatformServicePutCredentialBindsWhenPlatformAccountIDUnknown(t *testing.T) {
+func TestGenericPlatformServiceBindCredentialUsesBindAction(t *testing.T) {
 	credentialRepo := newMemoryCredentialRepo()
 	deviceRepo := newMemoryDeviceRepo()
 	profileRepo := newMemoryProfileRepo()
@@ -559,7 +559,7 @@ func TestGenericPlatformServicePutCredentialBindsWhenPlatformAccountIDUnknown(t 
 	)
 
 	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.bind"))
-	resp, err := adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
+	resp, err := adapter.BindCredential(ctx, &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 	require.NoError(t, err)
@@ -567,7 +567,7 @@ func TestGenericPlatformServicePutCredentialBindsWhenPlatformAccountIDUnknown(t 
 	require.Equal(t, "binding_101_10001", resp.GetSummary().GetPlatformAccountId())
 }
 
-func TestGenericPlatformServicePutCredentialRejectsCreateWithUpdateOnlyScope(t *testing.T) {
+func TestGenericPlatformServiceBindCredentialRejectsUpdateAction(t *testing.T) {
 	credentialRepo := newMemoryCredentialRepo()
 	deviceRepo := newMemoryDeviceRepo()
 	profileRepo := newMemoryProfileRepo()
@@ -594,13 +594,13 @@ func TestGenericPlatformServicePutCredentialRejectsCreateWithUpdateOnlyScope(t *
 	)
 
 	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, "", "mihomo.credential.update"))
-	_, err := adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
+	_, err := adapter.BindCredential(ctx, &platformv1.BindCredentialRequest{
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"iPhone","region_hint":"cn_gf01"}`,
 	})
 	require.Error(t, err)
 }
 
-func TestGenericPlatformServicePutCredentialRejectsUpdateWithBindOnlyScope(t *testing.T) {
+func TestGenericPlatformServiceReplaceCredentialRejectsBindAction(t *testing.T) {
 	credentialRepo := newMemoryCredentialRepo()
 	deviceRepo := newMemoryDeviceRepo()
 	profileRepo := newMemoryProfileRepo()
@@ -636,7 +636,7 @@ func TestGenericPlatformServicePutCredentialRejectsUpdateWithBindOnlyScope(t *te
 	require.NoError(t, err)
 
 	ctx := incomingServiceTicketContext(signedMihomoSummaryTicket(t, bindResp.PlatformAccountID, "mihomo.credential.bind"))
-	_, err = adapter.PutCredential(ctx, &platformv1.PutCredentialRequest{
+	_, err = adapter.ReplaceCredential(ctx, &platformv1.ReplaceCredentialRequest{
 		PlatformAccountId:     bindResp.PlatformAccountID,
 		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"updated\"}","device_id":"device-2","device_fp":"fp-2","device_name":"iPad","region_hint":"cn_gf01"}`,
 	})

@@ -708,6 +708,13 @@ func (r *memoryCredentialRepo) Save(_ context.Context, credential *biz.Credentia
 	return nil
 }
 
+func (r *memoryCredentialRepo) Create(ctx context.Context, credential *biz.Credential) error {
+	if r.byBindingID[credential.BindingID] != nil || r.byPlatformAccountID[credential.PlatformAccountID] != nil {
+		return biz.ErrCredentialAlreadyBound
+	}
+	return r.Save(ctx, credential)
+}
+
 func (r *memoryCredentialRepo) GetByPlatformAccountID(_ context.Context, platformAccountID string) (*biz.Credential, error) {
 	credential := r.byPlatformAccountID[platformAccountID]
 	if credential == nil {

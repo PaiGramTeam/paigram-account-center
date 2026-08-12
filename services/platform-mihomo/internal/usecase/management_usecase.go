@@ -141,7 +141,7 @@ func (uc *ManagementUsecase) UpdateCredential(ctx context.Context, input UpdateC
 	}
 
 	err = uc.bindUC.runInTransaction(ctx, func(txCtx context.Context) error {
-		result, err := uc.bindUC.bindPreparedCredential(txCtx, input.BindCredentialInput, prepared)
+		result, err := uc.bindUC.bindPreparedCredential(txCtx, input.BindCredentialInput, prepared, false)
 		if err != nil {
 			return err
 		}

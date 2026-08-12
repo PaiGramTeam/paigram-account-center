@@ -1226,7 +1226,95 @@ func (x *UpsertDeviceResponse) GetSuccess() bool {
 	return false
 }
 
-type PutCredentialRequest struct {
+type BindCredentialRequest struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	CredentialPayloadJson string                 `protobuf:"bytes,3,opt,name=credential_payload_json,json=credentialPayloadJson,proto3" json:"credential_payload_json,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *BindCredentialRequest) Reset() {
+	*x = BindCredentialRequest{}
+	mi := &file_platform_v1_platform_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindCredentialRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindCredentialRequest) ProtoMessage() {}
+
+func (x *BindCredentialRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_platform_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindCredentialRequest.ProtoReflect.Descriptor instead.
+func (*BindCredentialRequest) Descriptor() ([]byte, []int) {
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *BindCredentialRequest) GetCredentialPayloadJson() string {
+	if x != nil {
+		return x.CredentialPayloadJson
+	}
+	return ""
+}
+
+type BindCredentialResponse struct {
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Summary       *GetCredentialSummaryResponse `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindCredentialResponse) Reset() {
+	*x = BindCredentialResponse{}
+	mi := &file_platform_v1_platform_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindCredentialResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindCredentialResponse) ProtoMessage() {}
+
+func (x *BindCredentialResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_platform_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindCredentialResponse.ProtoReflect.Descriptor instead.
+func (*BindCredentialResponse) Descriptor() ([]byte, []int) {
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *BindCredentialResponse) GetSummary() *GetCredentialSummaryResponse {
+	if x != nil {
+		return x.Summary
+	}
+	return nil
+}
+
+type ReplaceCredentialRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	PlatformAccountId     string                 `protobuf:"bytes,2,opt,name=platform_account_id,json=platformAccountId,proto3" json:"platform_account_id,omitempty"`
 	CredentialPayloadJson string                 `protobuf:"bytes,3,opt,name=credential_payload_json,json=credentialPayloadJson,proto3" json:"credential_payload_json,omitempty"`
@@ -1234,21 +1322,21 @@ type PutCredentialRequest struct {
 	sizeCache             protoimpl.SizeCache
 }
 
-func (x *PutCredentialRequest) Reset() {
-	*x = PutCredentialRequest{}
-	mi := &file_platform_v1_platform_proto_msgTypes[21]
+func (x *ReplaceCredentialRequest) Reset() {
+	*x = ReplaceCredentialRequest{}
+	mi := &file_platform_v1_platform_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PutCredentialRequest) String() string {
+func (x *ReplaceCredentialRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PutCredentialRequest) ProtoMessage() {}
+func (*ReplaceCredentialRequest) ProtoMessage() {}
 
-func (x *PutCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[21]
+func (x *ReplaceCredentialRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_platform_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1259,47 +1347,47 @@ func (x *PutCredentialRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PutCredentialRequest.ProtoReflect.Descriptor instead.
-func (*PutCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{21}
+// Deprecated: Use ReplaceCredentialRequest.ProtoReflect.Descriptor instead.
+func (*ReplaceCredentialRequest) Descriptor() ([]byte, []int) {
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{23}
 }
 
-func (x *PutCredentialRequest) GetPlatformAccountId() string {
+func (x *ReplaceCredentialRequest) GetPlatformAccountId() string {
 	if x != nil {
 		return x.PlatformAccountId
 	}
 	return ""
 }
 
-func (x *PutCredentialRequest) GetCredentialPayloadJson() string {
+func (x *ReplaceCredentialRequest) GetCredentialPayloadJson() string {
 	if x != nil {
 		return x.CredentialPayloadJson
 	}
 	return ""
 }
 
-type PutCredentialResponse struct {
+type ReplaceCredentialResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Summary       *GetCredentialSummaryResponse `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PutCredentialResponse) Reset() {
-	*x = PutCredentialResponse{}
-	mi := &file_platform_v1_platform_proto_msgTypes[22]
+func (x *ReplaceCredentialResponse) Reset() {
+	*x = ReplaceCredentialResponse{}
+	mi := &file_platform_v1_platform_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PutCredentialResponse) String() string {
+func (x *ReplaceCredentialResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PutCredentialResponse) ProtoMessage() {}
+func (*ReplaceCredentialResponse) ProtoMessage() {}
 
-func (x *PutCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[22]
+func (x *ReplaceCredentialResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_platform_v1_platform_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1310,12 +1398,12 @@ func (x *PutCredentialResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PutCredentialResponse.ProtoReflect.Descriptor instead.
-func (*PutCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{22}
+// Deprecated: Use ReplaceCredentialResponse.ProtoReflect.Descriptor instead.
+func (*ReplaceCredentialResponse) Descriptor() ([]byte, []int) {
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{24}
 }
 
-func (x *PutCredentialResponse) GetSummary() *GetCredentialSummaryResponse {
+func (x *ReplaceCredentialResponse) GetSummary() *GetCredentialSummaryResponse {
 	if x != nil {
 		return x.Summary
 	}
@@ -1331,7 +1419,7 @@ type RefreshCredentialRequest struct {
 
 func (x *RefreshCredentialRequest) Reset() {
 	*x = RefreshCredentialRequest{}
-	mi := &file_platform_v1_platform_proto_msgTypes[23]
+	mi := &file_platform_v1_platform_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1343,7 +1431,7 @@ func (x *RefreshCredentialRequest) String() string {
 func (*RefreshCredentialRequest) ProtoMessage() {}
 
 func (x *RefreshCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[23]
+	mi := &file_platform_v1_platform_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1356,7 +1444,7 @@ func (x *RefreshCredentialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshCredentialRequest.ProtoReflect.Descriptor instead.
 func (*RefreshCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{23}
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RefreshCredentialRequest) GetPlatformAccountId() string {
@@ -1376,7 +1464,7 @@ type RefreshCredentialResponse struct {
 
 func (x *RefreshCredentialResponse) Reset() {
 	*x = RefreshCredentialResponse{}
-	mi := &file_platform_v1_platform_proto_msgTypes[24]
+	mi := &file_platform_v1_platform_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1388,7 +1476,7 @@ func (x *RefreshCredentialResponse) String() string {
 func (*RefreshCredentialResponse) ProtoMessage() {}
 
 func (x *RefreshCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[24]
+	mi := &file_platform_v1_platform_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1401,7 +1489,7 @@ func (x *RefreshCredentialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshCredentialResponse.ProtoReflect.Descriptor instead.
 func (*RefreshCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{24}
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RefreshCredentialResponse) GetStatus() CredentialStatus {
@@ -1427,7 +1515,7 @@ type DeleteCredentialRequest struct {
 
 func (x *DeleteCredentialRequest) Reset() {
 	*x = DeleteCredentialRequest{}
-	mi := &file_platform_v1_platform_proto_msgTypes[25]
+	mi := &file_platform_v1_platform_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1439,7 +1527,7 @@ func (x *DeleteCredentialRequest) String() string {
 func (*DeleteCredentialRequest) ProtoMessage() {}
 
 func (x *DeleteCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[25]
+	mi := &file_platform_v1_platform_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1452,7 +1540,7 @@ func (x *DeleteCredentialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCredentialRequest.ProtoReflect.Descriptor instead.
 func (*DeleteCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{25}
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DeleteCredentialRequest) GetPlatformAccountId() string {
@@ -1471,7 +1559,7 @@ type DeleteCredentialResponse struct {
 
 func (x *DeleteCredentialResponse) Reset() {
 	*x = DeleteCredentialResponse{}
-	mi := &file_platform_v1_platform_proto_msgTypes[26]
+	mi := &file_platform_v1_platform_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1483,7 +1571,7 @@ func (x *DeleteCredentialResponse) String() string {
 func (*DeleteCredentialResponse) ProtoMessage() {}
 
 func (x *DeleteCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[26]
+	mi := &file_platform_v1_platform_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1496,7 +1584,7 @@ func (x *DeleteCredentialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCredentialResponse.ProtoReflect.Descriptor instead.
 func (*DeleteCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{26}
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DeleteCredentialResponse) GetSuccess() bool {
@@ -1517,7 +1605,7 @@ type InvalidateConsumerGrantRequest struct {
 
 func (x *InvalidateConsumerGrantRequest) Reset() {
 	*x = InvalidateConsumerGrantRequest{}
-	mi := &file_platform_v1_platform_proto_msgTypes[27]
+	mi := &file_platform_v1_platform_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1529,7 +1617,7 @@ func (x *InvalidateConsumerGrantRequest) String() string {
 func (*InvalidateConsumerGrantRequest) ProtoMessage() {}
 
 func (x *InvalidateConsumerGrantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[27]
+	mi := &file_platform_v1_platform_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1542,7 +1630,7 @@ func (x *InvalidateConsumerGrantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateConsumerGrantRequest.ProtoReflect.Descriptor instead.
 func (*InvalidateConsumerGrantRequest) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{27}
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *InvalidateConsumerGrantRequest) GetBindingId() uint64 {
@@ -1575,7 +1663,7 @@ type InvalidateConsumerGrantResponse struct {
 
 func (x *InvalidateConsumerGrantResponse) Reset() {
 	*x = InvalidateConsumerGrantResponse{}
-	mi := &file_platform_v1_platform_proto_msgTypes[28]
+	mi := &file_platform_v1_platform_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1587,7 +1675,7 @@ func (x *InvalidateConsumerGrantResponse) String() string {
 func (*InvalidateConsumerGrantResponse) ProtoMessage() {}
 
 func (x *InvalidateConsumerGrantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_platform_v1_platform_proto_msgTypes[28]
+	mi := &file_platform_v1_platform_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1600,7 +1688,7 @@ func (x *InvalidateConsumerGrantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateConsumerGrantResponse.ProtoReflect.Descriptor instead.
 func (*InvalidateConsumerGrantResponse) Descriptor() ([]byte, []int) {
-	return file_platform_v1_platform_proto_rawDescGZIP(), []int{28}
+	return file_platform_v1_platform_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *InvalidateConsumerGrantResponse) GetSuccess() bool {
@@ -1691,11 +1779,15 @@ const file_platform_v1_platform_proto_rawDesc = "" +
 	"\x13platform_account_id\x18\x02 \x01(\tR\x11platformAccountId\x127\n" +
 	"\x06device\x18\x03 \x01(\v2\x1f.paigram.platform.v1.DeviceInfoR\x06deviceJ\x04\b\x01\x10\x02R\x0eservice_ticket\"0\n" +
 	"\x14UpsertDeviceResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x94\x01\n" +
-	"\x14PutCredentialRequest\x12.\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x80\x01\n" +
+	"\x15BindCredentialRequest\x126\n" +
+	"\x17credential_payload_json\x18\x03 \x01(\tR\x15credentialPayloadJsonJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03R\x0eservice_ticketR\x13platform_account_id\"e\n" +
+	"\x16BindCredentialResponse\x12K\n" +
+	"\asummary\x18\x01 \x01(\v21.paigram.platform.v1.GetCredentialSummaryResponseR\asummary\"\x98\x01\n" +
+	"\x18ReplaceCredentialRequest\x12.\n" +
 	"\x13platform_account_id\x18\x02 \x01(\tR\x11platformAccountId\x126\n" +
-	"\x17credential_payload_json\x18\x03 \x01(\tR\x15credentialPayloadJsonJ\x04\b\x01\x10\x02R\x0eservice_ticket\"d\n" +
-	"\x15PutCredentialResponse\x12K\n" +
+	"\x17credential_payload_json\x18\x03 \x01(\tR\x15credentialPayloadJsonJ\x04\b\x01\x10\x02R\x0eservice_ticket\"h\n" +
+	"\x19ReplaceCredentialResponse\x12K\n" +
 	"\asummary\x18\x01 \x01(\v21.paigram.platform.v1.GetCredentialSummaryResponseR\asummary\"`\n" +
 	"\x18RefreshCredentialRequest\x12.\n" +
 	"\x13platform_account_id\x18\x02 \x01(\tR\x11platformAccountIdJ\x04\b\x01\x10\x02R\x0eservice_ticket\"\x99\x01\n" +
@@ -1718,7 +1810,7 @@ const file_platform_v1_platform_proto_rawDesc = "" +
 	"\x18CREDENTIAL_STATUS_ACTIVE\x10\x01\x12\x1d\n" +
 	"\x19CREDENTIAL_STATUS_EXPIRED\x10\x02\x12\x1d\n" +
 	"\x19CREDENTIAL_STATUS_INVALID\x10\x03\x12(\n" +
-	"$CREDENTIAL_STATUS_CHALLENGE_REQUIRED\x10\x042\xe1\v\n" +
+	"$CREDENTIAL_STATUS_CHALLENGE_REQUIRED\x10\x042\xd8\f\n" +
 	"\x0fPlatformService\x12o\n" +
 	"\x10DescribePlatform\x12,.paigram.platform.v1.DescribePlatformRequest\x1a-.paigram.platform.v1.DescribePlatformResponse\x12x\n" +
 	"\x13GetCredentialStatus\x12/.paigram.platform.v1.GetCredentialStatusRequest\x1a0.paigram.platform.v1.GetCredentialStatusResponse\x12u\n" +
@@ -1729,8 +1821,9 @@ const file_platform_v1_platform_proto_rawDesc = "" +
 	"\x15ConfirmPrimaryProfile\x121.paigram.platform.v1.ConfirmPrimaryProfileRequest\x1a2.paigram.platform.v1.ConfirmPrimaryProfileResponse\x12]\n" +
 	"\n" +
 	"GetAuthKey\x12&.paigram.platform.v1.GetAuthKeyRequest\x1a'.paigram.platform.v1.GetAuthKeyResponse\x12c\n" +
-	"\fUpsertDevice\x12(.paigram.platform.v1.UpsertDeviceRequest\x1a).paigram.platform.v1.UpsertDeviceResponse\x12f\n" +
-	"\rPutCredential\x12).paigram.platform.v1.PutCredentialRequest\x1a*.paigram.platform.v1.PutCredentialResponse\x12r\n" +
+	"\fUpsertDevice\x12(.paigram.platform.v1.UpsertDeviceRequest\x1a).paigram.platform.v1.UpsertDeviceResponse\x12i\n" +
+	"\x0eBindCredential\x12*.paigram.platform.v1.BindCredentialRequest\x1a+.paigram.platform.v1.BindCredentialResponse\x12r\n" +
+	"\x11ReplaceCredential\x12-.paigram.platform.v1.ReplaceCredentialRequest\x1a..paigram.platform.v1.ReplaceCredentialResponse\x12r\n" +
 	"\x11RefreshCredential\x12-.paigram.platform.v1.RefreshCredentialRequest\x1a..paigram.platform.v1.RefreshCredentialResponse\x12o\n" +
 	"\x10DeleteCredential\x12,.paigram.platform.v1.DeleteCredentialRequest\x1a-.paigram.platform.v1.DeleteCredentialResponse\x12\x84\x01\n" +
 	"\x17InvalidateConsumerGrant\x123.paigram.platform.v1.InvalidateConsumerGrantRequest\x1a4.paigram.platform.v1.InvalidateConsumerGrantResponseBWZUgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1;platformv1b\x06proto3"
@@ -1748,7 +1841,7 @@ func file_platform_v1_platform_proto_rawDescGZIP() []byte {
 }
 
 var file_platform_v1_platform_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_platform_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_platform_v1_platform_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_platform_v1_platform_proto_goTypes = []any{
 	(CredentialStatus)(0),                   // 0: paigram.platform.v1.CredentialStatus
 	(*DescribePlatformRequest)(nil),         // 1: paigram.platform.v1.DescribePlatformRequest
@@ -1772,67 +1865,72 @@ var file_platform_v1_platform_proto_goTypes = []any{
 	(*DeviceInfo)(nil),                      // 19: paigram.platform.v1.DeviceInfo
 	(*UpsertDeviceRequest)(nil),             // 20: paigram.platform.v1.UpsertDeviceRequest
 	(*UpsertDeviceResponse)(nil),            // 21: paigram.platform.v1.UpsertDeviceResponse
-	(*PutCredentialRequest)(nil),            // 22: paigram.platform.v1.PutCredentialRequest
-	(*PutCredentialResponse)(nil),           // 23: paigram.platform.v1.PutCredentialResponse
-	(*RefreshCredentialRequest)(nil),        // 24: paigram.platform.v1.RefreshCredentialRequest
-	(*RefreshCredentialResponse)(nil),       // 25: paigram.platform.v1.RefreshCredentialResponse
-	(*DeleteCredentialRequest)(nil),         // 26: paigram.platform.v1.DeleteCredentialRequest
-	(*DeleteCredentialResponse)(nil),        // 27: paigram.platform.v1.DeleteCredentialResponse
-	(*InvalidateConsumerGrantRequest)(nil),  // 28: paigram.platform.v1.InvalidateConsumerGrantRequest
-	(*InvalidateConsumerGrantResponse)(nil), // 29: paigram.platform.v1.InvalidateConsumerGrantResponse
-	(*structpb.Struct)(nil),                 // 30: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil),           // 31: google.protobuf.Timestamp
+	(*BindCredentialRequest)(nil),           // 22: paigram.platform.v1.BindCredentialRequest
+	(*BindCredentialResponse)(nil),          // 23: paigram.platform.v1.BindCredentialResponse
+	(*ReplaceCredentialRequest)(nil),        // 24: paigram.platform.v1.ReplaceCredentialRequest
+	(*ReplaceCredentialResponse)(nil),       // 25: paigram.platform.v1.ReplaceCredentialResponse
+	(*RefreshCredentialRequest)(nil),        // 26: paigram.platform.v1.RefreshCredentialRequest
+	(*RefreshCredentialResponse)(nil),       // 27: paigram.platform.v1.RefreshCredentialResponse
+	(*DeleteCredentialRequest)(nil),         // 28: paigram.platform.v1.DeleteCredentialRequest
+	(*DeleteCredentialResponse)(nil),        // 29: paigram.platform.v1.DeleteCredentialResponse
+	(*InvalidateConsumerGrantRequest)(nil),  // 30: paigram.platform.v1.InvalidateConsumerGrantRequest
+	(*InvalidateConsumerGrantResponse)(nil), // 31: paigram.platform.v1.InvalidateConsumerGrantResponse
+	(*structpb.Struct)(nil),                 // 32: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil),           // 33: google.protobuf.Timestamp
 }
 var file_platform_v1_platform_proto_depIdxs = []int32{
-	30, // 0: paigram.platform.v1.DescribePlatformResponse.credential_schema:type_name -> google.protobuf.Struct
-	31, // 1: paigram.platform.v1.DeviceSummary.last_seen_at:type_name -> google.protobuf.Timestamp
+	32, // 0: paigram.platform.v1.DescribePlatformResponse.credential_schema:type_name -> google.protobuf.Struct
+	33, // 1: paigram.platform.v1.DeviceSummary.last_seen_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: paigram.platform.v1.GetCredentialSummaryResponse.status:type_name -> paigram.platform.v1.CredentialStatus
-	31, // 3: paigram.platform.v1.GetCredentialSummaryResponse.last_validated_at:type_name -> google.protobuf.Timestamp
-	31, // 4: paigram.platform.v1.GetCredentialSummaryResponse.last_refreshed_at:type_name -> google.protobuf.Timestamp
+	33, // 3: paigram.platform.v1.GetCredentialSummaryResponse.last_validated_at:type_name -> google.protobuf.Timestamp
+	33, // 4: paigram.platform.v1.GetCredentialSummaryResponse.last_refreshed_at:type_name -> google.protobuf.Timestamp
 	3,  // 5: paigram.platform.v1.GetCredentialSummaryResponse.devices:type_name -> paigram.platform.v1.DeviceSummary
 	4,  // 6: paigram.platform.v1.GetCredentialSummaryResponse.profiles:type_name -> paigram.platform.v1.ProfileSummary
 	0,  // 7: paigram.platform.v1.GetCredentialStatusResponse.status:type_name -> paigram.platform.v1.CredentialStatus
-	31, // 8: paigram.platform.v1.GetCredentialStatusResponse.last_validated_at:type_name -> google.protobuf.Timestamp
+	33, // 8: paigram.platform.v1.GetCredentialStatusResponse.last_validated_at:type_name -> google.protobuf.Timestamp
 	0,  // 9: paigram.platform.v1.ValidateCredentialResponse.status:type_name -> paigram.platform.v1.CredentialStatus
 	4,  // 10: paigram.platform.v1.ListProfilesResponse.profiles:type_name -> paigram.platform.v1.ProfileSummary
 	4,  // 11: paigram.platform.v1.GetPrimaryProfileResponse.profile:type_name -> paigram.platform.v1.ProfileSummary
 	4,  // 12: paigram.platform.v1.ConfirmPrimaryProfileResponse.profile:type_name -> paigram.platform.v1.ProfileSummary
-	31, // 13: paigram.platform.v1.GetAuthKeyResponse.expires_at:type_name -> google.protobuf.Timestamp
+	33, // 13: paigram.platform.v1.GetAuthKeyResponse.expires_at:type_name -> google.protobuf.Timestamp
 	19, // 14: paigram.platform.v1.UpsertDeviceRequest.device:type_name -> paigram.platform.v1.DeviceInfo
-	6,  // 15: paigram.platform.v1.PutCredentialResponse.summary:type_name -> paigram.platform.v1.GetCredentialSummaryResponse
-	0,  // 16: paigram.platform.v1.RefreshCredentialResponse.status:type_name -> paigram.platform.v1.CredentialStatus
-	31, // 17: paigram.platform.v1.RefreshCredentialResponse.refreshed_at:type_name -> google.protobuf.Timestamp
-	1,  // 18: paigram.platform.v1.PlatformService.DescribePlatform:input_type -> paigram.platform.v1.DescribePlatformRequest
-	7,  // 19: paigram.platform.v1.PlatformService.GetCredentialStatus:input_type -> paigram.platform.v1.GetCredentialStatusRequest
-	9,  // 20: paigram.platform.v1.PlatformService.ValidateCredential:input_type -> paigram.platform.v1.ValidateCredentialRequest
-	5,  // 21: paigram.platform.v1.PlatformService.GetCredentialSummary:input_type -> paigram.platform.v1.GetCredentialSummaryRequest
-	11, // 22: paigram.platform.v1.PlatformService.ListProfiles:input_type -> paigram.platform.v1.ListProfilesRequest
-	13, // 23: paigram.platform.v1.PlatformService.GetPrimaryProfile:input_type -> paigram.platform.v1.GetPrimaryProfileRequest
-	15, // 24: paigram.platform.v1.PlatformService.ConfirmPrimaryProfile:input_type -> paigram.platform.v1.ConfirmPrimaryProfileRequest
-	17, // 25: paigram.platform.v1.PlatformService.GetAuthKey:input_type -> paigram.platform.v1.GetAuthKeyRequest
-	20, // 26: paigram.platform.v1.PlatformService.UpsertDevice:input_type -> paigram.platform.v1.UpsertDeviceRequest
-	22, // 27: paigram.platform.v1.PlatformService.PutCredential:input_type -> paigram.platform.v1.PutCredentialRequest
-	24, // 28: paigram.platform.v1.PlatformService.RefreshCredential:input_type -> paigram.platform.v1.RefreshCredentialRequest
-	26, // 29: paigram.platform.v1.PlatformService.DeleteCredential:input_type -> paigram.platform.v1.DeleteCredentialRequest
-	28, // 30: paigram.platform.v1.PlatformService.InvalidateConsumerGrant:input_type -> paigram.platform.v1.InvalidateConsumerGrantRequest
-	2,  // 31: paigram.platform.v1.PlatformService.DescribePlatform:output_type -> paigram.platform.v1.DescribePlatformResponse
-	8,  // 32: paigram.platform.v1.PlatformService.GetCredentialStatus:output_type -> paigram.platform.v1.GetCredentialStatusResponse
-	10, // 33: paigram.platform.v1.PlatformService.ValidateCredential:output_type -> paigram.platform.v1.ValidateCredentialResponse
-	6,  // 34: paigram.platform.v1.PlatformService.GetCredentialSummary:output_type -> paigram.platform.v1.GetCredentialSummaryResponse
-	12, // 35: paigram.platform.v1.PlatformService.ListProfiles:output_type -> paigram.platform.v1.ListProfilesResponse
-	14, // 36: paigram.platform.v1.PlatformService.GetPrimaryProfile:output_type -> paigram.platform.v1.GetPrimaryProfileResponse
-	16, // 37: paigram.platform.v1.PlatformService.ConfirmPrimaryProfile:output_type -> paigram.platform.v1.ConfirmPrimaryProfileResponse
-	18, // 38: paigram.platform.v1.PlatformService.GetAuthKey:output_type -> paigram.platform.v1.GetAuthKeyResponse
-	21, // 39: paigram.platform.v1.PlatformService.UpsertDevice:output_type -> paigram.platform.v1.UpsertDeviceResponse
-	23, // 40: paigram.platform.v1.PlatformService.PutCredential:output_type -> paigram.platform.v1.PutCredentialResponse
-	25, // 41: paigram.platform.v1.PlatformService.RefreshCredential:output_type -> paigram.platform.v1.RefreshCredentialResponse
-	27, // 42: paigram.platform.v1.PlatformService.DeleteCredential:output_type -> paigram.platform.v1.DeleteCredentialResponse
-	29, // 43: paigram.platform.v1.PlatformService.InvalidateConsumerGrant:output_type -> paigram.platform.v1.InvalidateConsumerGrantResponse
-	31, // [31:44] is the sub-list for method output_type
-	18, // [18:31] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	6,  // 15: paigram.platform.v1.BindCredentialResponse.summary:type_name -> paigram.platform.v1.GetCredentialSummaryResponse
+	6,  // 16: paigram.platform.v1.ReplaceCredentialResponse.summary:type_name -> paigram.platform.v1.GetCredentialSummaryResponse
+	0,  // 17: paigram.platform.v1.RefreshCredentialResponse.status:type_name -> paigram.platform.v1.CredentialStatus
+	33, // 18: paigram.platform.v1.RefreshCredentialResponse.refreshed_at:type_name -> google.protobuf.Timestamp
+	1,  // 19: paigram.platform.v1.PlatformService.DescribePlatform:input_type -> paigram.platform.v1.DescribePlatformRequest
+	7,  // 20: paigram.platform.v1.PlatformService.GetCredentialStatus:input_type -> paigram.platform.v1.GetCredentialStatusRequest
+	9,  // 21: paigram.platform.v1.PlatformService.ValidateCredential:input_type -> paigram.platform.v1.ValidateCredentialRequest
+	5,  // 22: paigram.platform.v1.PlatformService.GetCredentialSummary:input_type -> paigram.platform.v1.GetCredentialSummaryRequest
+	11, // 23: paigram.platform.v1.PlatformService.ListProfiles:input_type -> paigram.platform.v1.ListProfilesRequest
+	13, // 24: paigram.platform.v1.PlatformService.GetPrimaryProfile:input_type -> paigram.platform.v1.GetPrimaryProfileRequest
+	15, // 25: paigram.platform.v1.PlatformService.ConfirmPrimaryProfile:input_type -> paigram.platform.v1.ConfirmPrimaryProfileRequest
+	17, // 26: paigram.platform.v1.PlatformService.GetAuthKey:input_type -> paigram.platform.v1.GetAuthKeyRequest
+	20, // 27: paigram.platform.v1.PlatformService.UpsertDevice:input_type -> paigram.platform.v1.UpsertDeviceRequest
+	22, // 28: paigram.platform.v1.PlatformService.BindCredential:input_type -> paigram.platform.v1.BindCredentialRequest
+	24, // 29: paigram.platform.v1.PlatformService.ReplaceCredential:input_type -> paigram.platform.v1.ReplaceCredentialRequest
+	26, // 30: paigram.platform.v1.PlatformService.RefreshCredential:input_type -> paigram.platform.v1.RefreshCredentialRequest
+	28, // 31: paigram.platform.v1.PlatformService.DeleteCredential:input_type -> paigram.platform.v1.DeleteCredentialRequest
+	30, // 32: paigram.platform.v1.PlatformService.InvalidateConsumerGrant:input_type -> paigram.platform.v1.InvalidateConsumerGrantRequest
+	2,  // 33: paigram.platform.v1.PlatformService.DescribePlatform:output_type -> paigram.platform.v1.DescribePlatformResponse
+	8,  // 34: paigram.platform.v1.PlatformService.GetCredentialStatus:output_type -> paigram.platform.v1.GetCredentialStatusResponse
+	10, // 35: paigram.platform.v1.PlatformService.ValidateCredential:output_type -> paigram.platform.v1.ValidateCredentialResponse
+	6,  // 36: paigram.platform.v1.PlatformService.GetCredentialSummary:output_type -> paigram.platform.v1.GetCredentialSummaryResponse
+	12, // 37: paigram.platform.v1.PlatformService.ListProfiles:output_type -> paigram.platform.v1.ListProfilesResponse
+	14, // 38: paigram.platform.v1.PlatformService.GetPrimaryProfile:output_type -> paigram.platform.v1.GetPrimaryProfileResponse
+	16, // 39: paigram.platform.v1.PlatformService.ConfirmPrimaryProfile:output_type -> paigram.platform.v1.ConfirmPrimaryProfileResponse
+	18, // 40: paigram.platform.v1.PlatformService.GetAuthKey:output_type -> paigram.platform.v1.GetAuthKeyResponse
+	21, // 41: paigram.platform.v1.PlatformService.UpsertDevice:output_type -> paigram.platform.v1.UpsertDeviceResponse
+	23, // 42: paigram.platform.v1.PlatformService.BindCredential:output_type -> paigram.platform.v1.BindCredentialResponse
+	25, // 43: paigram.platform.v1.PlatformService.ReplaceCredential:output_type -> paigram.platform.v1.ReplaceCredentialResponse
+	27, // 44: paigram.platform.v1.PlatformService.RefreshCredential:output_type -> paigram.platform.v1.RefreshCredentialResponse
+	29, // 45: paigram.platform.v1.PlatformService.DeleteCredential:output_type -> paigram.platform.v1.DeleteCredentialResponse
+	31, // 46: paigram.platform.v1.PlatformService.InvalidateConsumerGrant:output_type -> paigram.platform.v1.InvalidateConsumerGrantResponse
+	33, // [33:47] is the sub-list for method output_type
+	19, // [19:33] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_platform_v1_platform_proto_init() }
@@ -1846,7 +1944,7 @@ func file_platform_v1_platform_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_platform_v1_platform_proto_rawDesc), len(file_platform_v1_platform_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   29,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -79,10 +79,15 @@ class PlatformServiceStub:
                 request_serializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceRequest.SerializeToString,
                 response_deserializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceResponse.FromString,
                 _registered_method=True)
-        self.PutCredential = channel.unary_unary(
-                '/paigram.platform.v1.PlatformService/PutCredential',
-                request_serializer=platform_dot_v1_dot_platform__pb2.PutCredentialRequest.SerializeToString,
-                response_deserializer=platform_dot_v1_dot_platform__pb2.PutCredentialResponse.FromString,
+        self.BindCredential = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/BindCredential',
+                request_serializer=platform_dot_v1_dot_platform__pb2.BindCredentialRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.BindCredentialResponse.FromString,
+                _registered_method=True)
+        self.ReplaceCredential = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/ReplaceCredential',
+                request_serializer=platform_dot_v1_dot_platform__pb2.ReplaceCredentialRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.ReplaceCredentialResponse.FromString,
                 _registered_method=True)
         self.RefreshCredential = channel.unary_unary(
                 '/paigram.platform.v1.PlatformService/RefreshCredential',
@@ -158,7 +163,13 @@ class PlatformServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def PutCredential(self, request, context):
+    def BindCredential(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReplaceCredential(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -230,10 +241,15 @@ def add_PlatformServiceServicer_to_server(servicer, server):
                     request_deserializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceRequest.FromString,
                     response_serializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceResponse.SerializeToString,
             ),
-            'PutCredential': grpc.unary_unary_rpc_method_handler(
-                    servicer.PutCredential,
-                    request_deserializer=platform_dot_v1_dot_platform__pb2.PutCredentialRequest.FromString,
-                    response_serializer=platform_dot_v1_dot_platform__pb2.PutCredentialResponse.SerializeToString,
+            'BindCredential': grpc.unary_unary_rpc_method_handler(
+                    servicer.BindCredential,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.BindCredentialRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.BindCredentialResponse.SerializeToString,
+            ),
+            'ReplaceCredential': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReplaceCredential,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.ReplaceCredentialRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.ReplaceCredentialResponse.SerializeToString,
             ),
             'RefreshCredential': grpc.unary_unary_rpc_method_handler(
                     servicer.RefreshCredential,
@@ -505,7 +521,7 @@ class PlatformService:
             _registered_method=True)
 
     @staticmethod
-    def PutCredential(request,
+    def BindCredential(request,
             target,
             options=(),
             channel_credentials=None,
@@ -518,9 +534,36 @@ class PlatformService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/paigram.platform.v1.PlatformService/PutCredential',
-            platform_dot_v1_dot_platform__pb2.PutCredentialRequest.SerializeToString,
-            platform_dot_v1_dot_platform__pb2.PutCredentialResponse.FromString,
+            '/paigram.platform.v1.PlatformService/BindCredential',
+            platform_dot_v1_dot_platform__pb2.BindCredentialRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.BindCredentialResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReplaceCredential(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/ReplaceCredential',
+            platform_dot_v1_dot_platform__pb2.ReplaceCredentialRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.ReplaceCredentialResponse.FromString,
             options,
             channel_credentials,
             insecure,

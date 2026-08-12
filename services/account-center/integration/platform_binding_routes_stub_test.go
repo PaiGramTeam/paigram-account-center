@@ -16,11 +16,12 @@ import (
 type platformBindingRouteStub struct {
 	platformv1.UnimplementedPlatformServiceServer
 	summaryResponse           *platformv1.GetCredentialSummaryResponse
-	putResponse               *platformv1.PutCredentialResponse
-	putErr                    error
+	credentialMutationSummary *platformv1.GetCredentialSummaryResponse
+	credentialMutationErr     error
 	deleteErr                 error
 	confirmPrimaryProfileErr  error
-	lastPut                   *platformv1.PutCredentialRequest
+	lastBind                  *platformv1.BindCredentialRequest
+	lastReplace               *platformv1.ReplaceCredentialRequest
 	deleteRequests            []*platformv1.DeleteCredentialRequest
 	lastConfirmPrimaryProfile *platformv1.ConfirmPrimaryProfileRequest
 	lastConfirmAuthorization  []string
@@ -37,12 +38,20 @@ func (s *platformBindingRouteStub) GetCredentialSummary(context.Context, *platfo
 	return &platformv1.GetCredentialSummaryResponse{}, nil
 }
 
-func (s *platformBindingRouteStub) PutCredential(_ context.Context, req *platformv1.PutCredentialRequest) (*platformv1.PutCredentialResponse, error) {
-	s.lastPut = req
-	if s.putErr != nil {
-		return nil, s.putErr
+func (s *platformBindingRouteStub) BindCredential(_ context.Context, req *platformv1.BindCredentialRequest) (*platformv1.BindCredentialResponse, error) {
+	s.lastBind = req
+	if s.credentialMutationErr != nil {
+		return nil, s.credentialMutationErr
 	}
-	return s.putResponse, nil
+	return &platformv1.BindCredentialResponse{Summary: s.credentialMutationSummary}, nil
+}
+
+func (s *platformBindingRouteStub) ReplaceCredential(_ context.Context, req *platformv1.ReplaceCredentialRequest) (*platformv1.ReplaceCredentialResponse, error) {
+	s.lastReplace = req
+	if s.credentialMutationErr != nil {
+		return nil, s.credentialMutationErr
+	}
+	return &platformv1.ReplaceCredentialResponse{Summary: s.credentialMutationSummary}, nil
 }
 
 func (s *platformBindingRouteStub) RefreshCredential(context.Context, *platformv1.RefreshCredentialRequest) (*platformv1.RefreshCredentialResponse, error) {

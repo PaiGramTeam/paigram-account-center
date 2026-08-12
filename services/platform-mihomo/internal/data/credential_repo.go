@@ -3,7 +3,9 @@ package data
 import (
 	"context"
 	"errors"
+	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -26,7 +28,24 @@ func (r *CredentialRepo) WithinTransaction(ctx context.Context, fn func(context.
 }
 
 func (r *CredentialRepo) Save(ctx context.Context, credential *biz.Credential) error {
-	record := model.CredentialRecord{
+	record := credentialRecord(credential)
+
+	return dbFromContext(ctx, r.db).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "binding_id"}},
+		UpdateAll: true,
+	}).Create(&record).Error
+}
+
+func (r *CredentialRepo) Create(ctx context.Context, credential *biz.Credential) error {
+	record := credentialRecord(credential)
+	if err := dbFromContext(ctx, r.db).Create(&record).Error; err != nil {
+		return mapCredentialDuplicateError(err)
+	}
+	return nil
+}
+
+func credentialRecord(credential *biz.Credential) model.CredentialRecord {
+	return model.CredentialRecord{
 		BindingID:         credential.BindingID,
 		PlatformAccountID: credential.PlatformAccountID,
 		Platform:          credential.Platform,
@@ -39,11 +58,17 @@ func (r *CredentialRepo) Save(ctx context.Context, credential *biz.Credential) e
 		LastRefreshedAt:   credential.LastRefreshedAt,
 		ExpiresAt:         credential.ExpiresAt,
 	}
+}
 
-	return dbFromContext(ctx, r.db).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "binding_id"}},
-		UpdateAll: true,
-	}).Create(&record).Error
+func mapCredentialDuplicateError(err error) error {
+	var postgresErr *pgconn.PgError
+	if errors.As(err, &postgresErr) && postgresErr.Code == "23505" {
+		return biz.ErrCredentialAlreadyBound
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "unique constraint") {
+		return biz.ErrCredentialAlreadyBound
+	}
+	return err
 }
 
 func (r *CredentialRepo) GetByBindingID(ctx context.Context, bindingID uint64) (*biz.Credential, error) {
