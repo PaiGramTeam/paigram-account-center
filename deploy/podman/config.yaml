@@ -29,7 +29,9 @@ openapi:
 auth:
   service_ticket_ttl: 300
   service_ticket_issuer: "paigram-account-center"
-  service_ticket_signing_key: ""
+  service_ticket_key_id: "account-center-ed25519-2026-01"
+  service_ticket_private_key_pem: ""
+  oauth_signing_key: ""
 
 frontend:
   base_url: ""

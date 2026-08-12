@@ -16,6 +16,7 @@ var (
 	ErrCredentialGatewayUnavailable    = errors.New("platform credential orchestration is unavailable")
 	ErrCredentialValidationFailed      = errors.New("platform credential validation failed")
 	ErrConsumerNotSupported            = errors.New("consumer is not supported")
+	ErrGrantActionNotAllowed           = errors.New("consumer grant action is not allowed")
 	ErrMultiplePrimaryProfiles         = errors.New("multiple primary profiles are not supported")
 	ErrPlatformServiceUnavailable      = errors.New("platform service is unavailable")
 	ErrPlatformSummaryProxyUnavailable = errors.New("platform summary proxy is unavailable")

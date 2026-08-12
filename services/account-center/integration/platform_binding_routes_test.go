@@ -886,7 +886,7 @@ func TestPlatformBindingProjectionRepairTaskRepairsStaleProjection(t *testing.T)
 	seedEnabledPlatformService(t, stack, endpoint)
 
 	platformGroup := serviceplatform.NewServiceGroup(stack.DB)
-	require.NoError(t, platformGroup.PlatformService.ConfigureAuth(newTestConfig(stack.RedisPrefix).Auth))
+	require.NoError(t, platformGroup.PlatformService.ConfigureAuth(newTestConfig(t, stack.RedisPrefix).Auth))
 	platformGroup.PlatformService.SetGenericSummaryProxy(serviceplatform.NewGRPCGenericSummaryProxy(nil))
 	handler := tasks.NewPlatformBindingProjectionRepairHandler(stack.DB, &platformGroup.PlatformService)
 	repairTask, err := tasks.NewPlatformBindingProjectionRepairTask(binding.ID)

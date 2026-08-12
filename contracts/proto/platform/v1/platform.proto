@@ -9,7 +9,13 @@ import "google/protobuf/timestamp.proto";
 
 service PlatformService {
   rpc DescribePlatform(DescribePlatformRequest) returns (DescribePlatformResponse);
+  rpc GetCredentialStatus(GetCredentialStatusRequest) returns (GetCredentialStatusResponse);
+  rpc ValidateCredential(ValidateCredentialRequest) returns (ValidateCredentialResponse);
   rpc GetCredentialSummary(GetCredentialSummaryRequest) returns (GetCredentialSummaryResponse);
+  rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse);
+  rpc GetPrimaryProfile(GetPrimaryProfileRequest) returns (GetPrimaryProfileResponse);
+  rpc GetAuthKey(GetAuthKeyRequest) returns (GetAuthKeyResponse);
+  rpc UpsertDevice(UpsertDeviceRequest) returns (UpsertDeviceResponse);
   rpc PutCredential(PutCredentialRequest) returns (PutCredentialResponse);
   rpc RefreshCredential(RefreshCredentialRequest) returns (RefreshCredentialResponse);
   rpc DeleteCredential(DeleteCredentialRequest) returns (DeleteCredentialResponse);
@@ -66,6 +72,71 @@ message GetCredentialSummaryResponse {
   google.protobuf.Timestamp last_refreshed_at = 4;
   repeated DeviceSummary devices = 5;
   repeated ProfileSummary profiles = 6;
+}
+
+message GetCredentialStatusRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message GetCredentialStatusResponse {
+  CredentialStatus status = 1;
+  google.protobuf.Timestamp last_validated_at = 2;
+}
+
+message ValidateCredentialRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message ValidateCredentialResponse {
+  CredentialStatus status = 1;
+  string error_code = 2;
+}
+
+message ListProfilesRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message ListProfilesResponse {
+  repeated ProfileSummary profiles = 1;
+}
+
+message GetPrimaryProfileRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+}
+
+message GetPrimaryProfileResponse {
+  ProfileSummary profile = 1;
+}
+
+message GetAuthKeyRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+  string player_id = 3;
+}
+
+message GetAuthKeyResponse {
+  string authkey = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message DeviceInfo {
+  string device_id = 1;
+  string device_fp = 2;
+  string device_name = 3;
+}
+
+message UpsertDeviceRequest {
+  string service_ticket = 1;
+  string platform_account_id = 2;
+  DeviceInfo device = 3;
+}
+
+message UpsertDeviceResponse {
+  bool success = 1;
 }
 
 message PutCredentialRequest {

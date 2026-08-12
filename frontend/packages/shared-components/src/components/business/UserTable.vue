@@ -61,12 +61,6 @@
         </a-space>
 
         <a-space>
-          <a-button @click="handleExport">
-            <template #icon>
-              <icon-export />
-            </template>
-            导出
-          </a-button>
           <a-button @click="handleRefresh">
             <template #icon>
               <icon-refresh />
@@ -141,15 +135,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import type { TableColumnData, TableRowSelection } from '@arco-design/web-vue'
-import {
-  IconSearch,
-  IconPlus,
-  IconDelete,
-  IconExport,
-  IconRefresh,
-  IconUser,
-  IconDown,
-} from '@arco-design/web-vue/es/icon'
+import { IconSearch, IconPlus, IconDelete, IconRefresh, IconUser, IconDown } from '@arco-design/web-vue/es/icon'
 import type { UserListItem, UserListParams, UserListResponse } from '../../api/types'
 
 interface Props {
@@ -415,10 +401,6 @@ const handleToggleStatus = (record: UserListItem) => {
       emit('toggle-status', record)
     },
   })
-}
-
-const handleExport = () => {
-  Message.info('导出功能开发中...')
 }
 
 onMounted(() => {

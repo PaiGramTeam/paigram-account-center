@@ -1,7 +1,7 @@
 <template>
   <BasicLayout
     :menu-items="menuItems"
-    :show-notifications="true"
+    :show-notifications="false"
     app-title="Paigram Admin"
     app-title-short="PA"
     :collapsible="true"
@@ -27,8 +27,6 @@ function filterRoutes(routes: RouteRecordRaw[]): RouteRecordRaw[] {
   return routes
     .map((route) => ({ ...route }))
     .filter((route) => {
-      console.log(`检查路由: ${route.name as string}, hideInMenu: ${route.meta?.hideInMenu}`)
-
       if (route.meta?.hideInMenu) {
         return false
       }

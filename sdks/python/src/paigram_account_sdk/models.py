@@ -99,6 +99,25 @@ class CredentialSummary:
 
 
 @dataclass(frozen=True, slots=True)
-class RefreshResult:
+class CredentialStatusResult:
     status: CredentialStatus
-    refreshed_at: datetime | None
+    last_validated_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationResult:
+    status: CredentialStatus
+    error_code: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuthKey:
+    value: str
+    expires_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceInfo:
+    device_id: str
+    device_fp: str
+    device_name: str = ""

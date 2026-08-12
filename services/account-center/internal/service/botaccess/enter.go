@@ -12,12 +12,9 @@ type ServiceGroup struct {
 	TicketService     TicketService
 }
 
-// NewServiceGroup creates the bot access service group. The HS256
-// signingKey is the deployment-wide SHARED_TICKET_KEY (see
-// internal/config.AuthConfig.ServiceTicketSigningKey) — the same key
-// account-center uses for OAuth access tokens.
-func NewServiceGroup(db *gorm.DB, authCfg config.AuthConfig, signingKey []byte) (*ServiceGroup, error) {
-	ticketService, err := NewTicketService(authCfg, signingKey)
+// NewServiceGroup creates the bot access service group.
+func NewServiceGroup(db *gorm.DB, authCfg config.AuthConfig) (*ServiceGroup, error) {
+	ticketService, err := NewTicketService(authCfg)
 	if err != nil {
 		return nil, err
 	}

@@ -37,7 +37,16 @@ const currentUser = {
     },
   ],
   roles: ['admin'],
-  permissions: ['user:read', 'user:manage', 'role:read', 'permission:read', 'audit:read'],
+  permissions: [
+    'user:create',
+    'user:read',
+    'user:update',
+    'user:delete',
+    'user:list',
+    'role:read',
+    'permission:read',
+    'audit:read',
+  ],
 } satisfies OpenApiCurrentUser
 
 const adminUser = {

@@ -645,7 +645,7 @@ func (h *Handler) GetSecuritySummary(c *gin.Context) {
 
 // CreateUser registers a new user account.
 // @Summary Create a new user
-// @Description Create a new user account with email authentication and profile information. This endpoint requires user:write permission. Role membership is managed via the authority domain. The password will be hashed using bcrypt before storage.
+// @Description Create a new user account with email authentication and profile information. This endpoint requires user:create permission. Role membership is managed via the authority domain. The password will be hashed using bcrypt before storage.
 // @Tags users
 // @Accept json
 // @Produce json
@@ -654,7 +654,7 @@ func (h *Handler) GetSecuritySummary(c *gin.Context) {
 // @Success 201 {object} UserDetailResponse "User created successfully"
 // @Failure 400 {object} gin.H "Invalid request body or validation error"
 // @Failure 401 {object} gin.H "Unauthorized - authentication required"
-// @Failure 403 {object} gin.H "Forbidden - requires user:write permission"
+// @Failure 403 {object} gin.H "Forbidden - requires user:create permission"
 // @Failure 409 {object} gin.H "Email already registered"
 // @Failure 500 {object} gin.H "Internal server error"
 // @Router /api/v1/admin/users [post]
@@ -806,7 +806,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 
 // UpdateUser modifies user profile fields and locale.
 // @Summary Update user information
-// @Description Update user profile fields (display name, avatar, bio) and locale settings. Users can update their own profile or require user:write permission to update other users. Role membership is managed via the authority domain.
+// @Description Update user profile fields (display name, avatar, bio) and locale settings. Users can update their own profile or require user:update permission to update other users. Role membership is managed via the authority domain.
 // @Tags users
 // @Accept json
 // @Produce json

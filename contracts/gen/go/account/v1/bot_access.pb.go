@@ -547,7 +547,6 @@ type IssueServiceTicketRequest struct {
 	ExternalUserId  string                 `protobuf:"bytes,1,opt,name=external_user_id,json=externalUserId,proto3" json:"external_user_id,omitempty"`
 	BindingId       uint64                 `protobuf:"varint,2,opt,name=binding_id,json=bindingId,proto3" json:"binding_id,omitempty"`
 	RequestedScopes []string               `protobuf:"bytes,3,rep,name=requested_scopes,json=requestedScopes,proto3" json:"requested_scopes,omitempty"`
-	Audience        string                 `protobuf:"bytes,4,opt,name=audience,proto3" json:"audience,omitempty"`
 	ProfileId       uint64                 `protobuf:"varint,5,opt,name=profile_id,json=profileId,proto3" json:"profile_id,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -602,13 +601,6 @@ func (x *IssueServiceTicketRequest) GetRequestedScopes() []string {
 		return x.RequestedScopes
 	}
 	return nil
-}
-
-func (x *IssueServiceTicketRequest) GetAudience() string {
-	if x != nil {
-		return x.Audience
-	}
-	return ""
 }
 
 func (x *IssueServiceTicketRequest) GetProfileId() uint64 {
@@ -728,15 +720,14 @@ const file_account_v1_bot_access_proto_rawDesc = "" +
 	"\x10external_user_id\x18\x01 \x01(\tR\x0eexternalUserId\x12\x1a\n" +
 	"\bplatform\x18\x02 \x01(\tR\bplatform\"`\n" +
 	"\x1eListAccessibleBindingsResponse\x12>\n" +
-	"\bbindings\x18\x01 \x03(\v2\".paigram.v1.PlatformAccountBindingR\bbindings\"\xca\x01\n" +
+	"\bbindings\x18\x01 \x03(\v2\".paigram.v1.PlatformAccountBindingR\bbindings\"\xbe\x01\n" +
 	"\x19IssueServiceTicketRequest\x12(\n" +
 	"\x10external_user_id\x18\x01 \x01(\tR\x0eexternalUserId\x12\x1d\n" +
 	"\n" +
 	"binding_id\x18\x02 \x01(\x04R\tbindingId\x12)\n" +
-	"\x10requested_scopes\x18\x03 \x03(\tR\x0frequestedScopes\x12\x1a\n" +
-	"\baudience\x18\x04 \x01(\tR\baudience\x12\x1d\n" +
+	"\x10requested_scopes\x18\x03 \x03(\tR\x0frequestedScopes\x12\x1d\n" +
 	"\n" +
-	"profile_id\x18\x05 \x01(\x04R\tprofileId\"\xc9\x01\n" +
+	"profile_id\x18\x05 \x01(\x04R\tprofileIdJ\x04\b\x04\x10\x05R\baudience\"\xc9\x01\n" +
 	"\x1aIssueServiceTicketResponse\x12\x16\n" +
 	"\x06ticket\x18\x01 \x01(\tR\x06ticket\x12\x1a\n" +
 	"\baudience\x18\x02 \x01(\tR\baudience\x129\n" +
@@ -747,10 +738,9 @@ const file_account_v1_bot_access_proto_rawDesc = "" +
 	"#PLATFORM_ACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1ePLATFORM_ACCOUNT_STATUS_ACTIVE\x10\x01\x12$\n" +
 	" PLATFORM_ACCOUNT_STATUS_INACTIVE\x10\x02\x12#\n" +
-	"\x1fPLATFORM_ACCOUNT_STATUS_REVOKED\x10\x032\xaf\x03\n" +
+	"\x1fPLATFORM_ACCOUNT_STATUS_REVOKED\x10\x032\xc1\x02\n" +
 	"\x10BotAccessService\x12W\n" +
-	"\x0eResolveBotUser\x12!.paigram.v1.ResolveBotUserRequest\x1a\".paigram.v1.ResolveBotUserResponse\x12l\n" +
-	"\x15UpsertPlatformBinding\x12(.paigram.v1.UpsertPlatformBindingRequest\x1a).paigram.v1.UpsertPlatformBindingResponse\x12o\n" +
+	"\x0eResolveBotUser\x12!.paigram.v1.ResolveBotUserRequest\x1a\".paigram.v1.ResolveBotUserResponse\x12o\n" +
 	"\x16ListAccessibleBindings\x12).paigram.v1.ListAccessibleBindingsRequest\x1a*.paigram.v1.ListAccessibleBindingsResponse\x12c\n" +
 	"\x12IssueServiceTicket\x12%.paigram.v1.IssueServiceTicketRequest\x1a&.paigram.v1.IssueServiceTicketResponseBUZSgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1;accountv1b\x06proto3"
 
@@ -790,15 +780,13 @@ var file_account_v1_bot_access_proto_depIdxs = []int32{
 	10, // 5: paigram.v1.IssueServiceTicketResponse.expires_at:type_name -> google.protobuf.Timestamp
 	1,  // 6: paigram.v1.IssueServiceTicketResponse.binding:type_name -> paigram.v1.PlatformAccountBinding
 	2,  // 7: paigram.v1.BotAccessService.ResolveBotUser:input_type -> paigram.v1.ResolveBotUserRequest
-	4,  // 8: paigram.v1.BotAccessService.UpsertPlatformBinding:input_type -> paigram.v1.UpsertPlatformBindingRequest
-	6,  // 9: paigram.v1.BotAccessService.ListAccessibleBindings:input_type -> paigram.v1.ListAccessibleBindingsRequest
-	8,  // 10: paigram.v1.BotAccessService.IssueServiceTicket:input_type -> paigram.v1.IssueServiceTicketRequest
-	3,  // 11: paigram.v1.BotAccessService.ResolveBotUser:output_type -> paigram.v1.ResolveBotUserResponse
-	5,  // 12: paigram.v1.BotAccessService.UpsertPlatformBinding:output_type -> paigram.v1.UpsertPlatformBindingResponse
-	7,  // 13: paigram.v1.BotAccessService.ListAccessibleBindings:output_type -> paigram.v1.ListAccessibleBindingsResponse
-	9,  // 14: paigram.v1.BotAccessService.IssueServiceTicket:output_type -> paigram.v1.IssueServiceTicketResponse
-	11, // [11:15] is the sub-list for method output_type
-	7,  // [7:11] is the sub-list for method input_type
+	6,  // 8: paigram.v1.BotAccessService.ListAccessibleBindings:input_type -> paigram.v1.ListAccessibleBindingsRequest
+	8,  // 9: paigram.v1.BotAccessService.IssueServiceTicket:input_type -> paigram.v1.IssueServiceTicketRequest
+	3,  // 10: paigram.v1.BotAccessService.ResolveBotUser:output_type -> paigram.v1.ResolveBotUserResponse
+	7,  // 11: paigram.v1.BotAccessService.ListAccessibleBindings:output_type -> paigram.v1.ListAccessibleBindingsResponse
+	9,  // 12: paigram.v1.BotAccessService.IssueServiceTicket:output_type -> paigram.v1.IssueServiceTicketResponse
+	10, // [10:13] is the sub-list for method output_type
+	7,  // [7:10] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name

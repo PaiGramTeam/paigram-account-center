@@ -43,7 +43,6 @@ export const asyncRoutes: RouteRecordRaw[] = [
           locale: 'menu.dashboard',
           icon: 'icon-dashboard',
           requiresAuth: true,
-          permissions: ['user:read'],
         },
       },
       {
@@ -101,14 +100,36 @@ export const asyncRoutes: RouteRecordRaw[] = [
         ],
       },
       {
+        path: 'platform-accounts',
+        name: 'PlatformAccounts',
+        component: () => import('@/pages/platform-accounts/index.vue'),
+        meta: {
+          locale: 'menu.platformAccounts',
+          icon: 'icon-cloud',
+          requiresAuth: true,
+          permissions: ['platform_account:list'],
+        },
+      },
+      {
+        path: 'services',
+        name: 'Services',
+        component: () => import('@/pages/services/index.vue'),
+        meta: {
+          locale: 'menu.services',
+          icon: 'icon-apps',
+          requiresAuth: true,
+          permissions: ['platform:list', 'bot:list'],
+        },
+      },
+      {
         path: 'system',
         name: 'System',
-        redirect: '/system/settings',
+        redirect: '/system/logs',
         meta: {
           locale: 'menu.system',
           icon: 'icon-settings',
           requiresAuth: true,
-          permissions: ['audit:read'],
+          permissions: ['system:read', 'audit:list'],
         },
         children: [
           {
@@ -117,7 +138,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
             component: () => import('@/pages/system/settings.vue'),
             meta: {
               locale: 'menu.system.settings',
-              permissions: ['audit:read'],
+              permissions: ['system:read'],
               requiresAuth: true,
             },
           },
@@ -127,17 +148,7 @@ export const asyncRoutes: RouteRecordRaw[] = [
             component: () => import('@/pages/system/logs.vue'),
             meta: {
               locale: 'menu.system.logs',
-              permissions: ['audit:read'],
-              requiresAuth: true,
-            },
-          },
-          {
-            path: 'backup',
-            name: 'SystemBackup',
-            component: () => import('@/pages/system/backup.vue'),
-            meta: {
-              locale: 'menu.system.backup',
-              permissions: ['audit:read'],
+              permissions: ['audit:list'],
               requiresAuth: true,
             },
           },
@@ -152,17 +163,6 @@ export const asyncRoutes: RouteRecordRaw[] = [
           icon: 'icon-user',
           requiresAuth: true,
           hideInMenu: true,
-        },
-      },
-      {
-        path: 'debug',
-        name: 'Debug',
-        component: () => import('@/pages/debug.vue'),
-        meta: {
-          locale: 'menu.debug',
-          icon: 'icon-bug',
-          requiresAuth: true,
-          hideInMenu: false,
         },
       },
     ],

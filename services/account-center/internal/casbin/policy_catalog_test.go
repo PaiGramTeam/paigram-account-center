@@ -248,3 +248,15 @@ func TestAllManagedPoliciesIncludesAdminOnlyPolicies(t *testing.T) {
 	assert.Contains(t, rules, PolicyRule{Path: "/api/v1/admin/roles/:id/permissions", Method: "PUT"})
 	assert.NotContains(t, rules, PolicyRule{Path: "/api/v1/casbin/authorities/:id/policies", Method: "GET"})
 }
+
+func TestServiceCredentialRoutesUseBotPermissions(t *testing.T) {
+	assert.Contains(t, PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionList)), PolicyRule{
+		Path: "/api/v1/admin/service-credentials", Method: "GET",
+	})
+	assert.Contains(t, PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionCreate)), PolicyRule{
+		Path: "/api/v1/admin/service-credentials", Method: "POST",
+	})
+	assert.Contains(t, PoliciesForPermission(model.BuildPermissionName(model.ResourceBot, model.ActionUpdate)), PolicyRule{
+		Path: "/api/v1/admin/service-credentials/:client_id/secret", Method: "POST",
+	})
+}

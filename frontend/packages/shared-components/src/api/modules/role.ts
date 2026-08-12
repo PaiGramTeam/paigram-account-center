@@ -1,5 +1,6 @@
 import type { createRequest } from '../request'
 import type { OpenApiRole } from '../openapi'
+import type { components } from '../generated/schema'
 import type {
   RoleListParams,
   RoleListItem,
@@ -73,6 +74,22 @@ export function createRoleApi(request: ReturnType<typeof createRequest>) {
 
     async delete(id: number | string): Promise<DeleteRoleResponse> {
       return request.delete(`/admin/roles/${id}`)
+    },
+
+    async getPermissions(id: number | string): Promise<{ data: components['schemas']['Permission'][] | null }> {
+      return request.get(`/admin/roles/${id}/permissions`)
+    },
+
+    async replacePermissions(id: number | string, permissionIds: number[]): Promise<void> {
+      await request.put(`/admin/roles/${id}/permissions`, { permission_ids: permissionIds })
+    },
+
+    async getUsers(id: number | string): Promise<{ data: components['schemas']['AuthorityUserItem'][] | null }> {
+      return request.get(`/admin/roles/${id}/users`)
+    },
+
+    async replaceUsers(id: number | string, userIds: number[]): Promise<void> {
+      await request.put(`/admin/roles/${id}/users`, { user_ids: userIds })
     },
   }
 }

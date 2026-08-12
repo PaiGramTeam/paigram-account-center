@@ -2,12 +2,17 @@ package platform
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"database/sql"
+	"encoding/pem"
 	"net"
 	"testing"
 	"time"
 
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,8 +25,29 @@ import (
 	"paigram/internal/config"
 	"paigram/internal/model"
 	"paigram/internal/service/platformbinding"
+	internalticket "paigram/internal/serviceticket"
 	"paigram/internal/testutil"
 )
+
+func testPlatformAuthConfig(t *testing.T) config.AuthConfig {
+	config, _ := testPlatformAuth(t)
+	return config
+}
+
+func testPlatformAuth(t *testing.T) (config.AuthConfig, ed25519.PublicKey) {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	require.NoError(t, err)
+
+	return config.AuthConfig{
+		ServiceTicketTTLSeconds:    300,
+		ServiceTicketIssuer:        "account-center",
+		ServiceTicketKeyID:         "test-key",
+		ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
+	}, publicKey
+}
 
 type fakeSummaryProxy struct {
 	endpoint          string
@@ -122,11 +148,8 @@ func TestPlatformServiceBuildsBindingActorTicketClaims(t *testing.T) {
 
 func TestIssueLegacyRefScopedTicketSupportsUserAdminAndConsumer(t *testing.T) {
 	svc := PlatformService{}
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	authConfig, publicKey := testPlatformAuth(t)
+	require.NoError(t, svc.ConfigureAuth(authConfig))
 
 	ref := &model.PlatformAccountRef{
 		ID:                11,
@@ -141,10 +164,11 @@ func TestIssueLegacyRefScopedTicketSupportsUserAdminAndConsumer(t *testing.T) {
 		actor   string
 		actorID string
 		scopes  []string
+		typ     string
 	}{
-		{name: "user", actor: "user", actorID: "session:1", scopes: []string{"binding:write"}},
-		{name: "admin", actor: "admin", actorID: "user:1", scopes: []string{"binding:delete"}},
-		{name: "consumer", actor: "consumer", actorID: "paigram-bot", scopes: []string{"profile:read"}},
+		{name: "user", actor: "user", actorID: "session:1", scopes: []string{"binding:write"}, typ: internalticket.TypeControl},
+		{name: "admin", actor: "admin", actorID: "user:1", scopes: []string{"binding:delete"}, typ: internalticket.TypeControl},
+		{name: "consumer", actor: "consumer", actorID: "paigram-bot", scopes: []string{"profile:read"}, typ: internalticket.TypeDelegation},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tokenString, expiresAt, err := svc.IssueLegacyRefScopedTicket(tc.actor, tc.actorID, ref.UserID, ref, tc.scopes, "platform-mihomo-service")
@@ -153,8 +177,11 @@ func TestIssueLegacyRefScopedTicketSupportsUserAdminAndConsumer(t *testing.T) {
 
 			parsed := &ServiceTicketClaims{}
 			token, err := jwt.ParseWithClaims(tokenString, parsed, func(token *jwt.Token) (any, error) {
-				return []byte("0123456789abcdef0123456789abcdef"), nil
-			})
+				require.Equal(t, contractticket.AlgorithmEd25519, token.Method.Alg())
+				require.Equal(t, "test-key", token.Header["kid"])
+				require.Equal(t, tc.typ, token.Header["typ"])
+				return publicKey, nil
+			}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}))
 			require.NoError(t, err)
 			require.True(t, token.Valid)
 			require.Equal(t, tc.actor, parsed.ActorType)
@@ -163,9 +190,13 @@ func TestIssueLegacyRefScopedTicketSupportsUserAdminAndConsumer(t *testing.T) {
 			require.Equal(t, ref.Platform, parsed.Platform)
 			require.Equal(t, ref.ID, parsed.BindingID)
 			require.Equal(t, ref.PlatformAccountID, parsed.PlatformAccountID)
-			require.Equal(t, tc.scopes, parsed.Scopes)
+			require.Equal(t, tc.scopes, parsed.AllowedActions)
 			require.Equal(t, "account-center", parsed.Issuer)
-			require.Equal(t, "user:7", parsed.Subject)
+			if tc.actor == "consumer" {
+				require.Equal(t, "consumer:paigram-bot", parsed.Subject)
+			} else {
+				require.Equal(t, "user:7", parsed.Subject)
+			}
 			require.Equal(t, []string{"platform-mihomo-service"}, []string(parsed.Audience))
 			require.WithinDuration(t, expiresAt, parsed.ExpiresAt.Time, time.Second)
 			require.NotEmpty(t, parsed.ID)
@@ -175,11 +206,7 @@ func TestIssueLegacyRefScopedTicketSupportsUserAdminAndConsumer(t *testing.T) {
 
 func TestIssueLegacyRefScopedTicketRejectsLegacyWebUserActor(t *testing.T) {
 	svc := PlatformService{}
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
 
 	ref := &model.PlatformAccountRef{
 		ID:                11,
@@ -193,16 +220,14 @@ func TestIssueLegacyRefScopedTicketRejectsLegacyWebUserActor(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidTicketConfig)
 }
 
-func TestPlatformServiceConfigureAuthAllowsEmptySigningKeyForReadOnlyRoutes(t *testing.T) {
+func TestPlatformServiceConfigureAuthRejectsMissingPrivateKey(t *testing.T) {
 	svc := PlatformService{}
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
+	require.ErrorIs(t, svc.ConfigureAuth(config.AuthConfig{
 		ServiceTicketTTLSeconds: 300,
 		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "",
-	}))
-	require.Equal(t, 5*time.Minute, svc.ttl)
-	require.Equal(t, "account-center", svc.issuer)
-	require.Empty(t, svc.signingKey)
+		ServiceTicketKeyID:      "test-key",
+	}), ErrInvalidTicketConfig)
+	require.Nil(t, svc.ticketSigner)
 }
 
 func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T) {
@@ -230,11 +255,8 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 	})
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	authConfig, publicKey := testPlatformAuth(t)
+	require.NoError(t, svc.ConfigureAuth(authConfig))
 	svc.dial = func(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 		require.Equal(t, "bufnet", endpoint)
 		return grpc.DialContext(ctx, "passthrough:///bufnet",
@@ -263,7 +285,7 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 
 	parsed := &ServiceTicketClaims{}
 	token, err := jwt.ParseWithClaims(stub.lastRequest.GetServiceTicket(), parsed, func(token *jwt.Token) (any, error) {
-		return []byte("0123456789abcdef0123456789abcdef"), nil
+		return publicKey, nil
 	})
 	require.NoError(t, err)
 	require.True(t, token.Valid)
@@ -302,11 +324,8 @@ func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t
 	})
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	authConfig, _ := testPlatformAuth(t)
+	require.NoError(t, svc.ConfigureAuth(authConfig))
 	svc.dial = func(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 		require.Equal(t, "bufnet", endpoint)
 		return grpc.DialContext(ctx, "passthrough:///bufnet",
@@ -355,11 +374,8 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 	})
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	authConfig, publicKey := testPlatformAuth(t)
+	require.NoError(t, svc.ConfigureAuth(authConfig))
 	svc.dial = func(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 		require.Equal(t, "bufnet", endpoint)
 		return grpc.DialContext(ctx, "passthrough:///bufnet",
@@ -384,7 +400,7 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 
 	parsed := &ServiceTicketClaims{}
 	token, err := jwt.ParseWithClaims(stub.lastRequest.GetServiceTicket(), parsed, func(token *jwt.Token) (any, error) {
-		return []byte("0123456789abcdef0123456789abcdef"), nil
+		return publicKey, nil
 	})
 	require.NoError(t, err)
 	require.True(t, token.Valid)
@@ -487,11 +503,8 @@ func TestPlatformServiceGetPlatformAccountSummaryIssuesScopedTicketAndCallsProxy
 	require.NoError(t, db.Create(&ref).Error)
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	authConfig, publicKey := testPlatformAuth(t)
+	require.NoError(t, svc.ConfigureAuth(authConfig))
 	proxy := &fakeSummaryProxy{summary: map[string]any{"status": "active"}}
 	svc.SetSummaryProxy(proxy)
 
@@ -503,7 +516,7 @@ func TestPlatformServiceGetPlatformAccountSummaryIssuesScopedTicketAndCallsProxy
 
 	parsed := &ServiceTicketClaims{}
 	token, err := jwt.ParseWithClaims(proxy.ticket, parsed, func(token *jwt.Token) (any, error) {
-		return []byte("0123456789abcdef0123456789abcdef"), nil
+		return publicKey, nil
 	})
 	require.NoError(t, err)
 	require.True(t, token.Valid)
@@ -571,11 +584,7 @@ func TestPlatformServiceGetPlatformAccountSummaryReturnsServiceUnavailableWhenRe
 	require.NoError(t, db.Create(&ref).Error)
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
 	svc.SetSummaryProxy(&fakeSummaryProxy{summary: map[string]any{"status": "active"}})
 
 	_, err := svc.GetPlatformAccountSummary(context.Background(), "user", "session:99", owner.ID, ref.ID, []string{"mihomo.credential.read_meta"})
@@ -616,11 +625,7 @@ func TestPlatformServiceGetPlatformAccountSummaryPrefersGenericProxy(t *testing.
 	require.NoError(t, db.Create(&ref).Error)
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
 	legacyProxy := &fakeSummaryProxy{summary: map[string]any{"path": "legacy"}}
 	genericProxy := &fakeSummaryProxy{summary: map[string]any{"path": "generic"}}
 	svc.SetSummaryProxy(legacyProxy)
@@ -669,11 +674,7 @@ func TestPlatformServiceGetPlatformAccountSummaryReturnsGenericProxyError(t *tes
 	require.NoError(t, db.Create(&ref).Error)
 
 	svc := NewServiceGroup(db).PlatformService
-	require.NoError(t, svc.ConfigureAuth(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "account-center",
-		ServiceTicketSigningKey: "0123456789abcdef0123456789abcdef",
-	}))
+	require.NoError(t, svc.ConfigureAuth(testPlatformAuthConfig(t)))
 	genericProxy := &fakeSummaryProxy{err: grpcstatus.Error(codes.Unavailable, "downstream unavailable")}
 	svc.SetGenericSummaryProxy(genericProxy)
 

@@ -138,6 +138,9 @@ func registerContracts(rg *httpserver.Group) {
 	rg.RegisterContract(http.MethodGet, "/admin/roles/:id/permissions", httpserver.ResponseContract(
 		response.Envelope[[]model.Permission]{}, http.StatusOK, adminReadErrors...,
 	))
+	rg.RegisterContract(http.MethodGet, "/admin/permissions", httpserver.ResponseContract(
+		response.Envelope[[]model.Permission]{}, http.StatusOK, adminReadErrors...,
+	))
 	rg.RegisterContract(http.MethodDelete, "/admin/roles/:id", httpserver.ResponseContract(
 		response.Envelope[response.MessageData]{}, http.StatusOK,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError,

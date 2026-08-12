@@ -94,7 +94,7 @@
             </a-button>
           </a-tooltip>
 
-          <a-badge v-if="showNotifications" :count="notificationCount" dot>
+          <a-badge v-if="showNotifications" dot>
             <a-button type="text">
               <template #icon>
                 <icon-notification />
@@ -230,7 +230,6 @@ const openKeys = ref<string[]>([])
 const isFullScreen = ref(false)
 
 const isDark = computed(() => appStore.effectiveTheme === 'dark')
-const notificationCount = computed(() => 5) // TODO: Read the count from the store.
 const userAvatar = computed(() => userStore.avatar)
 const layoutContentStyle = {
   backgroundColor: 'var(--color-bg-1)',
@@ -278,7 +277,6 @@ watch(
   () => {
     if (route.name) {
       selectedKeys.value = [String(route.name)]
-      console.log('路由变化，选中菜单:', route.name)
     }
 
     const matched = route.matched

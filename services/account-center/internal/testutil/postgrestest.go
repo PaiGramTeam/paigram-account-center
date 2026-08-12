@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -30,6 +30,9 @@ func LoadPostgreSQLTestEnv(t *testing.T) PostgreSQLEnv {
 		dsn = strings.TrimSpace(os.Getenv("PAI_DATABASE_DSN"))
 	}
 	if dsn == "" {
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("PAI_REQUIRE_DATABASE_TESTS")), "true") || strings.TrimSpace(os.Getenv("CI")) != "" {
+			t.Fatal("PostgreSQL test environment is required but not configured: set PAI_TEST_DATABASE_DSN or PAI_DATABASE_DSN")
+		}
 		t.Skip("PostgreSQL test environment is not configured: set PAI_TEST_DATABASE_DSN or PAI_DATABASE_DSN")
 	}
 	if _, err := pgx.ParseConfig(dsn); err != nil {
@@ -50,12 +53,11 @@ func OpenPostgreSQLTestDB(t *testing.T, prefix string, models ...any) *gorm.DB {
 		_ = rootDB.Close()
 	})
 
-	dsn := postgresDSNForDatabase(t, env.DSN, dbName)
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	cfg := postgresConfigForDatabase(t, env.DSN, dbName)
+	sqlDB := stdlib.OpenDB(*cfg)
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{})
 	require.NoError(t, err)
 
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = sqlDB.Close()
 	})
@@ -69,9 +71,8 @@ func OpenPostgreSQLTestDB(t *testing.T, prefix string, models ...any) *gorm.DB {
 
 func openPostgreSQLRootDB(t *testing.T, env PostgreSQLEnv) *sql.DB {
 	t.Helper()
-	dsn := postgresDSNForDatabase(t, env.DSN, "postgres")
-	db, err := sql.Open("pgx", dsn)
-	require.NoError(t, err)
+	cfg := postgresConfigForDatabase(t, env.DSN, "postgres")
+	db := stdlib.OpenDB(*cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -96,12 +97,12 @@ func dropPostgreSQLDatabase(t *testing.T, db *sql.DB, dbName string) {
 	require.NoError(t, err)
 }
 
-func postgresDSNForDatabase(t *testing.T, dsn, database string) string {
+func postgresConfigForDatabase(t *testing.T, dsn, database string) *pgx.ConnConfig {
 	t.Helper()
 	cfg, err := pgx.ParseConfig(dsn)
 	require.NoError(t, err)
 	cfg.Database = database
-	return cfg.ConnString()
+	return cfg
 }
 
 func quotePostgreSQLIdentifier(identifier string) string {

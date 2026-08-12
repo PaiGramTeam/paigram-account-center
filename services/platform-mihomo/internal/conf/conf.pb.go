@@ -26,6 +26,7 @@ type Bootstrap struct {
 	Server        *Server                `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
 	Data          *Data                  `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Security      *Security              `protobuf:"bytes,3,opt,name=security,proto3" json:"security,omitempty"`
+	Upstream      *Upstream              `protobuf:"bytes,4,opt,name=upstream,proto3" json:"upstream,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -81,6 +82,81 @@ func (x *Bootstrap) GetSecurity() *Security {
 	return nil
 }
 
+func (x *Bootstrap) GetUpstream() *Upstream {
+	if x != nil {
+		return x.Upstream
+	}
+	return nil
+}
+
+type Upstream struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	BaseUrl           string                 `protobuf:"bytes,1,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	TimeoutSeconds    int32                  `protobuf:"varint,2,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	BearerTokenFile   string                 `protobuf:"bytes,3,opt,name=bearer_token_file,json=bearerTokenFile,proto3" json:"bearer_token_file,omitempty"`
+	AllowInsecureHttp bool                   `protobuf:"varint,4,opt,name=allow_insecure_http,json=allowInsecureHttp,proto3" json:"allow_insecure_http,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *Upstream) Reset() {
+	*x = Upstream{}
+	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Upstream) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Upstream) ProtoMessage() {}
+
+func (x *Upstream) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Upstream.ProtoReflect.Descriptor instead.
+func (*Upstream) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Upstream) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *Upstream) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+func (x *Upstream) GetBearerTokenFile() string {
+	if x != nil {
+		return x.BearerTokenFile
+	}
+	return ""
+}
+
+func (x *Upstream) GetAllowInsecureHttp() bool {
+	if x != nil {
+		return x.AllowInsecureHttp
+	}
+	return false
+}
+
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Grpc          *Server_GRPC           `protobuf:"bytes,1,opt,name=grpc,proto3" json:"grpc,omitempty"`
@@ -90,7 +166,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_internal_conf_conf_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -102,7 +178,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_internal_conf_conf_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +191,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Server) GetGrpc() *Server_GRPC {
@@ -135,7 +211,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_internal_conf_conf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -147,7 +223,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_internal_conf_conf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -160,7 +236,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -180,7 +256,6 @@ func (x *Data) GetRedis() *Data_Redis {
 type Security struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
 	CredentialEncryptionKey   string                 `protobuf:"bytes,1,opt,name=credential_encryption_key,json=credentialEncryptionKey,proto3" json:"credential_encryption_key,omitempty"`
-	ServiceTicketSigningKey   string                 `protobuf:"bytes,2,opt,name=service_ticket_signing_key,json=serviceTicketSigningKey,proto3" json:"service_ticket_signing_key,omitempty"`
 	ServiceTicketIssuer       string                 `protobuf:"bytes,3,opt,name=service_ticket_issuer,json=serviceTicketIssuer,proto3" json:"service_ticket_issuer,omitempty"`
 	ServiceTicketPublicKeyPem string                 `protobuf:"bytes,4,opt,name=service_ticket_public_key_pem,json=serviceTicketPublicKeyPem,proto3" json:"service_ticket_public_key_pem,omitempty"`
 	ServiceTicketKeyId        string                 `protobuf:"bytes,5,opt,name=service_ticket_key_id,json=serviceTicketKeyId,proto3" json:"service_ticket_key_id,omitempty"`
@@ -190,7 +265,7 @@ type Security struct {
 
 func (x *Security) Reset() {
 	*x = Security{}
-	mi := &file_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_internal_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -202,7 +277,7 @@ func (x *Security) String() string {
 func (*Security) ProtoMessage() {}
 
 func (x *Security) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_internal_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -215,19 +290,12 @@ func (x *Security) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Security.ProtoReflect.Descriptor instead.
 func (*Security) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Security) GetCredentialEncryptionKey() string {
 	if x != nil {
 		return x.CredentialEncryptionKey
-	}
-	return ""
-}
-
-func (x *Security) GetServiceTicketSigningKey() string {
-	if x != nil {
-		return x.ServiceTicketSigningKey
 	}
 	return ""
 }
@@ -264,7 +332,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -276,7 +344,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -289,7 +357,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -322,7 +390,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_internal_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +402,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_internal_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +415,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
 }
 
 func (x *Data_Database) GetDsn() string {
@@ -369,7 +437,7 @@ type Data_Redis struct {
 
 func (x *Data_Redis) Reset() {
 	*x = Data_Redis{}
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_internal_conf_conf_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +449,7 @@ func (x *Data_Redis) String() string {
 func (*Data_Redis) ProtoMessage() {}
 
 func (x *Data_Redis) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_internal_conf_conf_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +462,7 @@ func (x *Data_Redis) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Redis.ProtoReflect.Descriptor instead.
 func (*Data_Redis) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
 }
 
 func (x *Data_Redis) GetAddr() string {
@@ -429,11 +497,17 @@ var File_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
-	"\x18internal/conf/conf.proto\x12\x14platform.mihomo.conf\"\xad\x01\n" +
+	"\x18internal/conf/conf.proto\x12\x14platform.mihomo.conf\"\xe9\x01\n" +
 	"\tBootstrap\x124\n" +
 	"\x06server\x18\x01 \x01(\v2\x1c.platform.mihomo.conf.ServerR\x06server\x12.\n" +
 	"\x04data\x18\x02 \x01(\v2\x1a.platform.mihomo.conf.DataR\x04data\x12:\n" +
-	"\bsecurity\x18\x03 \x01(\v2\x1e.platform.mihomo.conf.SecurityR\bsecurity\"\x9e\x01\n" +
+	"\bsecurity\x18\x03 \x01(\v2\x1e.platform.mihomo.conf.SecurityR\bsecurity\x12:\n" +
+	"\bupstream\x18\x04 \x01(\v2\x1e.platform.mihomo.conf.UpstreamR\bupstream\"\xaa\x01\n" +
+	"\bUpstream\x12\x19\n" +
+	"\bbase_url\x18\x01 \x01(\tR\abaseUrl\x12'\n" +
+	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\x12*\n" +
+	"\x11bearer_token_file\x18\x03 \x01(\tR\x0fbearerTokenFile\x12.\n" +
+	"\x13allow_insecure_http\x18\x04 \x01(\bR\x11allowInsecureHttp\"\x9e\x01\n" +
 	"\x06Server\x125\n" +
 	"\x04grpc\x18\x01 \x01(\v2!.platform.mihomo.conf.Server.GRPCR\x04grpc\x1a]\n" +
 	"\x04GRPC\x12\x18\n" +
@@ -449,13 +523,12 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x04addr\x18\x01 \x01(\tR\x04addr\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x0e\n" +
 	"\x02db\x18\x03 \x01(\x05R\x02db\x12\x16\n" +
-	"\x06prefix\x18\x04 \x01(\tR\x06prefix\"\xac\x02\n" +
+	"\x06prefix\x18\x04 \x01(\tR\x06prefix\"\xf5\x01\n" +
 	"\bSecurity\x12:\n" +
-	"\x19credential_encryption_key\x18\x01 \x01(\tR\x17credentialEncryptionKey\x12;\n" +
-	"\x1aservice_ticket_signing_key\x18\x02 \x01(\tR\x17serviceTicketSigningKey\x122\n" +
+	"\x19credential_encryption_key\x18\x01 \x01(\tR\x17credentialEncryptionKey\x122\n" +
 	"\x15service_ticket_issuer\x18\x03 \x01(\tR\x13serviceTicketIssuer\x12@\n" +
 	"\x1dservice_ticket_public_key_pem\x18\x04 \x01(\tR\x19serviceTicketPublicKeyPem\x121\n" +
-	"\x15service_ticket_key_id\x18\x05 \x01(\tR\x12serviceTicketKeyIdB,Z*platform-mihomo-service/internal/conf;confb\x06proto3"
+	"\x15service_ticket_key_id\x18\x05 \x01(\tR\x12serviceTicketKeyIdJ\x04\b\x02\x10\x03B,Z*platform-mihomo-service/internal/conf;confb\x06proto3"
 
 var (
 	file_internal_conf_conf_proto_rawDescOnce sync.Once
@@ -469,28 +542,30 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),     // 0: platform.mihomo.conf.Bootstrap
-	(*Server)(nil),        // 1: platform.mihomo.conf.Server
-	(*Data)(nil),          // 2: platform.mihomo.conf.Data
-	(*Security)(nil),      // 3: platform.mihomo.conf.Security
-	(*Server_GRPC)(nil),   // 4: platform.mihomo.conf.Server.GRPC
-	(*Data_Database)(nil), // 5: platform.mihomo.conf.Data.Database
-	(*Data_Redis)(nil),    // 6: platform.mihomo.conf.Data.Redis
+	(*Upstream)(nil),      // 1: platform.mihomo.conf.Upstream
+	(*Server)(nil),        // 2: platform.mihomo.conf.Server
+	(*Data)(nil),          // 3: platform.mihomo.conf.Data
+	(*Security)(nil),      // 4: platform.mihomo.conf.Security
+	(*Server_GRPC)(nil),   // 5: platform.mihomo.conf.Server.GRPC
+	(*Data_Database)(nil), // 6: platform.mihomo.conf.Data.Database
+	(*Data_Redis)(nil),    // 7: platform.mihomo.conf.Data.Redis
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
-	1, // 0: platform.mihomo.conf.Bootstrap.server:type_name -> platform.mihomo.conf.Server
-	2, // 1: platform.mihomo.conf.Bootstrap.data:type_name -> platform.mihomo.conf.Data
-	3, // 2: platform.mihomo.conf.Bootstrap.security:type_name -> platform.mihomo.conf.Security
-	4, // 3: platform.mihomo.conf.Server.grpc:type_name -> platform.mihomo.conf.Server.GRPC
-	5, // 4: platform.mihomo.conf.Data.database:type_name -> platform.mihomo.conf.Data.Database
-	6, // 5: platform.mihomo.conf.Data.redis:type_name -> platform.mihomo.conf.Data.Redis
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	2, // 0: platform.mihomo.conf.Bootstrap.server:type_name -> platform.mihomo.conf.Server
+	3, // 1: platform.mihomo.conf.Bootstrap.data:type_name -> platform.mihomo.conf.Data
+	4, // 2: platform.mihomo.conf.Bootstrap.security:type_name -> platform.mihomo.conf.Security
+	1, // 3: platform.mihomo.conf.Bootstrap.upstream:type_name -> platform.mihomo.conf.Upstream
+	5, // 4: platform.mihomo.conf.Server.grpc:type_name -> platform.mihomo.conf.Server.GRPC
+	6, // 5: platform.mihomo.conf.Data.database:type_name -> platform.mihomo.conf.Data.Database
+	7, // 6: platform.mihomo.conf.Data.redis:type_name -> platform.mihomo.conf.Data.Redis
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -504,7 +579,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

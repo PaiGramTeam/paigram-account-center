@@ -9,7 +9,9 @@ import (
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 )
 
@@ -25,10 +27,11 @@ func NewService(db *gorm.DB) *Service {
 }
 
 // CreateInput carries the operator-supplied data for a new credential.
-// ClientID is provided directly by the caller (Path D §2.1: human-readable
-// strings like "telegram-service", "paigram-genshin", no "mi_" prefix).
+// ClientID is a stable, human-readable consumer identifier such as
+// "telegram-service" or "paigram-genshin".
 type CreateInput struct {
 	ClientID    string
+	BotID       string
 	DisplayName string
 	OwnerUserID uint64
 	Description string
@@ -40,6 +43,7 @@ type CreateInput struct {
 // row (no secret hash). Used by admin handlers.
 type CredentialView struct {
 	ClientID    string    `json:"client_id"`
+	BotID       string    `json:"bot_id"`
 	DisplayName string    `json:"display_name"`
 	Status      string    `json:"status"`
 	OwnerUserID uint64    `json:"owner_user_id"`
@@ -68,6 +72,10 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 	if clientID == "" {
 		return nil, ErrEmptyClientID
 	}
+	botID := strings.TrimSpace(input.BotID)
+	if botID == "" {
+		botID = clientID
+	}
 
 	audiencesJSON, err := encodeStringList(input.Audiences)
 	if err != nil {
@@ -89,6 +97,7 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 
 	row := &model.ServiceCredential{
 		ClientID:    clientID,
+		BotID:       botID,
 		DisplayName: input.DisplayName,
 		SecretHash:  hash,
 		Audiences:   audiencesJSON,
@@ -97,7 +106,27 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 		OwnerUserID: input.OwnerUserID,
 		Description: input.Description,
 	}
-	if err := s.db.Create(row).Error; err != nil {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		bot := model.Bot{
+			ID:          botID,
+			DisplayName: botID,
+			Description: "Logical service principal registered with its first OAuth credential",
+			Type:        "SERVICE",
+			Status:      "ACTIVE",
+			OwnerUserID: input.OwnerUserID,
+		}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&bot).Error; err != nil {
+			return err
+		}
+		var registered model.Bot
+		if err := tx.First(&registered, "id = ?", botID).Error; err != nil {
+			return err
+		}
+		return tx.Create(row).Error
+	}); err != nil {
+		if dberror.IsUniqueViolation(err) {
+			return nil, ErrCredentialConflict
+		}
 		return nil, err
 	}
 
@@ -187,8 +216,7 @@ func (s *Service) VerifySecret(clientID, clientSecret string) (*model.ServiceCre
 
 // RotateSecret regenerates a fresh plaintext secret for the existing
 // credential, replaces the stored bcrypt hash, and returns the plaintext
-// to the caller exactly once. The old secret is invalidated immediately
-// (no grace period — Path D §1.6: rotate = create-and-disable).
+// to the caller exactly once. The old secret is invalidated immediately.
 func (s *Service) RotateSecret(clientID string) (*CreateResult, error) {
 	if clientID == "" {
 		return nil, ErrEmptyClientID
@@ -227,8 +255,7 @@ func (s *Service) RotateSecret(clientID string) (*CreateResult, error) {
 }
 
 // SetStatus flips a credential between active and disabled. Disabled
-// credentials cannot issue new tokens. Existing tokens (already-issued
-// JWTs) remain valid until natural expiry per Path D §1.6.
+// credentials cannot issue or validate access tokens.
 func (s *Service) SetStatus(clientID, status string) (*model.ServiceCredential, error) {
 	if status != model.ServiceCredentialStatusActive && status != model.ServiceCredentialStatusDisabled {
 		return nil, ErrInvalidStatus
@@ -303,6 +330,7 @@ func newCredentialView(row *model.ServiceCredential) (*CredentialView, error) {
 	}
 	return &CredentialView{
 		ClientID:    row.ClientID,
+		BotID:       row.BotID,
 		DisplayName: row.DisplayName,
 		Status:      row.Status,
 		OwnerUserID: row.OwnerUserID,

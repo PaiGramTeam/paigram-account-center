@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -22,12 +23,13 @@ import (
 	"gorm.io/gorm"
 
 	pb "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
-	"paigram/internal/config"
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"paigram/internal/grpc/interceptor"
 	grpcservice "paigram/internal/grpc/service"
 	"paigram/internal/model"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/credentials"
+	internalticket "paigram/internal/serviceticket"
 	"paigram/internal/testutil"
 )
 
@@ -64,6 +66,7 @@ func seedServiceCredentialAndIssueToken(t *testing.T, db *gorm.DB, signingKey []
 
 	row := &model.ServiceCredential{
 		ClientID:    clientID,
+		BotID:       clientID,
 		DisplayName: clientID,
 		SecretHash:  hash,
 		Audiences:   datatypes.JSON(audiencesJSON),
@@ -96,6 +99,7 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 		&model.Bot{},
 		&model.ServiceCredential{},
 		&model.BotIdentity{},
+		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.PlatformAccountProfile{},
 		&model.ConsumerGrant{},
@@ -104,7 +108,8 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 
 	signingKey := botAccessTestSigningKey(t)
 	bot, identityUser, ref := seedBotAccessGRPCTestData(t, db)
-	conn := newBotAccessBufconnClient(t, db, signingKey)
+	var ticketPublicKey ed25519.PublicKey
+	conn := newBotAccessBufconnClient(t, db, signingKey, &ticketPublicKey)
 	defer conn.Close()
 
 	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.write", "bot.access.issue_ticket"})
@@ -132,23 +137,19 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 		ExternalUserId:  "tg-123",
 		BindingId:       ref.ID,
 		RequestedScopes: []string{"daily.sign"},
-		Audience:        "platform-hoyoverse-service",
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, ticketResp.Ticket)
-	assert.Equal(t, "platform-hoyoverse-service", ticketResp.Audience)
+	assert.Equal(t, "hoyoverse.runtime", ticketResp.Audience)
 	assert.Equal(t, ref.ID, ticketResp.Binding.Id)
 
-	// Validate the ticket signature with the same HS256 key (Path D §1.4
-	// + §1.5 — single shared key, no kid header, no JWKS lookup).
 	parsedClaims := &botaccess.ServiceTicketClaims{}
 	parsedToken, err := jwt.ParseWithClaims(ticketResp.Ticket, parsedClaims, func(token *jwt.Token) (any, error) {
-		assert.Equal(t, jwt.SigningMethodHS256.Alg(), token.Method.Alg())
-		assert.Equal(t, "service_ticket", token.Header["typ"])
-		_, hasKID := token.Header["kid"]
-		assert.False(t, hasKID, "Path D HS256 tickets must not carry a kid header")
-		return signingKey, nil
-	})
+		assert.Equal(t, contractticket.AlgorithmEd25519, token.Method.Alg())
+		assert.Equal(t, internalticket.TypeDelegation, token.Header["typ"])
+		assert.Equal(t, "test-key", token.Header["kid"])
+		return ticketPublicKey, nil
+	}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}))
 	require.NoError(t, err)
 	require.True(t, parsedToken.Valid)
 	assert.Equal(t, "consumer", parsedClaims.ActorType)
@@ -157,8 +158,9 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	assert.Equal(t, bot.ID, parsedClaims.BotID)
 	assert.Equal(t, identityUser.ID, parsedClaims.UserID)
 	assert.Equal(t, ref.ID, parsedClaims.BindingID)
-	assert.Equal(t, []string{"daily.sign"}, parsedClaims.Scopes)
-	assert.ElementsMatch(t, []string{"platform-hoyoverse-service"}, []string(parsedClaims.Audience))
+	assert.Equal(t, []string{"daily.sign"}, parsedClaims.AllowedActions)
+	assert.Equal(t, "consumer:"+bot.ID, parsedClaims.Subject)
+	assert.ElementsMatch(t, []string{"hoyoverse.runtime"}, []string(parsedClaims.Audience))
 	assert.WithinDuration(t, ticketResp.ExpiresAt.AsTime(), parsedClaims.ExpiresAt.Time, time.Second)
 
 	var event model.AuditEvent
@@ -175,6 +177,7 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 		&model.Bot{},
 		&model.ServiceCredential{},
 		&model.BotIdentity{},
+		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.PlatformAccountProfile{},
 		&model.ConsumerGrant{},
@@ -197,7 +200,6 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 		ExternalUserId:  "tg-123",
 		BindingId:       ref.ID,
 		RequestedScopes: []string{"daily.sign", "notes.write"},
-		Audience:        "platform-hoyoverse-service",
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -215,6 +217,7 @@ func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) 
 		&model.Bot{},
 		&model.ServiceCredential{},
 		&model.BotIdentity{},
+		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
 	)
@@ -237,99 +240,9 @@ func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) 
 		ExternalUserId:  "tg-123",
 		BindingId:       ref.ID,
 		RequestedScopes: []string{"daily.sign"},
-		Audience:        "platform-hoyoverse-service",
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-}
-
-func TestBotAccessServiceUpsertPlatformBindingDeniedForNormalBot(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_legacy_gate",
-		&model.User{},
-		&model.UserEmail{},
-		&model.Bot{},
-		&model.ServiceCredential{},
-		&model.BotIdentity{},
-		&model.PlatformService{},
-		&model.PlatformAccountBinding{},
-		&model.ConsumerGrant{},
-		&model.AuditEvent{},
-	)
-
-	signingKey := botAccessTestSigningKey(t)
-	bot, _, _ := seedBotAccessGRPCTestData(t, db)
-	require.NoError(t, db.Model(&model.Bot{}).Where("id = ?", bot.ID).Update("allow_legacy_binding_write", false).Error)
-
-	conn := newBotAccessBufconnClient(t, db, signingKey)
-	defer conn.Close()
-	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.write", "bot.access.issue_ticket"})
-	client := pb.NewBotAccessServiceClient(conn)
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer "+accessToken)
-
-	resp, err := client.UpsertPlatformBinding(ctx, &pb.UpsertPlatformBindingRequest{
-		ExternalUserId:     "tg-123",
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountId:  "binding_100_123456789",
-		DisplayName:        "Migrated account",
-		GrantScopes:        []string{"mihomo.status.read"},
-	})
-
-	require.Error(t, err)
-	assert.Nil(t, resp)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), "migration-only")
-
-	var event model.AuditEvent
-	require.NoError(t, db.Where("category = ? AND action = ?", "bot_access", "legacy_binding_write_reject").Order("id DESC").First(&event).Error)
-	assert.Equal(t, "failure", event.Result)
-	assert.Equal(t, "legacy_binding_write_not_allowed", event.ReasonCode)
-	metadata := requireBotAccessMetadata(t, event.MetadataJSON)
-	assert.Equal(t, true, metadata["legacy_migration"])
-}
-
-func TestBotAccessServiceAllowsLegacyBindingWriteWithCapability(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_legacy_allowed",
-		&model.User{},
-		&model.UserEmail{},
-		&model.Bot{},
-		&model.ServiceCredential{},
-		&model.BotIdentity{},
-		&model.PlatformService{},
-		&model.PlatformAccountBinding{},
-		&model.ConsumerGrant{},
-		&model.AuditEvent{},
-	)
-
-	signingKey := botAccessTestSigningKey(t)
-	seedBotAccessPlatformService(t, db)
-	bot, _, _ := seedBotAccessGRPCTestData(t, db)
-	require.NoError(t, db.Model(&model.Bot{}).Where("id = ?", bot.ID).Update("allow_legacy_binding_write", true).Error)
-
-	conn := newBotAccessBufconnClient(t, db, signingKey)
-	defer conn.Close()
-	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.write", "bot.access.issue_ticket"})
-	client := pb.NewBotAccessServiceClient(conn)
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer "+accessToken)
-
-	resp, err := client.UpsertPlatformBinding(ctx, &pb.UpsertPlatformBindingRequest{
-		ExternalUserId:     "tg-123",
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		PlatformAccountId:  "binding_100_123456789",
-		DisplayName:        "Migrated account",
-		GrantScopes:        []string{"mihomo.status.read"},
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, resp.GetBinding())
-	assert.Equal(t, "binding_100_123456789", resp.GetBinding().GetPlatformAccountId())
-
-	var event model.AuditEvent
-	require.NoError(t, db.Where("category = ? AND action = ?", "bot_access", "legacy_binding_write").Order("id DESC").First(&event).Error)
-	assert.Equal(t, "success", event.Result)
-	metadata := requireBotAccessMetadata(t, event.MetadataJSON)
-	assert.Equal(t, true, metadata["legacy_migration"])
 }
 
 func TestBotAccessServiceRejectsMissingAuthorization(t *testing.T) {
@@ -339,6 +252,7 @@ func TestBotAccessServiceRejectsMissingAuthorization(t *testing.T) {
 		&model.Bot{},
 		&model.ServiceCredential{},
 		&model.BotIdentity{},
+		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
 	)
@@ -367,6 +281,7 @@ func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
 		&model.Bot{},
 		&model.ServiceCredential{},
 		&model.BotIdentity{},
+		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
 	)
@@ -383,7 +298,6 @@ func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
 		ExternalUserId:  "tg-123",
 		BindingId:       ref.ID,
 		RequestedScopes: []string{"daily.sign"},
-		Audience:        "platform-hoyoverse-service",
 	})
 
 	require.Error(t, err)
@@ -397,6 +311,7 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 		&model.Bot{},
 		&model.ServiceCredential{},
 		&model.BotIdentity{},
+		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
 	)
@@ -435,7 +350,6 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 	_, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId: "tg-123",
 		BindingId:      ref.ID,
-		Audience:       "platform-hoyoverse-service",
 	})
 
 	require.Error(t, err)
@@ -444,6 +358,17 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 
 func seedBotAccessGRPCTestData(t *testing.T, db *gorm.DB) (model.Bot, model.User, model.PlatformAccountBinding) {
 	t.Helper()
+	require.NoError(t, db.Where("platform_key = ?", "hoyoverse").FirstOrCreate(&model.PlatformService{
+		PlatformKey:          "hoyoverse",
+		DisplayName:          "Hoyoverse",
+		ServiceKey:           "platform-hoyoverse-service",
+		ServiceAudience:      "hoyoverse.runtime",
+		DiscoveryType:        "static",
+		Endpoint:             "127.0.0.1:1",
+		Enabled:              true,
+		SupportedActionsJSON: `[]`,
+		CredentialSchemaJSON: `{"type":"object"}`,
+	}).Error)
 
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)
@@ -516,7 +441,7 @@ func requireBotAccessMetadata(t *testing.T, raw string) map[string]any {
 	return metadata
 }
 
-func newBotAccessBufconnClient(t *testing.T, db *gorm.DB, signingKey []byte) *grpc.ClientConn {
+func newBotAccessBufconnClient(t *testing.T, db *gorm.DB, signingKey []byte, ticketPublicKeyOutput ...*ed25519.PublicKey) *grpc.ClientConn {
 	t.Helper()
 
 	tokenSvc, err := credentials.NewTokenService(credentials.NewService(db), credentials.TokenServiceConfig{
@@ -529,10 +454,11 @@ func newBotAccessBufconnClient(t *testing.T, db *gorm.DB, signingKey []byte) *gr
 	listener := bufconn.Listen(1024 * 1024)
 	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(interceptor.NewAuthInterceptor(tokenSvc).Unary()))
 
-	group, err := botaccess.NewServiceGroup(db, config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "paigram-account-center",
-	}, signingKey)
+	authConfig, ticketPublicKey := testutil.NewAuthConfig(t)
+	if len(ticketPublicKeyOutput) > 0 && ticketPublicKeyOutput[0] != nil {
+		*ticketPublicKeyOutput[0] = ticketPublicKey
+	}
+	group, err := botaccess.NewServiceGroup(db, authConfig)
 	require.NoError(t, err)
 	pb.RegisterBotAccessServiceServer(grpcServer, grpcservice.NewBotAccessService(&group.AccountRefService, &group.TicketService, db))
 

@@ -8,10 +8,6 @@ import "google/protobuf/timestamp.proto";
 
 service BotAccessService {
   rpc ResolveBotUser(ResolveBotUserRequest) returns (ResolveBotUserResponse);
-  // UpsertPlatformBinding is a legacy migration-only RPC.
-  // Normal bot runtime must use ResolveBotUser, ListAccessibleBindings,
-  // and IssueServiceTicket instead of creating or updating bindings.
-  rpc UpsertPlatformBinding(UpsertPlatformBindingRequest) returns (UpsertPlatformBindingResponse);
   rpc ListAccessibleBindings(ListAccessibleBindingsRequest) returns (ListAccessibleBindingsResponse);
   rpc IssueServiceTicket(IssueServiceTicketRequest) returns (IssueServiceTicketResponse);
 }
@@ -75,7 +71,8 @@ message IssueServiceTicketRequest {
   string external_user_id = 1;
   uint64 binding_id = 2;
   repeated string requested_scopes = 3;
-  string audience = 4;
+  reserved 4;
+  reserved "audience";
   uint64 profile_id = 5;
 }
 

@@ -27,6 +27,7 @@ import (
 func contextWithScopes(clientID string, scopes ...string) context.Context {
 	claims := &credentials.AccessClaims{
 		ClientID: clientID,
+		BotID:    clientID,
 		Scope:    strings.Join(scopes, " "),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:  clientID,

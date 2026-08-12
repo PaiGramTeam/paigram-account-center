@@ -18,9 +18,9 @@ const (
 	ConsumerPamgram    = "pamgram"
 )
 
-// SupportedConsumers is the allowlist enforced by validateConsumer in
-// grant_service.go. Pre-Path-D this was sourced from model.SupportedConsumers;
-// Path D collapses it to a plain string slice owned by this package.
+// SupportedConsumers contains built-in principals accepted before an OAuth
+// credential is provisioned. Registered active service credentials are also
+// accepted dynamically.
 var SupportedConsumers = []string{ConsumerPaiGramBot, ConsumerPamgram}
 
 type CreateBindingInput struct {
@@ -43,6 +43,7 @@ type CreateAndBindInput struct {
 type UpsertGrantInput struct {
 	BindingID uint64
 	Consumer  string
+	Actions   []string
 	GrantedBy sql.NullInt64
 	GrantedAt time.Time
 }

@@ -2,7 +2,7 @@
   <div class="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
     <div class="w-full max-w-md rounded-lg bg-white p-8 shadow-md dark:bg-gray-800">
       <h1 class="mb-6 text-center text-2xl font-bold dark:text-gray-100">注册账号</h1>
-      <a-form ref="formRef" :model="form" :rules="rules" layout="vertical" @submit="handleSubmit">
+      <a-form ref="formRef" :model="form" :rules="rules" layout="vertical" @submit-success="handleSubmit">
         <a-form-item field="display_name" label="显示名称">
           <a-input v-model="form.display_name" placeholder="请输入显示名称" allow-clear />
         </a-form-item>
@@ -131,9 +131,6 @@ const rules = {
 }
 
 const handleSubmit = async (): Promise<void> => {
-  const valid = await formRef.value?.validate()
-  if (!valid) return
-
   if (turnstileEnabled && !captchaToken.value) {
     Message.warning('请先完成安全验证')
     return

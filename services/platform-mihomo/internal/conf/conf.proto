@@ -8,6 +8,14 @@ message Bootstrap {
   Server server = 1;
   Data data = 2;
   Security security = 3;
+  Upstream upstream = 4;
+}
+
+message Upstream {
+  string base_url = 1;
+  int32 timeout_seconds = 2;
+  string bearer_token_file = 3;
+  bool allow_insecure_http = 4;
 }
 
 message Server {
@@ -39,7 +47,7 @@ message Data {
 
 message Security {
   string credential_encryption_key = 1;
-  string service_ticket_signing_key = 2;
+  reserved 2;
   string service_ticket_issuer = 3;
   string service_ticket_public_key_pem = 4;
   string service_ticket_key_id = 5;

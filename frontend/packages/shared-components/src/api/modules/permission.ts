@@ -1,5 +1,5 @@
 import type { createRequest } from '../request'
-import type { OpenApiPermissionInfo, OpenApiRole } from '../openapi'
+import type { components } from '../generated/schema'
 import type { PermissionListParams, PermissionListResponse, PermissionDetailResponse } from '../types'
 
 function toTitleCase(value: string): string {
@@ -10,7 +10,7 @@ function toTitleCase(value: string): string {
     .join(' ')
 }
 
-function mapPermission(permission: OpenApiPermissionInfo) {
+function mapPermission(permission: components['schemas']['Permission']) {
   return {
     id: permission.id,
     name: permission.name,
@@ -23,20 +23,14 @@ function mapPermission(permission: OpenApiPermissionInfo) {
 }
 
 export function createPermissionApi(request: ReturnType<typeof createRequest>) {
-  async function listAssignedPermissions() {
-    const response = await request.get<{ items: OpenApiRole[] | null }>('/admin/roles', {
-      params: { page: 1, page_size: 100 },
-    })
-    const permissions = new Map<number, OpenApiPermissionInfo>()
-    for (const role of response.data.items ?? []) {
-      for (const permission of role.permissions ?? []) permissions.set(permission.id, permission)
-    }
-    return [...permissions.values()]
+  async function listPermissions() {
+    const response = await request.get<components['schemas']['Permission'][] | null>('/admin/permissions')
+    return response.data ?? []
   }
 
   return {
     async getList(params?: PermissionListParams): Promise<PermissionListResponse> {
-      const assignedPermissions = await listAssignedPermissions()
+      const assignedPermissions = await listPermissions()
       const filteredPermissions = params?.category
         ? assignedPermissions.filter((permission) => permission.resource === params.category)
         : assignedPermissions
@@ -56,7 +50,7 @@ export function createPermissionApi(request: ReturnType<typeof createRequest>) {
     },
 
     async getDetail(id: number | string): Promise<PermissionDetailResponse> {
-      const permission = (await listAssignedPermissions()).find((item) => String(item.id) === String(id))
+      const permission = (await listPermissions()).find((item) => String(item.id) === String(id))
       if (!permission) throw new Error('Permission not found in the assigned role catalog.')
       return {
         data: {

@@ -1,63 +1,46 @@
 package botaccess
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
 	"database/sql"
+	"encoding/pem"
 	"strings"
 	"testing"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"paigram/internal/config"
 	"paigram/internal/model"
+	internalticket "paigram/internal/serviceticket"
 )
 
-// newTestSigningKey returns a fresh 32-byte random key, the minimum
-// HS256 size enforced by NewTicketService (Path D §1.4).
-func newTestSigningKey(t *testing.T) []byte {
-	t.Helper()
-	key := make([]byte, 32)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	return key
-}
-
-func TestNewTicketServiceRejectsShortSigningKey(t *testing.T) {
+func TestNewTicketServiceRejectsInvalidPrivateKey(t *testing.T) {
 	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "issuer",
-	}, []byte("too-short"))
-	require.ErrorIs(t, err, ErrSigningKeyUnavailable)
-	assert.Nil(t, service)
-}
-
-func TestNewTicketServiceRejectsNilSigningKey(t *testing.T) {
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "issuer",
-	}, nil)
-	require.ErrorIs(t, err, ErrSigningKeyUnavailable)
-	assert.Nil(t, service)
-}
-
-func TestNewTicketServiceRejectsZeroTTL(t *testing.T) {
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketTTLSeconds: 0,
-		ServiceTicketIssuer:     "issuer",
-	}, newTestSigningKey(t))
+		ServiceTicketTTLSeconds:    300,
+		ServiceTicketIssuer:        "issuer",
+		ServiceTicketKeyID:         "test-key",
+		ServiceTicketPrivateKeyPEM: "invalid",
+	})
 	require.ErrorIs(t, err, ErrInvalidTicketConfig)
 	assert.Nil(t, service)
 }
 
-func TestTicketServiceIssueIncludesAudienceAndScopes(t *testing.T) {
-	key := newTestSigningKey(t)
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "issuer",
-	}, key)
+func TestNewTicketServiceRejectsZeroTTL(t *testing.T) {
+	authConfig, _ := newTestTicketAuthConfig(t, 0)
+	service, err := NewTicketService(authConfig)
+	require.ErrorIs(t, err, ErrInvalidTicketConfig)
+	assert.Nil(t, service)
+}
+
+func TestTicketServiceIssueIncludesAudienceAndActions(t *testing.T) {
+	authConfig, publicKey := newTestTicketAuthConfig(t, 300)
+	service, err := NewTicketService(authConfig)
 	require.NoError(t, err)
 
 	binding := &model.PlatformAccountBinding{
@@ -76,20 +59,17 @@ func TestTicketServiceIssueIncludesAudienceAndScopes(t *testing.T) {
 
 	parsed := &ServiceTicketClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, parsed, func(token *jwt.Token) (any, error) {
-		assert.Equal(t, jwt.SigningMethodHS256.Alg(), token.Method.Alg())
-		assert.Equal(t, "service_ticket", token.Header["typ"])
-		// HS256 path D: no kid header — single shared key.
-		_, hasKID := token.Header["kid"]
-		assert.False(t, hasKID, "Path D HS256 tickets must not carry a kid header")
-		return key, nil
-	})
+		assert.Equal(t, contractticket.AlgorithmEd25519, token.Method.Alg())
+		assert.Equal(t, "test-key", token.Header["kid"])
+		assert.Equal(t, internalticket.TypeDelegation, token.Header["typ"])
+		return publicKey, nil
+	}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}), jwt.WithAudience("platform-service"), jwt.WithIssuer("issuer"), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 	require.NoError(t, err)
 	require.True(t, token.Valid)
-	assert.Equal(t, "service_ticket", parsed.Type)
 	assert.Equal(t, "consumer", parsed.ActorType)
 	assert.Equal(t, "paigram-bot", parsed.ActorID)
 	assert.Equal(t, "paigram-bot", parsed.Consumer)
-	assert.Equal(t, "bot-ticket", parsed.ClientID)
+	assert.Equal(t, "paigram-bot", parsed.ClientID)
 	assert.Equal(t, binding.OwnerUserID, parsed.OwnerUserID)
 	assert.Equal(t, "bot-ticket", parsed.BotID)
 	assert.Equal(t, binding.OwnerUserID, parsed.UserID)
@@ -97,37 +77,26 @@ func TestTicketServiceIssueIncludesAudienceAndScopes(t *testing.T) {
 	assert.Equal(t, binding.PlatformServiceKey, parsed.PlatformServiceKey)
 	assert.Equal(t, binding.ID, parsed.BindingID)
 	assert.Equal(t, "acct-42", parsed.PlatformAccountID)
-	assert.ElementsMatch(t, []string{"profile:read", "messages:send"}, parsed.Scopes)
-	assert.Equal(t, "issuer", parsed.Issuer)
-	assert.Equal(t, "user:100", parsed.Subject)
-	assert.Equal(t, []string{"platform-service"}, []string(parsed.Audience))
+	assert.ElementsMatch(t, []string{"profile:read", "messages:send"}, parsed.AllowedActions)
+	assert.Equal(t, "consumer:paigram-bot", parsed.Subject)
 	assert.WithinDuration(t, expiresAt, parsed.ExpiresAt.Time, time.Second)
+	assert.NotNil(t, parsed.NotBefore)
 	assert.NotEmpty(t, parsed.ID)
 }
 
 func TestTicketServiceIssueIncludesProfileAndGrantVersion(t *testing.T) {
-	key := newTestSigningKey(t)
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketIssuer:     "issuer",
-		ServiceTicketTTLSeconds: 60,
-	}, key)
+	authConfig, publicKey := newTestTicketAuthConfig(t, 60)
+	service, err := NewTicketService(authConfig)
 	require.NoError(t, err)
 
-	binding := &model.PlatformAccountBinding{
-		ID:                 42,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-
+	binding := activeTestBinding()
 	tokenString, _, err := service.Issue("bot-paigram", "paigram-bot", binding, []string{"mihomo.profile.read"}, "platform-mihomo-service", 99, 3)
 	require.NoError(t, err)
 
 	parsed := &ServiceTicketClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, parsed, func(token *jwt.Token) (any, error) {
-		return key, nil
-	}, jwt.WithAudience("platform-mihomo-service"), jwt.WithIssuer("issuer"))
+	token, err := jwt.ParseWithClaims(tokenString, parsed, func(_ *jwt.Token) (any, error) {
+		return publicKey, nil
+	}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}), jwt.WithAudience("platform-mihomo-service"), jwt.WithIssuer("issuer"))
 	require.NoError(t, err)
 	require.True(t, token.Valid)
 	assert.Equal(t, uint64(99), parsed.ProfileID)
@@ -135,47 +104,24 @@ func TestTicketServiceIssueIncludesProfileAndGrantVersion(t *testing.T) {
 }
 
 func TestTicketServiceIssueRejectsZeroGrantVersion(t *testing.T) {
-	key := newTestSigningKey(t)
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketIssuer:     "issuer",
-		ServiceTicketTTLSeconds: 60,
-	}, key)
+	authConfig, _ := newTestTicketAuthConfig(t, 60)
+	service, err := NewTicketService(authConfig)
 	require.NoError(t, err)
 
-	binding := &model.PlatformAccountBinding{
-		ID:                 42,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-
-	tokenString, expiresAt, err := service.Issue("bot-paigram", "paigram-bot", binding, []string{"mihomo.profile.read"}, "platform-mihomo-service", 99, 0)
+	tokenString, expiresAt, err := service.Issue("bot-paigram", "paigram-bot", activeTestBinding(), []string{"mihomo.profile.read"}, "platform-mihomo-service", 99, 0)
 	require.ErrorIs(t, err, ErrInvalidTicketConfig)
 	assert.Empty(t, tokenString)
 	assert.True(t, expiresAt.IsZero())
 }
 
 func TestTicketServiceRejectsTamperedSignature(t *testing.T) {
-	key := newTestSigningKey(t)
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketIssuer:     "issuer",
-		ServiceTicketTTLSeconds: 60,
-	}, key)
+	authConfig, publicKey := newTestTicketAuthConfig(t, 60)
+	service, err := NewTicketService(authConfig)
 	require.NoError(t, err)
 
-	binding := &model.PlatformAccountBinding{
-		ID:                 1,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		PlatformServiceKey: "platform-mihomo-service",
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-
-	tokenString, _, err := service.Issue("bot-paigram", "paigram-bot", binding, []string{"mihomo.profile.read"}, "platform-mihomo-service", 1, 1)
+	tokenString, _, err := service.Issue("bot-paigram", "paigram-bot", activeTestBinding(), []string{"mihomo.profile.read"}, "platform-mihomo-service", 1, 1)
 	require.NoError(t, err)
 
-	// Flip a character in the signature segment to corrupt the HMAC.
 	parts := strings.Split(tokenString, ".")
 	require.Len(t, parts, 3)
 	if parts[2][0] == 'A' {
@@ -183,37 +129,49 @@ func TestTicketServiceRejectsTamperedSignature(t *testing.T) {
 	} else {
 		parts[2] = "A" + parts[2][1:]
 	}
-	tampered := strings.Join(parts, ".")
 
-	parsed := &ServiceTicketClaims{}
-	_, err = jwt.ParseWithClaims(tampered, parsed, func(token *jwt.Token) (any, error) { return key, nil })
+	_, err = jwt.ParseWithClaims(strings.Join(parts, "."), &ServiceTicketClaims{}, func(_ *jwt.Token) (any, error) {
+		return publicKey, nil
+	}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}))
 	require.Error(t, err)
 }
 
 func TestTicketServiceRejectsExpiredTicket(t *testing.T) {
-	key := newTestSigningKey(t)
-	// 1-second TTL so we can wait past it.
-	service, err := NewTicketService(config.AuthConfig{
-		ServiceTicketIssuer:     "issuer",
-		ServiceTicketTTLSeconds: 1,
-	}, key)
+	authConfig, publicKey := newTestTicketAuthConfig(t, 1)
+	service, err := NewTicketService(authConfig)
 	require.NoError(t, err)
 
-	binding := &model.PlatformAccountBinding{
-		ID:                 1,
+	tokenString, _, err := service.Issue("bot-paigram", "paigram-bot", activeTestBinding(), []string{"mihomo.profile.read"}, "platform-mihomo-service", 1, 1)
+	require.NoError(t, err)
+	time.Sleep(1100 * time.Millisecond)
+
+	_, err = jwt.ParseWithClaims(tokenString, &ServiceTicketClaims{}, func(_ *jwt.Token) (any, error) {
+		return publicKey, nil
+	}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}))
+	require.ErrorIs(t, err, jwt.ErrTokenExpired)
+}
+
+func newTestTicketAuthConfig(t *testing.T, ttlSeconds int) (config.AuthConfig, ed25519.PublicKey) {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	require.NoError(t, err)
+
+	return config.AuthConfig{
+		ServiceTicketTTLSeconds:    ttlSeconds,
+		ServiceTicketIssuer:        "issuer",
+		ServiceTicketKeyID:         "test-key",
+		ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
+	}, publicKey
+}
+
+func activeTestBinding() *model.PlatformAccountBinding {
+	return &model.PlatformAccountBinding{
+		ID:                 42,
 		OwnerUserID:        7,
 		Platform:           "mihomo",
 		PlatformServiceKey: "platform-mihomo-service",
 		Status:             model.PlatformAccountBindingStatusActive,
 	}
-
-	tokenString, _, err := service.Issue("bot-paigram", "paigram-bot", binding, []string{"mihomo.profile.read"}, "platform-mihomo-service", 1, 1)
-	require.NoError(t, err)
-
-	time.Sleep(1100 * time.Millisecond)
-
-	parsed := &ServiceTicketClaims{}
-	_, err = jwt.ParseWithClaims(tokenString, parsed, func(token *jwt.Token) (any, error) { return key, nil })
-	require.Error(t, err)
-	require.ErrorIs(t, err, jwt.ErrTokenExpired)
 }

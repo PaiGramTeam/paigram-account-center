@@ -1,6 +1,10 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -28,7 +32,9 @@ func TestSetDefaultsIncludesServiceTicketSettings(t *testing.T) {
 
 	require.Equal(t, 300, v.GetInt("auth.service_ticket_ttl"))
 	require.Equal(t, "paigram-account-center", v.GetString("auth.service_ticket_issuer"))
-	require.Empty(t, v.GetString("auth.service_ticket_signing_key"))
+	require.Empty(t, v.GetString("auth.service_ticket_key_id"))
+	require.Empty(t, v.GetString("auth.service_ticket_private_key_pem"))
+	require.Empty(t, v.GetString("auth.oauth_signing_key"))
 }
 
 // TestSetDefaultsIncludesOAuthSettings covers the Path D §3.2 +
@@ -44,33 +50,69 @@ func TestSetDefaultsIncludesOAuthSettings(t *testing.T) {
 	require.Equal(t, 3600, v.GetInt("auth.oauth_access_token_ttl_seconds"))
 }
 
-func TestValidateServiceTicketConfigRejectsShortSigningKey(t *testing.T) {
+func TestValidateServiceTicketConfigRejectsInvalidPrivateKey(t *testing.T) {
 	err := validateServiceTicketConfig(&Config{Auth: AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "paigram-account-center",
-		ServiceTicketSigningKey: "short-key",
+		ServiceTicketTTLSeconds:    300,
+		ServiceTicketIssuer:        "paigram-account-center",
+		ServiceTicketKeyID:         "account-center-2026-08",
+		ServiceTicketPrivateKeyPEM: "not-a-private-key",
+		OAuthSigningKey:            "this-is-a-valid-32-byte-oauth-key!",
 	}})
 	require.Error(t, err)
 }
 
-// TestValidateServiceTicketConfigRejectsEmptySigningKey covers the Path D
-// hardening: account-center now serves OAuth tokens whose HS256 signing
-// key is the same SHARED_TICKET_KEY (§1.4). Empty is no longer a tolerated
-// "off" state — config load must fail closed.
-func TestValidateServiceTicketConfigRejectsEmptySigningKey(t *testing.T) {
+func TestValidateServiceTicketConfigRejectsEmptyOAuthSigningKey(t *testing.T) {
 	err := validateServiceTicketConfig(&Config{Auth: AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "paigram-account-center",
-		ServiceTicketSigningKey: "",
+		ServiceTicketTTLSeconds:    300,
+		ServiceTicketIssuer:        "paigram-account-center",
+		ServiceTicketKeyID:         "account-center-2026-08",
+		ServiceTicketPrivateKeyPEM: testServiceTicketPrivateKeyPEM(t),
 	}})
 	require.Error(t, err)
 }
 
-func TestValidateServiceTicketConfigAcceptsValidSigningKey(t *testing.T) {
+func TestValidateServiceTicketConfigAcceptsSeparatedKeys(t *testing.T) {
 	err := validateServiceTicketConfig(&Config{Auth: AuthConfig{
-		ServiceTicketTTLSeconds: 300,
-		ServiceTicketIssuer:     "paigram-account-center",
-		ServiceTicketSigningKey: "this-is-a-valid-32-byte-signing-key!!",
+		ServiceTicketTTLSeconds:    300,
+		ServiceTicketIssuer:        "paigram-account-center",
+		ServiceTicketKeyID:         "account-center-2026-08",
+		ServiceTicketPrivateKeyPEM: testServiceTicketPrivateKeyPEM(t),
+		OAuthSigningKey:            "this-is-a-valid-32-byte-oauth-key!",
 	}})
 	require.NoError(t, err)
+}
+
+func TestValidateEmailDeliveryConfigFailsClosedForReleaseVerification(t *testing.T) {
+	err := validateEmailDeliveryConfig(&Config{
+		App:      AppConfig{Mode: "release"},
+		Auth:     AuthConfig{RequireEmailVerificationLogin: true},
+		Frontend: FrontendConfig{BaseURL: "https://account.example.com"},
+		Email:    EmailConfig{Enabled: false},
+	})
+	require.Error(t, err)
+
+	err = validateEmailDeliveryConfig(&Config{
+		App:      AppConfig{Mode: "release"},
+		Auth:     AuthConfig{RequireEmailVerificationLogin: true},
+		Frontend: FrontendConfig{BaseURL: "https://account.example.com"},
+		Email:    EmailConfig{Enabled: true},
+	})
+	require.NoError(t, err)
+}
+
+func TestValidateEmailDeliveryConfigAllowsExplicitPreproductionOptOut(t *testing.T) {
+	err := validateEmailDeliveryConfig(&Config{
+		App:  AppConfig{Mode: "release"},
+		Auth: AuthConfig{RequireEmailVerificationLogin: false},
+	})
+	require.NoError(t, err)
+}
+
+func testServiceTicketPrivateKeyPEM(t *testing.T) string {
+	t.Helper()
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	encoded, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: encoded}))
 }

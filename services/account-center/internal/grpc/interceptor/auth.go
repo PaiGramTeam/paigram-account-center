@@ -24,9 +24,8 @@ const machineTokenAudience = "account-center"
 type credentialClaimsContextKey struct{}
 
 // AuthInterceptor verifies HS256 OAuth 2.0 access tokens on every
-// inbound gRPC unary/stream call. Per Path D §1.1 + §1.6, validation is
-// stateless except for one DB lookup against service_credentials
-// (encapsulated inside credentials.TokenService.ValidateAccessToken).
+// inbound gRPC unary and stream call. Validation includes a credential
+// registry lookup so disabled clients are rejected immediately.
 type AuthInterceptor struct {
 	tokens *credentials.TokenService
 
@@ -38,9 +37,7 @@ type AuthInterceptor struct {
 	publicMethods map[string]bool
 }
 
-// NewAuthInterceptor wires the interceptor against an HS256 token
-// service. The token service holds the shared SHARED_TICKET_KEY (Path D
-// §1.5) and the credentials registry it validates against.
+// NewAuthInterceptor wires the interceptor against the OAuth token service.
 func NewAuthInterceptor(tokens *credentials.TokenService) *AuthInterceptor {
 	return &AuthInterceptor{
 		tokens:        tokens,

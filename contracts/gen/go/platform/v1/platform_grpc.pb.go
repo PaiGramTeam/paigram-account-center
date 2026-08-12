@@ -20,7 +20,13 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	PlatformService_DescribePlatform_FullMethodName        = "/paigram.platform.v1.PlatformService/DescribePlatform"
+	PlatformService_GetCredentialStatus_FullMethodName     = "/paigram.platform.v1.PlatformService/GetCredentialStatus"
+	PlatformService_ValidateCredential_FullMethodName      = "/paigram.platform.v1.PlatformService/ValidateCredential"
 	PlatformService_GetCredentialSummary_FullMethodName    = "/paigram.platform.v1.PlatformService/GetCredentialSummary"
+	PlatformService_ListProfiles_FullMethodName            = "/paigram.platform.v1.PlatformService/ListProfiles"
+	PlatformService_GetPrimaryProfile_FullMethodName       = "/paigram.platform.v1.PlatformService/GetPrimaryProfile"
+	PlatformService_GetAuthKey_FullMethodName              = "/paigram.platform.v1.PlatformService/GetAuthKey"
+	PlatformService_UpsertDevice_FullMethodName            = "/paigram.platform.v1.PlatformService/UpsertDevice"
 	PlatformService_PutCredential_FullMethodName           = "/paigram.platform.v1.PlatformService/PutCredential"
 	PlatformService_RefreshCredential_FullMethodName       = "/paigram.platform.v1.PlatformService/RefreshCredential"
 	PlatformService_DeleteCredential_FullMethodName        = "/paigram.platform.v1.PlatformService/DeleteCredential"
@@ -32,7 +38,13 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PlatformServiceClient interface {
 	DescribePlatform(ctx context.Context, in *DescribePlatformRequest, opts ...grpc.CallOption) (*DescribePlatformResponse, error)
+	GetCredentialStatus(ctx context.Context, in *GetCredentialStatusRequest, opts ...grpc.CallOption) (*GetCredentialStatusResponse, error)
+	ValidateCredential(ctx context.Context, in *ValidateCredentialRequest, opts ...grpc.CallOption) (*ValidateCredentialResponse, error)
 	GetCredentialSummary(ctx context.Context, in *GetCredentialSummaryRequest, opts ...grpc.CallOption) (*GetCredentialSummaryResponse, error)
+	ListProfiles(ctx context.Context, in *ListProfilesRequest, opts ...grpc.CallOption) (*ListProfilesResponse, error)
+	GetPrimaryProfile(ctx context.Context, in *GetPrimaryProfileRequest, opts ...grpc.CallOption) (*GetPrimaryProfileResponse, error)
+	GetAuthKey(ctx context.Context, in *GetAuthKeyRequest, opts ...grpc.CallOption) (*GetAuthKeyResponse, error)
+	UpsertDevice(ctx context.Context, in *UpsertDeviceRequest, opts ...grpc.CallOption) (*UpsertDeviceResponse, error)
 	PutCredential(ctx context.Context, in *PutCredentialRequest, opts ...grpc.CallOption) (*PutCredentialResponse, error)
 	RefreshCredential(ctx context.Context, in *RefreshCredentialRequest, opts ...grpc.CallOption) (*RefreshCredentialResponse, error)
 	DeleteCredential(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error)
@@ -57,10 +69,70 @@ func (c *platformServiceClient) DescribePlatform(ctx context.Context, in *Descri
 	return out, nil
 }
 
+func (c *platformServiceClient) GetCredentialStatus(ctx context.Context, in *GetCredentialStatusRequest, opts ...grpc.CallOption) (*GetCredentialStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCredentialStatusResponse)
+	err := c.cc.Invoke(ctx, PlatformService_GetCredentialStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ValidateCredential(ctx context.Context, in *ValidateCredentialRequest, opts ...grpc.CallOption) (*ValidateCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateCredentialResponse)
+	err := c.cc.Invoke(ctx, PlatformService_ValidateCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformServiceClient) GetCredentialSummary(ctx context.Context, in *GetCredentialSummaryRequest, opts ...grpc.CallOption) (*GetCredentialSummaryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetCredentialSummaryResponse)
 	err := c.cc.Invoke(ctx, PlatformService_GetCredentialSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) ListProfiles(ctx context.Context, in *ListProfilesRequest, opts ...grpc.CallOption) (*ListProfilesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListProfilesResponse)
+	err := c.cc.Invoke(ctx, PlatformService_ListProfiles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) GetPrimaryProfile(ctx context.Context, in *GetPrimaryProfileRequest, opts ...grpc.CallOption) (*GetPrimaryProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPrimaryProfileResponse)
+	err := c.cc.Invoke(ctx, PlatformService_GetPrimaryProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) GetAuthKey(ctx context.Context, in *GetAuthKeyRequest, opts ...grpc.CallOption) (*GetAuthKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAuthKeyResponse)
+	err := c.cc.Invoke(ctx, PlatformService_GetAuthKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformServiceClient) UpsertDevice(ctx context.Context, in *UpsertDeviceRequest, opts ...grpc.CallOption) (*UpsertDeviceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpsertDeviceResponse)
+	err := c.cc.Invoke(ctx, PlatformService_UpsertDevice_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +184,13 @@ func (c *platformServiceClient) InvalidateConsumerGrant(ctx context.Context, in 
 // for forward compatibility.
 type PlatformServiceServer interface {
 	DescribePlatform(context.Context, *DescribePlatformRequest) (*DescribePlatformResponse, error)
+	GetCredentialStatus(context.Context, *GetCredentialStatusRequest) (*GetCredentialStatusResponse, error)
+	ValidateCredential(context.Context, *ValidateCredentialRequest) (*ValidateCredentialResponse, error)
 	GetCredentialSummary(context.Context, *GetCredentialSummaryRequest) (*GetCredentialSummaryResponse, error)
+	ListProfiles(context.Context, *ListProfilesRequest) (*ListProfilesResponse, error)
+	GetPrimaryProfile(context.Context, *GetPrimaryProfileRequest) (*GetPrimaryProfileResponse, error)
+	GetAuthKey(context.Context, *GetAuthKeyRequest) (*GetAuthKeyResponse, error)
+	UpsertDevice(context.Context, *UpsertDeviceRequest) (*UpsertDeviceResponse, error)
 	PutCredential(context.Context, *PutCredentialRequest) (*PutCredentialResponse, error)
 	RefreshCredential(context.Context, *RefreshCredentialRequest) (*RefreshCredentialResponse, error)
 	DeleteCredential(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error)
@@ -130,8 +208,26 @@ type UnimplementedPlatformServiceServer struct{}
 func (UnimplementedPlatformServiceServer) DescribePlatform(context.Context, *DescribePlatformRequest) (*DescribePlatformResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DescribePlatform not implemented")
 }
+func (UnimplementedPlatformServiceServer) GetCredentialStatus(context.Context, *GetCredentialStatusRequest) (*GetCredentialStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetCredentialStatus not implemented")
+}
+func (UnimplementedPlatformServiceServer) ValidateCredential(context.Context, *ValidateCredentialRequest) (*ValidateCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateCredential not implemented")
+}
 func (UnimplementedPlatformServiceServer) GetCredentialSummary(context.Context, *GetCredentialSummaryRequest) (*GetCredentialSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetCredentialSummary not implemented")
+}
+func (UnimplementedPlatformServiceServer) ListProfiles(context.Context, *ListProfilesRequest) (*ListProfilesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProfiles not implemented")
+}
+func (UnimplementedPlatformServiceServer) GetPrimaryProfile(context.Context, *GetPrimaryProfileRequest) (*GetPrimaryProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPrimaryProfile not implemented")
+}
+func (UnimplementedPlatformServiceServer) GetAuthKey(context.Context, *GetAuthKeyRequest) (*GetAuthKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAuthKey not implemented")
+}
+func (UnimplementedPlatformServiceServer) UpsertDevice(context.Context, *UpsertDeviceRequest) (*UpsertDeviceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertDevice not implemented")
 }
 func (UnimplementedPlatformServiceServer) PutCredential(context.Context, *PutCredentialRequest) (*PutCredentialResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PutCredential not implemented")
@@ -184,6 +280,42 @@ func _PlatformService_DescribePlatform_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformService_GetCredentialStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCredentialStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).GetCredentialStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_GetCredentialStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).GetCredentialStatus(ctx, req.(*GetCredentialStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ValidateCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ValidateCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ValidateCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ValidateCredential(ctx, req.(*ValidateCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformService_GetCredentialSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetCredentialSummaryRequest)
 	if err := dec(in); err != nil {
@@ -198,6 +330,78 @@ func _PlatformService_GetCredentialSummary_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformServiceServer).GetCredentialSummary(ctx, req.(*GetCredentialSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_ListProfiles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListProfilesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).ListProfiles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_ListProfiles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).ListProfiles(ctx, req.(*ListProfilesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_GetPrimaryProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPrimaryProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).GetPrimaryProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_GetPrimaryProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).GetPrimaryProfile(ctx, req.(*GetPrimaryProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_GetAuthKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAuthKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).GetAuthKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_GetAuthKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).GetAuthKey(ctx, req.(*GetAuthKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformService_UpsertDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertDeviceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformServiceServer).UpsertDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformService_UpsertDevice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformServiceServer).UpsertDevice(ctx, req.(*UpsertDeviceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -286,8 +490,32 @@ var PlatformService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformService_DescribePlatform_Handler,
 		},
 		{
+			MethodName: "GetCredentialStatus",
+			Handler:    _PlatformService_GetCredentialStatus_Handler,
+		},
+		{
+			MethodName: "ValidateCredential",
+			Handler:    _PlatformService_ValidateCredential_Handler,
+		},
+		{
 			MethodName: "GetCredentialSummary",
 			Handler:    _PlatformService_GetCredentialSummary_Handler,
+		},
+		{
+			MethodName: "ListProfiles",
+			Handler:    _PlatformService_ListProfiles_Handler,
+		},
+		{
+			MethodName: "GetPrimaryProfile",
+			Handler:    _PlatformService_GetPrimaryProfile_Handler,
+		},
+		{
+			MethodName: "GetAuthKey",
+			Handler:    _PlatformService_GetAuthKey_Handler,
+		},
+		{
+			MethodName: "UpsertDevice",
+			Handler:    _PlatformService_UpsertDevice_Handler,
 		},
 		{
 			MethodName: "PutCredential",

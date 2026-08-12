@@ -3,6 +3,7 @@ module paigram
 go 1.25.7
 
 require (
+	github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go v0.0.0
 	github.com/PaiGramTeam/proto-contracts v0.0.0-20260517134914-355561643fb1
 	github.com/casbin/casbin/v2 v2.77.2
 	github.com/casbin/gorm-adapter/v3 v3.20.0
@@ -172,3 +173,5 @@ require (
 )
 
 replace github.com/PaiGramTeam/paigram-account-center/contracts/gen/go => ../../contracts/gen/go
+
+replace github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go => ../../contracts/runtime/go

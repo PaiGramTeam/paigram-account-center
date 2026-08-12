@@ -211,13 +211,24 @@ const handleBindAccount = (): void => {
 }
 
 const handleBindTelegram = (): void => {
-  Message.info('Telegram 绑定功能开发中，请使用 Telegram Login Widget')
-  // TODO: Implement Telegram binding.
+  void handleBindOAuth('telegram')
 }
 
 const handleBindOAuth = async (provider: string): Promise<void> => {
-  Message.info(`${getProviderName(provider)} 绑定功能开发中`)
-  // TODO: Implement OAuth binding.
+  const userId = userStore.userInfo?.id
+  if (!userId) {
+    Message.error('未获取到用户信息')
+    return
+  }
+
+  try {
+    const response = await profileApi.bindAccount(userId, { provider })
+    sessionStorage.setItem(`oauth-bind:${response.data.state}`, provider)
+    window.location.assign(response.data.auth_url)
+  } catch (error) {
+    console.error('初始化账号绑定失败:', error)
+    Message.error(`${getProviderName(provider)} 绑定初始化失败`)
+  }
 }
 
 const handleUnbind = async (account: BoundAccount): Promise<void> => {

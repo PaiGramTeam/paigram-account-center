@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -21,8 +22,8 @@ import (
 
 	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/data"
-	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/service"
+	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
 	"platform-mihomo-service/internal/usecase"
 )
 
@@ -131,7 +132,7 @@ func newMihomoClientForTest(t *testing.T, stack *integrationStack) *testMihomoCl
 	profileRepo := data.NewProfileRepo(stack.DB)
 	artifactRepo := data.NewArtifactRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	managementRepo := data.NewManagementRepo(stack.DB, stack.Redis, stack.RedisPrefix)
-	hoyoClient := platformmihomo.StubClient{}
+	hoyoClient := mihomostub.Client{}
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, hoyoClient, integrationEncryptionKey, artifactRepo)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
 
@@ -300,12 +301,15 @@ func testTicket(t *testing.T) string { return testTicketForAccount(t, "", "mihom
 
 func testTicketForAccount(t *testing.T, platformAccountID string, scopes ...string) string {
 	t.Helper()
+	now := time.Now().UTC()
 
 	claims := jwt.MapClaims{
 		"iss":                     integrationTicketIssuer,
+		"sub":                     "user:1",
 		"aud":                     []string{integrationTicketAudience},
-		"actor_type":              "bot",
-		"actor_id":                "bot-paigram",
+		"jti":                     "integration-ticket-1",
+		"actor_type":              "user",
+		"actor_id":                "integration-user-1",
 		"owner_user_id":           float64(1),
 		"binding_id":              float64(testBindingID),
 		"bot_id":                  "bot-paigram",
@@ -313,7 +317,9 @@ func testTicketForAccount(t *testing.T, platformAccountID string, scopes ...stri
 		"user_id":                 float64(1),
 		"platform_service_key":    integrationTicketAudience,
 		"platform_account_ref_id": float64(testBindingID),
-		"exp":                     time.Now().Add(time.Minute).Unix(),
+		"iat":                     now.Unix(),
+		"nbf":                     now.Add(-time.Second).Unix(),
+		"exp":                     now.Add(time.Minute).Unix(),
 	}
 	if platformAccountID != "" {
 		claims["platform_account_id"] = platformAccountID
@@ -321,9 +327,9 @@ func testTicketForAccount(t *testing.T, platformAccountID string, scopes ...stri
 	if len(scopes) > 0 {
 		claims["scopes"] = scopes
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, claims)
 	token.Header["kid"] = integrationTicketKeyID
-	token.Header["typ"] = "service_ticket"
+	token.Header["typ"] = contractticket.TypeControl
 
 	signed, err := token.SignedString(integrationTicketPrivateKey)
 	require.NoError(t, err)

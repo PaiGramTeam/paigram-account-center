@@ -9,7 +9,6 @@ import (
 	"time"
 
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
-	"github.com/golang-jwt/jwt/v5"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -23,6 +22,7 @@ import (
 	"paigram/internal/model"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/platformbinding"
+	"paigram/internal/serviceticket"
 )
 
 var (
@@ -57,9 +57,7 @@ type platformSummaryProxy interface {
 // PlatformService provides platform registry lookups.
 type PlatformService struct {
 	db                  *gorm.DB
-	issuer              string
-	ttl                 time.Duration
-	signingKey          []byte
+	ticketSigner        *serviceticket.Signer
 	dial                dialFunc
 	summaryProxy        platformSummaryProxy
 	genericSummaryProxy platformSummaryProxy
@@ -96,22 +94,16 @@ func isSupportedInternalActorType(actorType string) bool {
 
 // ConfigureAuth loads service ticket signing settings from auth config.
 func (s *PlatformService) ConfigureAuth(authCfg config.AuthConfig) error {
-	if authCfg.ServiceTicketTTLSeconds <= 0 {
+	signer, err := serviceticket.NewSigner(serviceticket.Config{
+		Issuer:        authCfg.ServiceTicketIssuer,
+		KeyID:         authCfg.ServiceTicketKeyID,
+		TTL:           time.Duration(authCfg.ServiceTicketTTLSeconds) * time.Second,
+		PrivateKeyPEM: authCfg.ServiceTicketPrivateKeyPEM,
+	})
+	if err != nil {
 		return ErrInvalidTicketConfig
 	}
-
-	issuer := authCfg.ServiceTicketIssuer
-	if issuer == "" {
-		issuer = "paigram-account-center"
-	}
-	if authCfg.ServiceTicketSigningKey != "" && len(authCfg.ServiceTicketSigningKey) < 32 {
-		return ErrInvalidTicketConfig
-	}
-
-	s.issuer = issuer
-	s.ttl = time.Duration(authCfg.ServiceTicketTTLSeconds) * time.Second
-	s.signingKey = []byte(authCfg.ServiceTicketSigningKey)
-
+	s.ticketSigner = signer
 	return nil
 }
 
@@ -191,7 +183,7 @@ func (s *PlatformService) GetPlatformSchemaView(platformKey string) (*PlatformSc
 // IssueLegacyRefScopedTicket signs a short-lived service ticket for a legacy platform account ref.
 // Migration-only: do not use for new runtime platform binding flows.
 func (s *PlatformService) IssueLegacyRefScopedTicket(actorType, actorID string, ownerUserID uint64, ref *model.PlatformAccountRef, scopes []string, audience string) (string, time.Time, error) {
-	if len(s.signingKey) == 0 || s.ttl <= 0 {
+	if s.ticketSigner == nil {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
 	if ref == nil || ref.Status != model.PlatformAccountRefStatusActive {
@@ -201,29 +193,13 @@ func (s *PlatformService) IssueLegacyRefScopedTicket(actorType, actorID string, 
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
 
-	now := time.Now().UTC()
-	expiresAt := now.Add(s.ttl)
 	claims := buildBindingScopedTicketClaims(actorType, actorID, ownerUserID, ref.ID, ref.Platform, ref.PlatformServiceKey, ref.PlatformAccountID, scopes)
-	claims.RegisteredClaims = jwt.RegisteredClaims{
-		Issuer:    s.issuer,
-		Subject:   fmt.Sprintf("user:%d", ownerUserID),
-		Audience:  jwt.ClaimStrings{audience},
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(expiresAt),
-		ID:        fmt.Sprintf("%s:%s:%d:%d", actorType, actorID, ref.ID, now.UnixNano()),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(s.signingKey)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-
-	return signed, expiresAt, nil
+	claims.AllowedActions = scopes
+	return s.ticketSigner.Issue(ticketTypeForActor(actorType), ticketSubject(actorType, actorID, ownerUserID), audience, claims)
 }
 
 func (s *PlatformService) IssueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (string, time.Time, error) {
-	if len(s.signingKey) == 0 || s.ttl <= 0 {
+	if s.ticketSigner == nil {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
 	if binding == nil || actorType == "" || actorID == "" || !isSupportedInternalActorType(actorType) {
@@ -238,29 +214,13 @@ func (s *PlatformService) IssueBindingScopedTicket(actorType, actorID string, bi
 		return "", time.Time{}, err
 	}
 
-	now := time.Now().UTC()
-	expiresAt := now.Add(s.ttl)
 	claims := buildBindingScopedTicketClaims(actorType, actorID, binding.OwnerUserID, binding.ID, binding.Platform, binding.PlatformServiceKey, nullableBindingExternalAccountKey(binding.ExternalAccountKey), scopes)
-	claims.RegisteredClaims = jwt.RegisteredClaims{
-		Issuer:    s.issuer,
-		Subject:   fmt.Sprintf("user:%d", binding.OwnerUserID),
-		Audience:  jwt.ClaimStrings{platformRow.ServiceAudience},
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(expiresAt),
-		ID:        fmt.Sprintf("%s:%s:%d:%d", actorType, actorID, binding.ID, now.UnixNano()),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(s.signingKey)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-
-	return signed, expiresAt, nil
+	claims.AllowedActions = scopes
+	return s.ticketSigner.Issue(ticketTypeForActor(actorType), ticketSubject(actorType, actorID, binding.OwnerUserID), platformRow.ServiceAudience, claims)
 }
 
 func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input platformbinding.GrantInvalidationInput) error {
-	if len(s.signingKey) == 0 || s.ttl <= 0 {
+	if s.ticketSigner == nil {
 		return ErrInvalidTicketConfig
 	}
 	if input.BindingID == 0 || input.Platform == "" || input.PlatformServiceKey == "" || input.Consumer == "" || input.MinimumGrantVersion == 0 {
@@ -285,18 +245,9 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 		return ErrInvalidTicketConfig
 	}
 
-	now := time.Now().UTC()
-	expiresAt := now.Add(s.ttl)
 	claims := buildBindingScopedTicketClaims(actorType, actorID, input.OwnerUserID, input.BindingID, input.Platform, input.PlatformServiceKey, "", []string{"mihomo.consumer_grant.invalidate"})
-	claims.RegisteredClaims = jwt.RegisteredClaims{
-		Issuer:    s.issuer,
-		Subject:   fmt.Sprintf("user:%d", input.OwnerUserID),
-		Audience:  jwt.ClaimStrings{platformRow.ServiceAudience},
-		IssuedAt:  jwt.NewNumericDate(now),
-		ExpiresAt: jwt.NewNumericDate(expiresAt),
-		ID:        fmt.Sprintf("%s:%s:%d:%d", actorType, actorID, input.BindingID, now.UnixNano()),
-	}
-	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.signingKey)
+	claims.AllowedActions = claims.Scopes
+	signed, _, err := s.ticketSigner.Issue(serviceticket.TypeControl, ticketSubject(actorType, actorID, input.OwnerUserID), platformRow.ServiceAudience, claims)
 	if err != nil {
 		return err
 	}
@@ -339,6 +290,23 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 		return ErrConsumerGrantInvalidationRejected
 	}
 	return nil
+}
+
+func ticketTypeForActor(actorType string) string {
+	if actorType == "consumer" {
+		return serviceticket.TypeDelegation
+	}
+	return serviceticket.TypeControl
+}
+
+func ticketSubject(actorType, actorID string, ownerUserID uint64) string {
+	if actorType == "consumer" {
+		return "consumer:" + actorID
+	}
+	if actorType == "system" {
+		return "system:account-center"
+	}
+	return fmt.Sprintf("user:%d", ownerUserID)
 }
 
 func (s *PlatformService) getEnabledPlatformService(platformKey, serviceKey string) (*model.PlatformService, error) {

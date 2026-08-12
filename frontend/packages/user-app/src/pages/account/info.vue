@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <a-card title="基本信息" :loading="loading">
-      <a-form ref="formRef" :model="form" :rules="rules" layout="vertical" @submit="handleSubmit">
+      <a-form ref="formRef" :model="form" :rules="rules" layout="vertical" @submit-success="handleSubmit">
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <a-form-item field="avatar_url" label="头像" class="col-span-full">
             <div class="flex items-center space-x-4">
@@ -196,9 +196,6 @@ const resetForm = (): void => {
 }
 
 const handleSubmit = async (): Promise<void> => {
-  const valid = await formRef.value?.validate()
-  if (!valid) return
-
   const userId = userStore.userInfo?.id
   if (!userId) {
     Message.error('未获取到用户信息')

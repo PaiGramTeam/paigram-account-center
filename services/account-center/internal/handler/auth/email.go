@@ -48,22 +48,6 @@ var errRefreshTokenRotated = errors.New("refresh token already rotated")
 //	500: authErrorResponse
 //
 // RegisterEmail handles registration via email + password.
-//
-// KNOWN GAP (tracked as a security follow-up): this handler stores a
-// hashed verification token on the user_emails row but does NOT
-// dispatch the verification email containing the plaintext token. The
-// emailService.SendVerificationEmail method exists
-// (internal/email/email.go) but no caller wires it into the
-// registration flow. Until that wiring lands:
-//   - users registered through this endpoint cannot self-verify;
-//   - operators who set auth.require_verified_email_login=true will
-//     lock new users out of login because no plaintext token ever
-//     leaves the server. config.warnIfVerificationEmailDispatchMissing
-//     emits a startup warning when this combination is detected.
-//
-// Do NOT plug the gap by re-introducing the V14 response leak — the
-// token must arrive only via email so it proves ownership of the
-// address.
 func (h *Handler) RegisterEmail(c *gin.Context) {
 	var req RegisterEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -183,21 +167,19 @@ func (h *Handler) RegisterEmail(c *gin.Context) {
 		return
 	}
 
-	// V14 + KNOWN-GAP: the verification token's plaintext is no longer
-	// returned in this response. The intended dispatch path is
-	// h.emailService.SendVerificationEmail(ctx, email, verificationToken,
-	// h.frontendCfg.BaseURL) — but that wiring does not exist yet (see
-	// the package-level note above RegisterEmail). Until it lands, a
-	// freshly registered user has NO way to obtain the plaintext
-	// verification token, and operators who set
-	// auth.require_verified_email_login = true will lock new users out
-	// of login. config.warnIfVerificationEmailDispatchMissing emits a
-	// startup warning when this combination is detected. Tracked as a
-	// follow-up; do NOT silently re-add the response leak as a
-	// workaround.
-	_ = verificationToken     // surfaced via the email path once wired
-	_ = verificationTokenHash // already persisted on emailRecord above
-	_ = verificationExpiry    // already persisted on emailRecord above
+	if h.cfg.RequireEmailVerificationLogin {
+		baseURL := strings.TrimRight(strings.TrimSpace(h.frontendCfg.BaseURL), "/")
+		if baseURL == "" {
+			logging.Error("frontend.base_url is not configured; suppressing verification email",
+				zap.Uint64("user_id", user.ID),
+			)
+		} else if err := h.dispatchVerificationEmail(c.Request.Context(), email, verificationToken, baseURL); err != nil {
+			logging.Error("failed to dispatch verification email",
+				zap.Error(err),
+				zap.Uint64("user_id", user.ID),
+			)
+		}
+	}
 
 	// V14: do NOT include the verification token or its expiry in the
 	// HTTP response. The token must reach the user only through the
@@ -208,6 +190,16 @@ func (h *Handler) RegisterEmail(c *gin.Context) {
 		"requires_email_verification": h.cfg.RequireEmailVerificationLogin,
 	}
 	response.Created(c, responseData)
+}
+
+func (h *Handler) dispatchVerificationEmail(ctx context.Context, to, token, baseURL string) error {
+	if h.sendVerificationEmail != nil {
+		return h.sendVerificationEmail(ctx, to, token, baseURL)
+	}
+	if h.emailService == nil {
+		return errors.New("email service is not configured")
+	}
+	return h.emailService.SendVerificationEmail(ctx, to, token, baseURL)
 }
 
 // swagger:route POST /api/v1/auth/login auth loginEmail

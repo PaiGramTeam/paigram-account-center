@@ -1,6 +1,14 @@
 import { defineStore } from 'pinia'
 import type { UserInfo } from '../api/types'
 
+type RemoteLogout = (token: string) => Promise<void>
+
+let remoteLogout: RemoteLogout | undefined
+
+export function configureUserLogout(handler: RemoteLogout): void {
+  remoteLogout = handler
+}
+
 export interface UserState {
   userInfo: UserInfo | null
   token: string
@@ -43,24 +51,15 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    async login(loginForm: { email: string; password: string }) {
-      this.setToken('mock-token', 'mock-refresh-token')
-      this.setUserInfo({
-        id: 1,
-        display_name: '用户昵称',
-        primary_email: loginForm.email,
-        avatar_url: '',
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        roles: ['user'],
-        permissions: ['read'],
-      })
-    },
-
     async logout() {
-      // TODO: Call the logout API.
-      this.reset()
+      const accessToken = this.token
+      try {
+        if (accessToken && remoteLogout) {
+          await remoteLogout(accessToken)
+        }
+      } finally {
+        this.reset()
+      }
     },
 
     async fetchUserInfo() {

@@ -49,14 +49,6 @@
         </template>
       </a-dropdown>
 
-      <a-badge :count="9" dot>
-        <a-button type="text">
-          <template #icon>
-            <icon-notification />
-          </template>
-        </a-button>
-      </a-badge>
-
       <a-dropdown trigger="click" @select="handleUserMenuClick">
         <div class="flex cursor-pointer items-center rounded px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800">
           <a-avatar :size="32" class="mr-2">
@@ -99,7 +91,6 @@ import {
   IconSun,
   IconMoon,
   IconComputer,
-  IconNotification,
   IconUser,
   IconSettings,
   IconExport,

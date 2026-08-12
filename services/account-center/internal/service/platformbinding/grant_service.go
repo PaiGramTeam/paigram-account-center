@@ -3,8 +3,11 @@ package platformbinding
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,6 +15,22 @@ import (
 	"paigram/internal/model"
 	serviceaudit "paigram/internal/service/audit"
 )
+
+var defaultConsumerActions = []string{
+	"mihomo.authkey.issue",
+	"mihomo.credential.read_meta",
+	"mihomo.device.update",
+	"mihomo.profile.read",
+	"mihomo.status.read",
+}
+
+var delegatableActions = map[string]struct{}{
+	"mihomo.authkey.issue":        {},
+	"mihomo.credential.read_meta": {},
+	"mihomo.device.update":        {},
+	"mihomo.profile.read":         {},
+	"mihomo.status.read":          {},
+}
 
 type GrantService struct {
 	db          *gorm.DB
@@ -29,7 +48,15 @@ func NewGrantService(db *gorm.DB, dependencies ...any) *GrantService {
 }
 
 func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant, bool, error) {
-	if err := validateConsumer(input.Consumer); err != nil {
+	if err := s.validateConsumer(input.Consumer); err != nil {
+		return nil, false, err
+	}
+	actions, err := normalizeGrantActions(input.Actions)
+	if err != nil {
+		return nil, false, err
+	}
+	actionsJSON, err := json.Marshal(actions)
+	if err != nil {
 		return nil, false, err
 	}
 
@@ -53,12 +80,13 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 			}
 
 			grant = model.ConsumerGrant{
-				BindingID:  input.BindingID,
-				Consumer:   input.Consumer,
-				Status:     model.ConsumerGrantStatusActive,
-				ScopesJSON: "[]",
-				GrantedBy:  input.GrantedBy,
-				GrantedAt:  grantedAt,
+				BindingID:     input.BindingID,
+				Consumer:      input.Consumer,
+				Status:        model.ConsumerGrantStatusActive,
+				ScopesJSON:    string(actionsJSON),
+				TicketVersion: 1,
+				GrantedBy:     input.GrantedBy,
+				GrantedAt:     grantedAt,
 			}
 			created = true
 			if err := tx.Create(&grant).Error; err != nil {
@@ -68,6 +96,13 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 		}
 
 		grant.Status = model.ConsumerGrantStatusActive
+		if grant.ScopesJSON != string(actionsJSON) {
+			grant.TicketVersion = nextTicketVersion(grant.TicketVersion)
+		}
+		if grant.TicketVersion == 0 {
+			grant.TicketVersion = 1
+		}
+		grant.ScopesJSON = string(actionsJSON)
 		grant.GrantedBy = input.GrantedBy
 		grant.GrantedAt = grantedAt
 		grant.RevokedAt = sql.NullTime{}
@@ -83,8 +118,40 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 	return &grant, created, nil
 }
 
+func normalizeGrantActions(actions []string) ([]string, error) {
+	if len(actions) == 0 {
+		return slices.Clone(defaultConsumerActions), nil
+	}
+
+	normalized := make([]string, 0, len(actions))
+	seen := make(map[string]struct{}, len(actions))
+	for _, action := range actions {
+		action = strings.TrimSpace(action)
+		if _, allowed := delegatableActions[action]; !allowed {
+			return nil, ErrGrantActionNotAllowed
+		}
+		if _, exists := seen[action]; exists {
+			continue
+		}
+		seen[action] = struct{}{}
+		normalized = append(normalized, action)
+	}
+	if len(normalized) == 0 {
+		return nil, ErrGrantActionNotAllowed
+	}
+	slices.Sort(normalized)
+	return normalized, nil
+}
+
+func nextTicketVersion(current uint64) uint64 {
+	if current == 0 {
+		return 1
+	}
+	return current + 1
+}
+
 func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant, error) {
-	if err := validateConsumer(input.Consumer); err != nil {
+	if err := s.validateConsumer(input.Consumer); err != nil {
 		return nil, err
 	}
 	ctx := input.Context
@@ -293,9 +360,17 @@ func (s *GrantService) invalidateGrant(ctx context.Context, binding *model.Platf
 	})
 }
 
-func validateConsumer(consumer string) error {
+func (s *GrantService) validateConsumer(consumer string) error {
 	for _, supportedConsumer := range SupportedConsumers {
 		if consumer == supportedConsumer {
+			return nil
+		}
+	}
+	if s != nil && s.db != nil {
+		var count int64
+		if err := s.db.Model(&model.ServiceCredential{}).
+			Where("client_id = ? AND status = ?", consumer, model.ServiceCredentialStatusActive).
+			Count(&count).Error; err == nil && count == 1 {
 			return nil
 		}
 	}
@@ -331,7 +406,9 @@ func writeGrantAudit(tx *gorm.DB, binding *model.PlatformAccountBinding, binding
 }
 
 func writeGrantAuditBestEffort(tx *gorm.DB, binding *model.PlatformAccountBinding, bindingID uint64, consumer string, actorUserID *uint64, enabled bool, idempotent bool) {
-	_ = writeGrantAudit(tx, binding, bindingID, consumer, actorUserID, enabled, idempotent)
+	_ = tx.Transaction(func(nested *gorm.DB) error {
+		return writeGrantAudit(nested, binding, bindingID, consumer, actorUserID, enabled, idempotent)
+	})
 }
 
 func auditActorUserID(value sql.NullInt64) *uint64 {

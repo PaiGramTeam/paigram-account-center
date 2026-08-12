@@ -89,7 +89,6 @@
 </template>
 
 <script setup lang="ts">
-import { Message } from '@arco-design/web-vue'
 import {
   IconUser,
   IconIdcard,
@@ -127,7 +126,7 @@ const props = withDefaults(defineProps<Props>(), {
   hoverable: true,
   canView: true,
   canEdit: true,
-  canMessage: true,
+  canMessage: false,
   canBlock: true,
   avatarSize: 64,
   cardClass: '',
@@ -193,7 +192,6 @@ const handleEdit = () => {
 
 const handleMessage = () => {
   emit('message', props.user)
-  Message.info('消息功能开发中...')
 }
 
 const handleBlock = () => {

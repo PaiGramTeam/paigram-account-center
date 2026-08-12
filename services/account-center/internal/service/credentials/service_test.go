@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -9,6 +10,47 @@ import (
 
 	"paigram/internal/model"
 )
+
+func TestCreateRegistersMissingLogicalBot(t *testing.T) {
+	db := setupCredentialsTestDB(t)
+	svc := NewService(db)
+
+	result, err := svc.Create(CreateInput{
+		ClientID:    "telegram-service",
+		BotID:       "paigram",
+		DisplayName: "Telegram adapter",
+		OwnerUserID: 42,
+		Audiences:   []string{"paigram-account-center"},
+		Scopes:      []string{"platform.binding.read"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "paigram", result.View.BotID)
+
+	var bot model.Bot
+	require.NoError(t, db.WithContext(context.Background()).First(&bot, "id = ?", "paigram").Error)
+	assert.Equal(t, "paigram", bot.DisplayName)
+	assert.Equal(t, "SERVICE", bot.Type)
+	assert.Equal(t, "ACTIVE", bot.Status)
+	assert.Equal(t, uint64(42), bot.OwnerUserID)
+}
+
+func TestCreateReturnsConflictForDuplicateClientID(t *testing.T) {
+	db := setupCredentialsTestDB(t)
+	svc := NewService(db)
+	input := CreateInput{
+		ClientID:    "telegram-service",
+		BotID:       "paigram",
+		DisplayName: "Telegram adapter",
+		OwnerUserID: 42,
+		Audiences:   []string{"paigram-account-center"},
+		Scopes:      []string{"platform.binding.read"},
+	}
+
+	_, err := svc.Create(input)
+	require.NoError(t, err)
+	_, err = svc.Create(input)
+	require.ErrorIs(t, err, ErrCredentialConflict)
+}
 
 // TestVerifySecret_InvokesBcryptOnAllPaths is a contract test for the
 // timing-attack mitigation: VerifySecret MUST invoke bcrypt comparison

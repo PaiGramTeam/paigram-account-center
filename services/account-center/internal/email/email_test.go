@@ -2,6 +2,7 @@ package email
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,27 @@ import (
 
 	"paigram/internal/config"
 )
+
+func TestSendVerificationEmailIncludesEmailAndEscapedToken(t *testing.T) {
+	svc, err := NewService(config.EmailConfig{Enabled: false})
+	require.NoError(t, err)
+	mock := &mockSender{}
+	svc.cfg.Enabled = true
+	svc.sender = mock
+	svc.rateLimiter = &NoopRateLimiter{}
+
+	err = svc.SendVerificationEmail(
+		context.Background(),
+		"user+alerts@example.com",
+		"token/with+symbols=",
+		"https://app.example.com",
+	)
+	require.NoError(t, err)
+	require.Len(t, mock.calls, 1)
+	assert.True(t, strings.Contains(mock.calls[0].TextBody,
+		"https://app.example.com/verify-email?email=user%2Balerts%40example.com&token=token%2Fwith%2Bsymbols%3D"),
+	)
+}
 
 // mockSender is a mock email sender for testing
 type mockSender struct {

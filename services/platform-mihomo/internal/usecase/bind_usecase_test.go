@@ -12,6 +12,7 @@ import (
 	"platform-mihomo-service/internal/biz"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
+	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
 )
 
 func TestBindCredentialPersistsCredentialDeviceAndProfiles(t *testing.T) {
@@ -571,7 +572,7 @@ type bindUsecaseTestHarness struct {
 }
 
 func newBindUsecaseForTest() *bindUsecaseTestHarness {
-	return newBindUsecaseForTestWithClient(platformmihomo.StubClient{})
+	return newBindUsecaseForTestWithClient(mihomostub.Client{})
 }
 
 func newBindUsecaseForTestWithClient(client platformmihomo.Client) *bindUsecaseTestHarness {

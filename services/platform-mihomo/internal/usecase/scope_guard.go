@@ -7,16 +7,16 @@ var ErrBindingScopeDenied = errors.New("binding is outside ticket scope")
 var ErrProfileScopeDenied = errors.New("profile is outside ticket scope")
 
 const (
-	ActionStatusRead       = "mihomo.status.read"
-	ActionProfileRead      = "mihomo.profile.read"
-	ActionProfileWrite     = "mihomo.profile.write"
-	ActionAuthKeyIssue     = "mihomo.authkey.issue"
-	ActionCredentialBind   = "mihomo.credential.bind"
-	ActionDeviceUpdate     = "mihomo.device.update"
-	ActionCredentialRead   = "mihomo.credential.read_meta"
-	ActionCredentialUpdate = "mihomo.credential.update"
+	ActionStatusRead        = "mihomo.status.read"
+	ActionProfileRead       = "mihomo.profile.read"
+	ActionProfileWrite      = "mihomo.profile.write"
+	ActionAuthKeyIssue      = "mihomo.authkey.issue"
+	ActionCredentialBind    = "mihomo.credential.bind"
+	ActionDeviceUpdate      = "mihomo.device.update"
+	ActionCredentialRead    = "mihomo.credential.read_meta"
+	ActionCredentialUpdate  = "mihomo.credential.update"
 	ActionCredentialRefresh = "mihomo.credential.refresh"
-	ActionCredentialDelete = "mihomo.credential.delete"
+	ActionCredentialDelete  = "mihomo.credential.delete"
 )
 
 type ScopeGuard struct {

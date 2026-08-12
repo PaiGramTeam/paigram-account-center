@@ -20,3 +20,8 @@ security:
     -----BEGIN PUBLIC KEY-----
     MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     -----END PUBLIC KEY-----
+upstream:
+  base_url: "https://mihomo-upstream.internal"
+  timeout_seconds: 10
+  bearer_token_file: "/run/secrets/mihomo_upstream_token"
+  allow_insecure_http: false

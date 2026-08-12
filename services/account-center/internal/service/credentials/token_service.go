@@ -19,12 +19,8 @@ const (
 	minSigningKeyBytes           = 32
 )
 
-// TokenServiceConfig configures the HS256 token issuer / verifier.
-//
-// SigningKey is the deployment-wide SHARED_TICKET_KEY (Path D §1.4): it
-// signs every OAuth access token AND every per-Dispatch service ticket.
-// The two contexts are kept distinct by their iss claim (account-center
-// vs paigram-platform-telegram) — see §1.5.
+// TokenServiceConfig configures the HS256 OAuth access-token issuer and verifier.
+// Service tickets use a separate Ed25519 key pair and token profile.
 type TokenServiceConfig struct {
 	Issuer                string
 	AccessTokenTTLSeconds int
@@ -57,10 +53,11 @@ type IssuedToken struct {
 	Scope       string `json:"scope"`
 }
 
-// AccessClaims is the on-the-wire HS256 JWT payload, per Path D §1.3 +
-// RFC 7519 + RFC 8693 §4.2 (scope as space-delimited string).
+// AccessClaims is the on-the-wire HS256 JWT payload. Scope uses the
+// space-delimited OAuth representation defined by RFC 6749.
 type AccessClaims struct {
 	ClientID string `json:"client_id"`
+	BotID    string `json:"bot_id"`
 	Scope    string `json:"scope"`
 	jwt.RegisteredClaims
 }
@@ -76,10 +73,8 @@ func (c *AccessClaims) ScopeList() []string {
 
 // NewTokenService wires the issuer/verifier against a credentials service
 // and an HS256 signing key. The signing key MUST be ≥ 32 bytes; this
-// constructor rejects a shorter key rather than silently producing
-// signatures that will fail validation later. Mirrors the same guard
-// botaccess.NewTicketService applies for service tickets (Path D §1.4
-// — one shared key signs both surfaces).
+// constructor rejects a shorter key rather than silently weakening the
+// access-token signature.
 func NewTokenService(credentials *Service, cfg TokenServiceConfig) (*TokenService, error) {
 	if len(cfg.SigningKey) < minSigningKeyBytes {
 		return nil, fmt.Errorf(
@@ -102,8 +97,7 @@ func NewTokenService(credentials *Service, cfg TokenServiceConfig) (*TokenServic
 //   - intersect requested scopes with granted scopes;
 //   - mint an HS256 JWT of TTL `cfg.AccessTokenTTLSeconds` (default 1 h).
 //
-// No row is written; tokens are stateless (Path D §1.6). On success
-// last_used_at is best-effort updated.
+// No token row is written. On success last_used_at is best-effort updated.
 func (s *TokenService) IssueClientCredentials(input IssueClientCredentialsInput) (*IssuedToken, error) {
 	if input.ClientID == "" {
 		return nil, ErrEmptyClientID
@@ -135,6 +129,7 @@ func (s *TokenService) IssueClientCredentials(input IssueClientCredentialsInput)
 	scopeStr := strings.Join(resolvedScopes, " ")
 	claims := AccessClaims{
 		ClientID: credential.ClientID,
+		BotID:    credential.BotID,
 		Scope:    scopeStr,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
@@ -165,9 +160,8 @@ func (s *TokenService) IssueClientCredentials(input IssueClientCredentialsInput)
 
 // ValidateAccessToken verifies the HS256 signature, the issuer (must equal
 // cfg.Issuer), the audience (must equal expectedAudience), and the
-// expiry. It then confirms the credential row is still active in the DB
-// (a stale token from a disabled credential MUST be rejected, per Path D
-// §1.6 — revocation = credential disable + bounded token TTL).
+// expiry. It then confirms the credential row is still active in the DB,
+// so disabling a credential immediately rejects its previously issued tokens.
 func (s *TokenService) ValidateAccessToken(raw, expectedAudience string) (*AccessClaims, error) {
 	if expectedAudience == "" {
 		expectedAudience = defaultExpectedAudience
@@ -196,7 +190,7 @@ func (s *TokenService) ValidateAccessToken(raw, expectedAudience string) (*Acces
 		return nil, err
 	}
 	// Defense-in-depth: the JWT's sub must match the credential row.
-	if credential.ClientID != claims.Subject {
+	if credential.ClientID != claims.Subject || credential.BotID != claims.BotID {
 		return nil, jwt.ErrTokenInvalidClaims
 	}
 

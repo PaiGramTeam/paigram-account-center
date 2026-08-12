@@ -30,6 +30,13 @@ export type LoginResponseData = components['schemas']['LoginResponseDataStruct']
 
 export type LoginEmailResponseData = LoginResponseData | LoginChallengeResponseData
 export type LoginResponse = ApiResponse<LoginResponseData>
+export type OAuthCallbackResponse = ApiResponse<components['schemas']['OAuthCallbackResponseDataStruct']>
+
+export type ForgotPasswordRequest =
+  operations['post-api-v1-auth-forgot-password']['requestBody']['content']['application/json']
+
+export type PublicResetPasswordRequest =
+  operations['post-api-v1-auth-reset-password']['requestBody']['content']['application/json']
 export type LoginChallengeResponse = ApiResponse<LoginChallengeResponseData>
 export type LoginEmailResponse = ApiResponse<LoginEmailResponseData>
 

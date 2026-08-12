@@ -396,7 +396,9 @@ func ensureUserOAuthStatesTable(t *testing.T, db *gorm.DB) {
 			code_verifier VARCHAR(255) NULL,
 			client_ip VARCHAR(64) NOT NULL DEFAULT '',
 			user_agent VARCHAR(255) NOT NULL DEFAULT '',
+			metadata JSONB NULL,
 			expires_at TIMESTAMPTZ NOT NULL,
+			consumed_at TIMESTAMPTZ NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			CONSTRAINT uniq_state UNIQUE (state)
 		);

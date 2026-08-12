@@ -57,15 +57,9 @@ auth:
   oauth_state_ttl: 600           # 10 minutes
   service_ticket_ttl: 300        # 5 minutes
   service_ticket_issuer: "paigram-account-center"
-  service_ticket_signing_key: ""    # required in real deployments; inject via secrets/env, not a checked-in sample value
-  # bot_service_audience_allowlist enumerates the audience values that telegram-service
-  # is permitted to issue service tickets for. account-center does not gate ticket
-  # issuance directly (tickets are signed locally by telegram-service with the
-  # shared key above) but logs this list at startup as the operational record.
-  bot_service_audience_allowlist:
-    - paigram-genshin
-    # - paigram-starrail
-    # - paigram-endfield
+  service_ticket_key_id: ""
+  service_ticket_private_key_pem: ""
+  oauth_signing_key: ""
   captcha:
     turnstile:
       enabled: false

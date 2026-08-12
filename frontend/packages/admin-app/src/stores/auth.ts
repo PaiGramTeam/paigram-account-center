@@ -21,6 +21,14 @@ export interface LoginWithEmailResult {
 }
 
 export function resolveAdminPostLoginRoute(permissions: string[]): string {
+  if (permissions.includes('platform_account:list')) {
+    return '/platform-accounts'
+  }
+
+  if (permissions.includes('system:read')) {
+    return '/system/settings'
+  }
+
   if (permissions.includes('user:read')) {
     return '/dashboard'
   }
@@ -33,7 +41,7 @@ export function resolveAdminPostLoginRoute(permissions: string[]): string {
     return '/users/permissions'
   }
 
-  if (permissions.includes('audit:read')) {
+  if (permissions.includes('audit:list') || permissions.includes('audit:read')) {
     return '/system/settings'
   }
 
@@ -72,6 +80,7 @@ export const useAuthStore = defineStore('auth', {
         Message.success('登录成功')
         return { status: 'success' }
       } catch (error: unknown) {
+        userStore.reset()
         Message.error(resolveAuthErrorMessage(error, '登录失败'))
         throw error
       } finally {
@@ -132,6 +141,10 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await authApi.handleOAuthCallback(provider, callbackData)
 
+        if (!response.data.access_token || !response.data.refresh_token || !response.data.user_id) {
+          throw new Error('OAuth login response is incomplete')
+        }
+
         userStore.setAuthData({
           accessToken: response.data.access_token,
           refreshToken: response.data.refresh_token,
@@ -143,6 +156,7 @@ export const useAuthStore = defineStore('auth', {
         Message.success('登录成功')
         return resolveAdminPostLoginRoute(userStore.permissions)
       } catch (error) {
+        userStore.reset()
         console.error('OAuth callback error:', error)
         Message.error(resolveAuthErrorMessage(error, 'OAuth 登录失败'))
         throw error
@@ -155,13 +169,8 @@ export const useAuthStore = defineStore('auth', {
       const userStore = useUserStore()
 
       try {
-        if (userStore.token) {
-          await authApi.logout({ token: userStore.token })
-        }
-      } catch (error) {
-        console.error('Logout error:', error)
+        await userStore.logout()
       } finally {
-        userStore.logout()
         this.loginType = null
       }
     },

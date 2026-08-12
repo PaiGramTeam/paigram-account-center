@@ -26,6 +26,7 @@ import (
 	"paigram/internal/model"
 	"paigram/internal/router"
 	"paigram/internal/sessioncache"
+	"paigram/internal/testutil"
 )
 
 type integrationStack struct {
@@ -78,7 +79,7 @@ func newIntegrationStackWithConfig(t *testing.T, mutate func(*config.Config)) *i
 	rateLimitStore, err := middleware.NewRedisStore(stack.Redis, stack.RedisPrefix+":ratelimit")
 	require.NoError(t, err)
 
-	testCfg := newTestConfig(stack.RedisPrefix)
+	testCfg := newTestConfig(t, stack.RedisPrefix)
 	if mutate != nil {
 		mutate(testCfg)
 	}
@@ -91,7 +92,12 @@ func newIntegrationStackWithConfig(t *testing.T, mutate func(*config.Config)) *i
 	return stack
 }
 
-func newTestConfig(redisPrefix string) *config.Config {
+func newTestConfig(t testing.TB, redisPrefix string) *config.Config {
+	authConfig, _ := testutil.NewAuthConfig(t)
+	authConfig.EmailVerificationTTLSeconds = 86400
+	authConfig.SessionUpdateAgeSeconds = 86400
+	authConfig.SessionFreshAgeSeconds = 300
+	authConfig.RequireEmailVerificationLogin = true
 	return &config.Config{
 		App: config.AppConfig{
 			Name:           "Paigram Integration Test",
@@ -100,17 +106,7 @@ func newTestConfig(redisPrefix string) *config.Config {
 			IPv6Subnet:     64,
 		},
 		OpenAPI: config.OpenAPIConfig{Enabled: true, Path: "/openapi"},
-		Auth: config.AuthConfig{
-			AccessTokenTTLSeconds:         900,
-			RefreshTokenTTLSeconds:        604800,
-			EmailVerificationTTLSeconds:   86400,
-			SessionUpdateAgeSeconds:       86400,
-			SessionFreshAgeSeconds:        300,
-			RequireEmailVerificationLogin: true,
-			ServiceTicketTTLSeconds:       300,
-			ServiceTicketIssuer:           "paigram-account-center",
-			ServiceTicketSigningKey:       "0123456789abcdef0123456789abcdef",
-		},
+		Auth:    authConfig,
 		Redis: config.RedisConfig{
 			Enabled: true,
 			Addr:    testenv.MustShared().RedisAddr,

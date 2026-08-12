@@ -2,7 +2,7 @@
   <div class="p-6">
     <div class="mb-6 flex items-center justify-between">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-white">角色管理</h1>
-      <a-button type="primary" @click="handleCreate">
+      <a-button v-if="hasPermission('role:create')" type="primary" @click="handleCreate">
         <template #icon>
           <icon-plus />
         </template>
@@ -53,13 +53,22 @@
 
         <template #actions="{ record }">
           <a-space>
-            <a-button type="text" size="small" @click="handleEdit(record)">
+            <a-button v-if="hasPermission('role:manage')" type="text" size="small" @click="openAssignments(record)">
+              分配
+            </a-button>
+            <a-button v-if="hasPermission('role:update')" type="text" size="small" @click="handleEdit(record)">
               <template #icon>
                 <icon-edit />
               </template>
               编辑
             </a-button>
-            <a-button type="text" size="small" status="danger" @click="handleDelete(record)">
+            <a-button
+              v-if="hasPermission('role:delete')"
+              type="text"
+              size="small"
+              status="danger"
+              @click="handleDelete(record)"
+            >
               <template #icon>
                 <icon-delete />
               </template>
@@ -93,6 +102,42 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-drawer
+      :visible="assignmentVisible"
+      :width="680"
+      :title="assignmentRole ? `分配：${assignmentRole.display_name}` : '角色分配'"
+      @cancel="assignmentVisible = false"
+    >
+      <a-spin :loading="assignmentLoading" class="w-full">
+        <a-tabs>
+          <a-tab-pane key="permissions" title="权限">
+            <a-checkbox-group v-model="assignedPermissionIds" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <a-checkbox v-for="permission in allPermissions" :key="permission.id" :value="permission.id">
+                <div>
+                  <div class="font-medium">{{ permission.name }}</div>
+                  <div class="text-xs text-gray-500">{{ permission.description || '无描述' }}</div>
+                </div>
+              </a-checkbox>
+            </a-checkbox-group>
+            <a-empty v-if="allPermissions.length === 0" description="暂无权限" />
+          </a-tab-pane>
+          <a-tab-pane key="users" title="用户">
+            <a-select v-model="assignedUserIds" multiple allow-search allow-clear placeholder="请选择此角色的用户">
+              <a-option v-for="user in allUsers" :key="user.id" :value="user.id">
+                {{ user.display_name }} · #{{ user.id }}
+              </a-option>
+            </a-select>
+          </a-tab-pane>
+        </a-tabs>
+      </a-spin>
+      <template #footer>
+        <a-space>
+          <a-button @click="assignmentVisible = false">取消</a-button>
+          <a-button type="primary" :loading="assignmentSaving" @click="saveAssignments">保存分配</a-button>
+        </a-space>
+      </template>
+    </a-drawer>
   </div>
 </template>
 
@@ -100,8 +145,17 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconPlus, IconEdit, IconDelete } from '@arco-design/web-vue/es/icon'
-import { roleApi } from '@/api'
-import type { RoleListItem, CreateRoleRequest, UpdateRoleRequest } from '@paigram/shared-components'
+import { permissionApi, roleApi, userApi } from '@/api'
+import {
+  useUserStore,
+  type CreateRoleRequest,
+  type PermissionListItem,
+  type RoleListItem,
+  type UpdateRoleRequest,
+  type UserListItem,
+} from '@paigram/shared-components'
+
+const userStore = useUserStore()
 
 const columns = [
   {
@@ -155,6 +209,14 @@ const total = ref(0)
 const modalVisible = ref(false)
 const modalMode = ref<'create' | 'edit'>('create')
 const currentEditingRole = ref<RoleListItem | null>(null)
+const assignmentVisible = ref(false)
+const assignmentLoading = ref(false)
+const assignmentSaving = ref(false)
+const assignmentRole = ref<RoleListItem | null>(null)
+const allPermissions = ref<PermissionListItem[]>([])
+const allUsers = ref<UserListItem[]>([])
+const assignedPermissionIds = ref<number[]>([])
+const assignedUserIds = ref<number[]>([])
 
 const formData = reactive({
   name: '',
@@ -170,6 +232,8 @@ const paginationConfig = computed(() => ({
   showPageSize: true,
   pageSizeOptions: [10, 20, 50, 100],
 }))
+
+const hasPermission = (permission: string): boolean => userStore.hasPermission(permission)
 
 const formatDateTime = (dateString: string): string => {
   if (!dateString) return '-'
@@ -285,6 +349,42 @@ const handleModalOk = async (): Promise<void> => {
 
 const handleModalCancel = (): void => {
   modalVisible.value = false
+}
+
+const openAssignments = async (role: RoleListItem): Promise<void> => {
+  assignmentRole.value = role
+  assignmentVisible.value = true
+  assignmentLoading.value = true
+  try {
+    const [catalog, assignedPermissions, users, assignedUsers] = await Promise.all([
+      permissionApi.getList({ page: 1, page_size: 1000 }),
+      roleApi.getPermissions(role.id),
+      userApi.getList({ page: 1, page_size: 100 }),
+      roleApi.getUsers(role.id),
+    ])
+    allPermissions.value = catalog.data
+    assignedPermissionIds.value = (assignedPermissions.data ?? []).map((permission) => permission.id)
+    allUsers.value = users.data
+    assignedUserIds.value = (assignedUsers.data ?? []).map((user) => user.id)
+  } finally {
+    assignmentLoading.value = false
+  }
+}
+
+const saveAssignments = async (): Promise<void> => {
+  if (!assignmentRole.value) return
+  assignmentSaving.value = true
+  try {
+    await Promise.all([
+      roleApi.replacePermissions(assignmentRole.value.id, assignedPermissionIds.value),
+      roleApi.replaceUsers(assignmentRole.value.id, assignedUserIds.value),
+    ])
+    Message.success('角色分配已更新')
+    assignmentVisible.value = false
+    await loadRoleList()
+  } finally {
+    assignmentSaving.value = false
+  }
 }
 
 onMounted(async () => {

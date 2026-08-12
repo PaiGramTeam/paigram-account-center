@@ -104,6 +104,30 @@ func TestListAuthoritiesReturnsCanonicalPaginatedEnvelope(t *testing.T) {
 	assert.Equal(t, float64(1), pagination["total_pages"])
 }
 
+func TestListPermissionsReturnsCompleteCatalog(t *testing.T) {
+	db := setupAuthorityHandlerTestDB(t)
+	require.NoError(t, db.Create(&model.Permission{Name: "user:read", Resource: "user", Action: "read"}).Error)
+	require.NoError(t, db.Create(&model.Permission{Name: "role:update", Resource: "role", Action: "update"}).Error)
+
+	serviceGroup := serviceauthority.NewServiceGroup(db, nil)
+	handler := NewAuthorityHandler(&serviceGroup.AuthorityService)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/permissions", nil)
+
+	handler.ListPermissions(c)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	items, ok := resp.Data.([]any)
+	require.True(t, ok)
+	require.Len(t, items, 2)
+	first, ok := items[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "role:update", first["name"])
+}
+
 func TestCreateAuthorityWritesUnifiedAuditEvent(t *testing.T) {
 	db := setupAuthorityHandlerTestDB(t)
 	serviceGroup := serviceauthority.NewServiceGroup(db, nil)

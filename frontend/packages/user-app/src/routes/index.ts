@@ -27,6 +27,12 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { locale: 'common.forgotPassword', requiresAuth: false, hideInMenu: true },
   },
   {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: () => import('@/pages/auth/reset-password.vue'),
+    meta: { locale: 'common.resetPassword', requiresAuth: false, hideInMenu: true },
+  },
+  {
     path: '/verify-email',
     name: 'VerifyEmail',
     component: () => import('@/pages/auth/verify-email.vue'),
@@ -129,8 +135,21 @@ export const asyncRoutes: RouteRecordRaw[] = [
       {
         path: 'security',
         name: 'SecuritySettings',
-        component: () => import('@/pages/settings/security.vue'),
+        redirect: { name: 'AccountSecurity' },
         meta: { locale: 'menu.settings.security', requiresAuth: true },
+      },
+    ],
+  },
+  {
+    path: '/platform-accounts',
+    name: 'PlatformAccounts',
+    component: () => import('@/layouts/index.vue'),
+    children: [
+      {
+        path: '',
+        name: 'PlatformAccountList',
+        component: () => import('@/pages/platform-accounts/index.vue'),
+        meta: { locale: 'menu.platformAccounts', icon: 'icon-cloud', requiresAuth: true },
       },
     ],
   },

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
@@ -113,6 +114,10 @@ func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {
 				Dsn: "postgres://platform_mihomo:password@127.0.0.1:5432/platform_mihomo?sslmode=disable",
 			},
 		},
+		Upstream: &conf.Upstream{
+			BaseUrl:        "https://mihomo-upstream.internal",
+			TimeoutSeconds: 10,
+		},
 		Security: &conf.Security{
 			CredentialEncryptionKey:   "0123456789abcdef0123456789abcdef",
 			ServiceTicketIssuer:       "paigram-account-center",
@@ -132,18 +137,23 @@ func TestNewTicketVerifierFromSecurityUsesConfiguredEd25519PublicKeyAndKID(t *te
 		t.Fatalf("newTicketVerifierFromSecurity() error = %v", err)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{
+	now := time.Now()
+	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, jwt.MapClaims{
 		"iss":           "paigram-account-center",
+		"sub":           "user:1",
 		"aud":           []string{"platform-mihomo-service"},
-		"actor_type":    "bot",
-		"actor_id":      "bot-paigram",
+		"actor_type":    "user",
+		"actor_id":      "user-paigram",
 		"owner_user_id": float64(1),
 		"binding_id":    float64(101),
 		"platform":      "mihomo",
-		"exp":           time.Now().Add(time.Minute).Unix(),
+		"iat":           now.Unix(),
+		"nbf":           now.Add(-time.Second).Unix(),
+		"exp":           now.Add(time.Minute).Unix(),
+		"jti":           "main-test-ticket",
 	})
 	token.Header["kid"] = mainTestServiceTicketKeyID
-	token.Header["typ"] = "service_ticket"
+	token.Header["typ"] = contractticket.TypeControl
 	signed, err := token.SignedString(mainTestServiceTicketPrivateKey)
 	if err != nil {
 		t.Fatalf("SignedString() error = %v", err)

@@ -2,10 +2,9 @@
   <MainLayout
     :menu-items="menuItems"
     :show-sidebar="true"
-    :show-search="true"
+    :show-search="false"
     :show-breadcrumb="true"
     :show-footer="true"
-    @search="handleSearch"
   />
 </template>
 
@@ -50,10 +49,5 @@ function generateMenuFromRoutes(routes: (RouteRecordNormalized | RouteRecordRaw)
   })
 
   return menu.sort((a, b) => (a.meta.sort || 0) - (b.meta.sort || 0))
-}
-
-const handleSearch = (value: string) => {
-  console.log('Search:', value)
-  // TODO: Implement search.
 }
 </script>

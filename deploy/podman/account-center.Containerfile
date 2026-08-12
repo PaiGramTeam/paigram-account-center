@@ -4,11 +4,13 @@ WORKDIR /src
 
 COPY go.work go.work.sum ./
 COPY contracts/gen/go/go.mod contracts/gen/go/go.sum contracts/gen/go/
+COPY contracts/runtime/go/go.mod contracts/runtime/go/go.sum contracts/runtime/go/
 COPY services/account-center/go.mod services/account-center/go.sum services/account-center/
 COPY services/platform-mihomo/go.mod services/platform-mihomo/go.sum services/platform-mihomo/
 RUN cd services/account-center && go mod download
 
 COPY contracts/gen/go/ contracts/gen/go/
+COPY contracts/runtime/go/ contracts/runtime/go/
 COPY services/account-center/ services/account-center/
 RUN cd services/account-center \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/paigram ./cmd/paigram

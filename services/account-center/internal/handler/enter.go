@@ -103,13 +103,11 @@ func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.A
 	service.ServiceGroupApp.BotRouteGroup = *serviceBotRoute.NewServiceGroup(db, nil)
 	service.ServiceGroupApp.LoginRiskServiceGroup = *serviceLoginRisk.NewServiceGroup(db)
 	service.ServiceGroupApp.GeolocationServiceGroup = *serviceGeolocation.NewServiceGroup()
-	// Credentials service group: HS256 OAuth registry + token service.
-	// The signing key is the deployment-wide SHARED_TICKET_KEY (Path D §1.4),
-	// reused across access-token issuance and per-Dispatch service tickets.
+	// OAuth access tokens use a key that is isolated from platform service tickets.
 	credentialsGroup, err := serviceCredentials.NewServiceGroup(db, serviceCredentials.TokenServiceConfig{
 		Issuer:                authCfg.OAuthIssuer,
 		AccessTokenTTLSeconds: authCfg.OAuthAccessTokenTTLSeconds,
-		SigningKey:            []byte(authCfg.ServiceTicketSigningKey),
+		SigningKey:            []byte(authCfg.OAuthSigningKey),
 	})
 	if err != nil {
 		return err

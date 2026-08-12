@@ -104,18 +104,16 @@ class ListAccessibleBindingsResponse(_message.Message):
     def __init__(self, bindings: _Optional[_Iterable[_Union[PlatformAccountBinding, _Mapping]]] = ...) -> None: ...
 
 class IssueServiceTicketRequest(_message.Message):
-    __slots__ = ("external_user_id", "binding_id", "requested_scopes", "audience", "profile_id")
+    __slots__ = ("external_user_id", "binding_id", "requested_scopes", "profile_id")
     EXTERNAL_USER_ID_FIELD_NUMBER: _ClassVar[int]
     BINDING_ID_FIELD_NUMBER: _ClassVar[int]
     REQUESTED_SCOPES_FIELD_NUMBER: _ClassVar[int]
-    AUDIENCE_FIELD_NUMBER: _ClassVar[int]
     PROFILE_ID_FIELD_NUMBER: _ClassVar[int]
     external_user_id: str
     binding_id: int
     requested_scopes: _containers.RepeatedScalarFieldContainer[str]
-    audience: str
     profile_id: int
-    def __init__(self, external_user_id: _Optional[str] = ..., binding_id: _Optional[int] = ..., requested_scopes: _Optional[_Iterable[str]] = ..., audience: _Optional[str] = ..., profile_id: _Optional[int] = ...) -> None: ...
+    def __init__(self, external_user_id: _Optional[str] = ..., binding_id: _Optional[int] = ..., requested_scopes: _Optional[_Iterable[str]] = ..., profile_id: _Optional[int] = ...) -> None: ...
 
 class IssueServiceTicketResponse(_message.Message):
     __slots__ = ("ticket", "audience", "expires_at", "binding")

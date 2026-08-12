@@ -1,0 +1,23 @@
+server:
+  grpc:
+    network: tcp
+    addr: "0.0.0.0:9000"
+    timeout_seconds: 5
+data:
+  database:
+    dsn: "${PLATFORM_DATABASE_DSN}"
+  redis:
+    addr: "${PLATFORM_REDIS_ADDR:platform-redis:6379}"
+    password: "${PLATFORM_REDIS_PASSWORD}"
+    db: 0
+    prefix: "platform-mihomo:"
+security:
+  credential_encryption_key: "${PLATFORM_CREDENTIAL_ENCRYPTION_KEY}"
+  service_ticket_issuer: paigram-account-center
+  service_ticket_key_id: account-center-ed25519-2026-01
+  service_ticket_public_key_pem: "${SERVICE_TICKET_PUBLIC_KEY_PEM}"
+upstream:
+  base_url: "${MIHOMO_UPSTREAM_BASE_URL}"
+  timeout_seconds: 10
+  bearer_token_file: "${MIHOMO_UPSTREAM_BEARER_TOKEN_FILE:}"
+  allow_insecure_http: false

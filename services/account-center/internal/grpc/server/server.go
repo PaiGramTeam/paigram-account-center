@@ -38,17 +38,12 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 		return nil, fmt.Errorf("grpc config is required")
 	}
 
-	// Path D §1.4: a single HS256 SHARED_TICKET_KEY signs both OAuth
-	// access tokens and per-Dispatch service tickets. Construct one
-	// credentials service group here so the same configuration drives
-	// both the gRPC auth interceptor (validation) and the /oauth/token
-	// REST handler (issuance, wired up via handler.InitializeApiGroups).
-	signingKey := []byte(cfg.Auth.ServiceTicketSigningKey)
+	// OAuth access tokens and platform service tickets use independent keys.
 	credentialsRegistry := credentials.NewService(db)
 	tokenSvc, err := credentials.NewTokenService(credentialsRegistry, credentials.TokenServiceConfig{
 		Issuer:                cfg.Auth.OAuthIssuer,
 		AccessTokenTTLSeconds: cfg.Auth.OAuthAccessTokenTTLSeconds,
-		SigningKey:            signingKey,
+		SigningKey:            []byte(cfg.Auth.OAuthSigningKey),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("init oauth token service: %w", err)
@@ -70,7 +65,7 @@ func NewGRPCServer(port int, db *gorm.DB, redisClient *redis.Client, cfg *config
 
 	server := grpc.NewServer(opts...)
 
-	botAccessGroup, err := botaccess.NewServiceGroup(db, cfg.Auth, signingKey)
+	botAccessGroup, err := botaccess.NewServiceGroup(db, cfg.Auth)
 	if err != nil {
 		return nil, fmt.Errorf("init bot access services: %w", err)
 	}

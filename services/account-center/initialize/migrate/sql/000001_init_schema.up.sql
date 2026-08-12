@@ -308,6 +308,7 @@ CREATE INDEX idx_bot_identities_deleted_at ON bot_identities (deleted_at);
 
 CREATE TABLE service_credentials (
     client_id VARCHAR(96) PRIMARY KEY,
+    bot_id VARCHAR(64) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     secret_hash VARCHAR(255) NOT NULL,
     audiences JSONB NOT NULL,
@@ -319,10 +320,12 @@ CREATE TABLE service_credentials (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ,
-    CONSTRAINT fk_service_credentials_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE
+    CONSTRAINT fk_service_credentials_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_service_credentials_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 CREATE INDEX idx_service_credentials_status ON service_credentials (status);
 CREATE INDEX idx_service_credentials_owner ON service_credentials (owner_user_id);
+CREATE INDEX idx_service_credentials_bot ON service_credentials (bot_id);
 CREATE INDEX idx_service_credentials_deleted_at ON service_credentials (deleted_at);
 
 CREATE TABLE platform_services (

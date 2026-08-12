@@ -303,6 +303,13 @@ func (s *AuthorityService) GetRolePermissions(roleID uint) ([]model.Permission, 
 	return permissions, err
 }
 
+// ListPermissions returns the complete assignable permission catalog.
+func (s *AuthorityService) ListPermissions() ([]model.Permission, error) {
+	var permissions []model.Permission
+	err := s.db.Order("name ASC").Find(&permissions).Error
+	return permissions, err
+}
+
 func (s *AuthorityService) loadRolePermissionIDs(roleID uint) ([]uint64, error) {
 	var role model.Role
 	if err := s.db.Select("id").First(&role, uint64(roleID)).Error; err != nil {

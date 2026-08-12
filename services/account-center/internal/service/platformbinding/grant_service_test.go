@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"paigram/internal/model"
+	servicecredentials "paigram/internal/service/credentials"
 )
 
 func TestListGrantsPaginatesResults(t *testing.T) {
@@ -86,7 +87,82 @@ func TestGrantServiceSupportsRegistryConsumers(t *testing.T) {
 		assert.Equal(t, consumer, grant.Consumer)
 		assert.Equal(t, model.ConsumerGrantStatusActive, grant.Status)
 		assert.False(t, grant.RevokedAt.Valid)
+		var actions []string
+		require.NoError(t, json.Unmarshal([]byte(grant.ScopesJSON), &actions))
+		assert.Equal(t, defaultConsumerActions, actions)
 	}
+}
+
+func TestGrantServiceSupportsRegisteredCredentialConsumer(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	binding := seedGrantServiceBinding(t, db, "cn:registered-consumer")
+	require.NoError(t, db.Create(&model.Bot{
+		ID:          "paigram",
+		DisplayName: "PaiGram",
+		Type:        "SERVICE",
+		Status:      "ACTIVE",
+		OwnerUserID: binding.OwnerUserID,
+	}).Error)
+	_, err := servicecredentials.NewService(db).Create(servicecredentials.CreateInput{
+		ClientID:    "telegram-service",
+		BotID:       "paigram",
+		DisplayName: "Telegram Service",
+		OwnerUserID: binding.OwnerUserID,
+		Audiences:   []string{"account-center"},
+		Scopes:      []string{"bot.access.issue_ticket"},
+	})
+	require.NoError(t, err)
+
+	grant, created, err := NewGrantService(db).UpsertGrant(UpsertGrantInput{
+		BindingID: binding.ID,
+		Consumer:  "telegram-service",
+	})
+
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, "telegram-service", grant.Consumer)
+}
+
+func TestGrantServiceRejectsControlPlaneAction(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	service := NewGrantService(db)
+	binding := seedGrantServiceBinding(t, db, "cn:grant-control-action")
+
+	grant, created, err := service.UpsertGrant(UpsertGrantInput{
+		BindingID: binding.ID,
+		Consumer:  ConsumerPaiGramBot,
+		Actions:   []string{"mihomo.credential.bind"},
+	})
+
+	require.ErrorIs(t, err, ErrGrantActionNotAllowed)
+	assert.Nil(t, grant)
+	assert.False(t, created)
+}
+
+func TestGrantServiceNormalizesActionsAndIncrementsVersionOnChange(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	service := NewGrantService(db)
+	binding := seedGrantServiceBinding(t, db, "cn:grant-action-version")
+
+	grant, created, err := service.UpsertGrant(UpsertGrantInput{
+		BindingID: binding.ID,
+		Consumer:  ConsumerPaiGramBot,
+		Actions:   []string{"mihomo.status.read", "mihomo.profile.read", "mihomo.status.read"},
+	})
+	require.NoError(t, err)
+	require.True(t, created)
+	require.Equal(t, uint64(1), grant.TicketVersion)
+	require.JSONEq(t, `["mihomo.profile.read","mihomo.status.read"]`, grant.ScopesJSON)
+
+	updated, created, err := service.UpsertGrant(UpsertGrantInput{
+		BindingID: binding.ID,
+		Consumer:  ConsumerPaiGramBot,
+		Actions:   []string{"mihomo.status.read"},
+	})
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Equal(t, uint64(2), updated.TicketVersion)
+	require.JSONEq(t, `["mihomo.status.read"]`, updated.ScopesJSON)
 }
 
 func TestGrantServiceUpsertRejectsUnsupportedConsumer(t *testing.T) {
@@ -230,7 +306,7 @@ func TestGrantServiceUpsertGrantReactivationPreservesTicketVersion(t *testing.T)
 		BindingID:         binding.ID,
 		Consumer:          ConsumerPaiGramBot,
 		Status:            model.ConsumerGrantStatusRevoked,
-		ScopesJSON:        "[]",
+		ScopesJSON:        `["mihomo.authkey.issue","mihomo.credential.read_meta","mihomo.device.update","mihomo.profile.read","mihomo.status.read"]`,
 		TicketVersion:     4,
 		GrantedAt:         time.Now().UTC(),
 		RevokedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},
@@ -365,7 +441,16 @@ func TestGrantServiceRevokeGrantAuditFailureIsBestEffort(t *testing.T) {
 		TicketVersion: 1,
 		GrantedAt:     time.Now().UTC(),
 	}).Error)
-	require.NoError(t, db.Exec("CREATE TRIGGER audit_events_fail_before_insert BEFORE INSERT ON audit_events FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'audit disabled'").Error)
+	require.NoError(t, db.Exec(`
+		CREATE FUNCTION fail_audit_event_insert() RETURNS trigger AS $$
+		BEGIN
+			RAISE EXCEPTION 'audit disabled';
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER audit_events_fail_before_insert
+		BEFORE INSERT ON audit_events
+		FOR EACH ROW EXECUTE FUNCTION fail_audit_event_insert();
+	`).Error)
 
 	grant, err := service.RevokeGrant(RevokeGrantInput{
 		BindingID: binding.ID,

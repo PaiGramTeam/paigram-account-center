@@ -4,7 +4,7 @@
       <div v-if="loading" class="space-y-4">
         <a-spin size="large" />
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white">正在处理授权...</h2>
-        <p class="text-sm text-gray-600 dark:text-gray-400">请稍候，我们正在完成 {{ providerName }} 登录</p>
+        <p class="text-sm text-gray-600 dark:text-gray-400">请稍候，我们正在完成 {{ providerName }} 授权</p>
       </div>
 
       <div v-else-if="error" class="space-y-4">
@@ -100,9 +100,12 @@ const handleCallback = async (): Promise<void> => {
       state: state as string,
     }
 
-    await authStore.handleOAuthCallback(provider, callbackData)
+    const bindMarker = sessionStorage.getItem(`oauth-bind:${state as string}`)
+    const purpose = bindMarker === provider ? 'bind' : 'login'
+    const result = await authStore.handleOAuthCallback(provider, callbackData, purpose)
+    sessionStorage.removeItem(`oauth-bind:${state as string}`)
 
-    const redirectTo = (route.query.redirect_to as string) || '/dashboard'
+    const redirectTo = result.status === 'bound' ? '/account/binding' : '/dashboard'
 
     setTimeout(() => {
       router.replace(redirectTo)

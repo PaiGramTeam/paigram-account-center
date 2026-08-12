@@ -32,10 +32,9 @@ func NewCredentialsHandler(credentialsSvc credentialsService) *CredentialsHandle
 }
 
 // CreateRequest is the JSON body for POST /admin/service-credentials.
-// Path D §2.1 declares client_id as a human-readable string supplied by
-// the operator (no auto-generated mi_<uuid> prefix).
 type CreateRequest struct {
 	ClientID    string   `json:"client_id"`
+	BotID       string   `json:"bot_id"`
 	DisplayName string   `json:"display_name"`
 	Description string   `json:"description"`
 	Audiences   []string `json:"audiences"`
@@ -98,6 +97,7 @@ func (h *CredentialsHandler) Create(c *gin.Context) {
 	actorID, _ := middleware.GetUserID(c)
 	result, err := h.credentials.Create(credentials.CreateInput{
 		ClientID:    req.ClientID,
+		BotID:       req.BotID,
 		DisplayName: req.DisplayName,
 		OwnerUserID: actorID,
 		Description: req.Description,
@@ -112,15 +112,14 @@ func (h *CredentialsHandler) Create(c *gin.Context) {
 }
 
 // RotateSecret regenerates the bcrypt secret for an existing credential.
-// The old secret stops working immediately; there is no grace period
-// (Path D §1.6 — credential is the rotation unit, not the secret).
+// The old secret stops working immediately; there is no grace period.
 //
 // @Tags        AdminCredentials
 // @Summary     Rotate OAuth service credential secret
 // @Description Regenerates the plaintext client_secret for an existing
 // @Description client_id and replaces the stored bcrypt hash atomically.
 // @Description The previous secret is invalidated immediately — there is
-// @Description no grace period (Path D §1.6: rotate = create-and-disable).
+// @Description no grace period.
 // @Description The new plaintext is returned exactly once in the response.
 // @Security    BearerAuth
 // @Produce     json
@@ -152,6 +151,8 @@ func writeAdminError(c *gin.Context, err error, fallback string) {
 		response.BadRequest(c, "client_id is required")
 	case errors.Is(err, credentials.ErrCredentialNotFound):
 		response.NotFound(c, err.Error())
+	case errors.Is(err, credentials.ErrCredentialConflict):
+		response.Conflict(c, err.Error())
 	default:
 		response.InternalServerError(c, fallback)
 	}

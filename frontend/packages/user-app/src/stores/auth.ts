@@ -22,6 +22,10 @@ export interface LoginWithEmailResult {
   message?: string
 }
 
+export interface OAuthCallbackResult {
+  status: 'login' | 'bound'
+}
+
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
     loading: false,
@@ -54,6 +58,7 @@ export const useAuthStore = defineStore('auth', {
         Message.success('登录成功')
         return { status: 'success' }
       } catch (error: unknown) {
+        userStore.reset()
         Message.error(resolveAuthErrorMessage(error, '登录失败'))
         throw error
       } finally {
@@ -138,7 +143,7 @@ export const useAuthStore = defineStore('auth', {
           refreshToken: response.data.refresh_token,
         })
       } catch (error) {
-        userStore.logout()
+        userStore.reset()
         throw error
       }
     },
@@ -147,13 +152,8 @@ export const useAuthStore = defineStore('auth', {
       const userStore = useUserStore()
 
       try {
-        if (userStore.token) {
-          await authApi.logout({ token: userStore.token })
-        }
-      } catch (error) {
-        console.error('Logout error:', error)
+        await userStore.logout()
       } finally {
-        userStore.logout()
         this.loginType = null
       }
     },
@@ -171,12 +171,28 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async handleOAuthCallback(provider: string, callbackData: OAuthCallbackRequest): Promise<void> {
+    async handleOAuthCallback(
+      provider: string,
+      callbackData: OAuthCallbackRequest,
+      purpose: 'login' | 'bind' = 'login'
+    ): Promise<OAuthCallbackResult> {
       this.loading = true
       const userStore = useUserStore()
 
       try {
         const response = await authApi.handleOAuthCallback(provider, callbackData)
+
+        if (purpose === 'bind') {
+          if (!response.data.bound || response.data.purpose !== 'bind_login_method') {
+            throw new Error('OAuth callback did not complete account binding')
+          }
+          Message.success('第三方账号绑定成功')
+          return { status: 'bound' }
+        }
+
+        if (!response.data.access_token || !response.data.refresh_token || !response.data.user_id) {
+          throw new Error('OAuth login response is incomplete')
+        }
 
         userStore.setAuthData({
           accessToken: response.data.access_token,
@@ -187,7 +203,11 @@ export const useAuthStore = defineStore('auth', {
 
         this.loginType = 'oauth'
         Message.success('登录成功')
+        return { status: 'login' }
       } catch (error) {
+        if (purpose === 'login') {
+          userStore.reset()
+        }
         console.error('OAuth callback error:', error)
         Message.error(resolveAuthErrorMessage(error, 'OAuth 登录失败'))
         throw error

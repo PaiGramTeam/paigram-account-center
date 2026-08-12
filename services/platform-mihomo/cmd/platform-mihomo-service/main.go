@@ -4,9 +4,11 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"time"
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/config"
+	"github.com/go-kratos/kratos/v2/config/env"
 	"github.com/go-kratos/kratos/v2/config/file"
 	_ "github.com/go-kratos/kratos/v2/encoding/yaml"
 	"github.com/redis/go-redis/v9"
@@ -25,7 +27,7 @@ func main() {
 	flag.StringVar(&configPath, "conf", "configs/config.yaml", "config path")
 	flag.Parse()
 
-	c := config.New(config.WithSource(file.NewSource(configPath)))
+	c := config.New(config.WithSource(file.NewSource(configPath), env.NewSource("PAI_")))
 	defer c.Close()
 
 	if err := c.Load(); err != nil {
@@ -58,7 +60,10 @@ func main() {
 	artifactRepo := data.NewArtifactRepo(database, redisClient, bc.GetData().GetRedis().GetPrefix())
 	managementRepo := data.NewManagementRepo(database, redisClient, bc.GetData().GetRedis().GetPrefix())
 	grantInvalidationRepo := data.NewGrantInvalidationRepo(database)
-	client := platformmihomo.UnconfiguredClient{}
+	client, err := newMihomoUpstreamClient(bc.GetUpstream())
+	if err != nil {
+		log.Fatal(err)
+	}
 	ticketVerifier, err := newTicketVerifierFromSecurity(bc.GetSecurity())
 	if err != nil {
 		log.Fatal(err)
@@ -79,7 +84,8 @@ func main() {
 		managementUC,
 	)
 	sharedSvc := service.NewMihomoCredentialService(ticketVerifier, managementUC)
-	genericSvc := service.NewGenericPlatformService(ticketVerifier, bindUC, statusUC, managementUC, grantInvalidationRepo)
+	genericSvc := service.NewGenericPlatformService(ticketVerifier, bindUC, statusUC, managementUC, grantInvalidationRepo).
+		WithConsumerUsecases(profileUC, authkeyUC)
 
 	grpcSrv := server.NewGRPCServer(&bc, mihomoSvc, sharedSvc, genericSvc)
 	app := kratos.New(
@@ -107,6 +113,13 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	if databaseConf.GetDsn() == "" {
 		return errors.New("data.database.dsn is required")
 	}
+	upstream := bc.GetUpstream()
+	if upstream.GetBaseUrl() == "" {
+		return errors.New("upstream.base_url is required")
+	}
+	if upstream.GetTimeoutSeconds() <= 0 {
+		return errors.New("upstream.timeout_seconds must be greater than zero")
+	}
 
 	security := bc.GetSecurity()
 	if security.GetServiceTicketIssuer() == "" {
@@ -126,6 +139,15 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	}
 
 	return nil
+}
+
+func newMihomoUpstreamClient(upstream *conf.Upstream) (*platformmihomo.HTTPClient, error) {
+	return platformmihomo.NewHTTPClient(platformmihomo.HTTPClientConfig{
+		BaseURL:           upstream.GetBaseUrl(),
+		Timeout:           time.Duration(upstream.GetTimeoutSeconds()) * time.Second,
+		BearerTokenFile:   upstream.GetBearerTokenFile(),
+		AllowInsecureHTTP: upstream.GetAllowInsecureHttp(),
+	})
 }
 
 func newTicketVerifierFromSecurity(security *conf.Security) (*data.TicketVerifier, error) {

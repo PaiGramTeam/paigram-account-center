@@ -10,6 +10,7 @@ import (
 )
 
 func TestLoadUsesPostgreSQLDSNFromEnvFile(t *testing.T) {
+	clearShellIntegrationEnv(t)
 	repoRoot := t.TempDir()
 	dsn := "postgres://platform:file-secret@127.0.0.1:5432/platform_mihomo_test?sslmode=disable"
 	err := os.WriteFile(filepath.Join(repoRoot, ".env.integration.local"), []byte(strings.Join([]string{
@@ -77,6 +78,7 @@ func TestSummaryIncludesGeneratedResourcesAndRedactsSecrets(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidRedisDBAndPreservesSource(t *testing.T) {
+	clearShellIntegrationEnv(t)
 	repoRoot := t.TempDir()
 	err := os.WriteFile(filepath.Join(repoRoot, ".env.integration.local"), []byte(strings.Join([]string{
 		"PAI_TEST_DATABASE_DSN=postgres://platform:password@127.0.0.1:5432/platform_mihomo_test?sslmode=disable",
@@ -88,4 +90,21 @@ func TestLoadRejectsInvalidRedisDBAndPreservesSource(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "PAI_TEST_REDIS_DB")
 	require.Equal(t, SourceFile, env.Sources["PAI_TEST_REDIS_DB"])
+}
+
+func clearShellIntegrationEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"PAI_TEST_DATABASE_DSN",
+		"PAI_TEST_REDIS_ADDR",
+		"PAI_TEST_REDIS_PASSWORD",
+		"PAI_TEST_REDIS_DB",
+		"PAI_TEST_REDIS_PREFIX",
+	} {
+		value, exists := os.LookupEnv(key)
+		require.NoError(t, os.Unsetenv(key))
+		if exists {
+			t.Cleanup(func() { require.NoError(t, os.Setenv(key, value)) })
+		}
+	}
 }

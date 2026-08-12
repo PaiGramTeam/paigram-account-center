@@ -40,24 +40,25 @@ if ($LASTEXITCODE -ne 0) {
     throw "Podman Compose deployment failed"
 }
 
-$container = "$instance-frontend"
-for ($attempt = 1; $attempt -le 60; $attempt++) {
-    $status = & podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $container 2>$null
-    if ($status -eq "healthy") {
-        break
+foreach ($container in @("$instance-frontend", "$instance-platform-mihomo")) {
+    for ($attempt = 1; $attempt -le 60; $attempt++) {
+        $status = & podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $container 2>$null
+        if ($status -eq "healthy") {
+            break
+        }
+        if ($status -in @("exited", "unhealthy")) {
+            & podman logs --tail 80 $container
+            throw "$container entered state $status"
+        }
+        if ($attempt -eq 60) {
+            & podman logs --tail 80 $container
+            throw "Timed out waiting for $container"
+        }
+        Start-Sleep -Seconds 2
     }
-    if ($status -in @("exited", "unhealthy")) {
-        & podman logs --tail 80 $container
-        throw "$container entered state $status"
-    }
-    if ($attempt -eq 60) {
-        & podman logs --tail 80 $container
-        throw "Timed out waiting for $container"
-    }
-    Start-Sleep -Seconds 2
 }
 
-foreach ($privateContainer in @($instance, "$instance-postgres", "$instance-redis")) {
+foreach ($privateContainer in @($instance, "$instance-postgres", "$instance-redis", "$instance-platform-postgres", "$instance-platform-redis")) {
     $publishedPorts = & podman port $privateContainer
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to inspect $privateContainer ports"
@@ -65,6 +66,11 @@ foreach ($privateContainer in @($instance, "$instance-postgres", "$instance-redi
     if ($publishedPorts) {
         throw "$privateContainer unexpectedly publishes a host port: $publishedPorts"
     }
+}
+
+$platformPorts = & podman port "$instance-platform-mihomo"
+if ($LASTEXITCODE -ne 0 -or -not $platformPorts) {
+    throw "Platform Mihomo does not publish its configured loopback gRPC port"
 }
 
 $httpPort = Get-EnvValue -Name "PAI_HTTP_PORT"

@@ -1,6 +1,7 @@
 package platformbinding
 
 import (
+	"encoding/json"
 	"time"
 
 	"paigram/internal/model"
@@ -47,6 +48,7 @@ type ConsumerGrantView struct {
 	BindingID uint64                    `json:"binding_id"`
 	Consumer  string                    `json:"consumer"`
 	Status    model.ConsumerGrantStatus `json:"status"`
+	Actions   []string                  `json:"actions"`
 	GrantedBy any                       `json:"granted_by,omitempty"`
 	GrantedAt any                       `json:"granted_at,omitempty"`
 	RevokedAt any                       `json:"revoked_at"`
@@ -106,8 +108,10 @@ func buildGrantViews(items []model.ConsumerGrant) []ConsumerGrantView {
 }
 
 func buildGrantView(item *model.ConsumerGrant) ConsumerGrantView {
+	actions := make([]string, 0)
+	_ = json.Unmarshal([]byte(item.ScopesJSON), &actions)
 	view := ConsumerGrantView{
-		BindingID: item.BindingID, Consumer: item.Consumer, Status: item.Status, RevokedAt: nullableTime(item.RevokedAt),
+		BindingID: item.BindingID, Consumer: item.Consumer, Status: item.Status, Actions: actions, RevokedAt: nullableTime(item.RevokedAt),
 	}
 	if item.ID != 0 {
 		view.ID = item.ID

@@ -6,9 +6,40 @@ import (
 	"testing"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVerifyAcceptsFullySpecifiedDelegationTicket(t *testing.T) {
+	verifier := testTicketVerifier()
+	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, jwt.MapClaims{
+		"iss":             testTicketIssuer,
+		"sub":             "consumer:paigram",
+		"aud":             []string{testTicketAudience},
+		"iat":             time.Now().Add(-time.Second).Unix(),
+		"nbf":             time.Now().Add(-time.Second).Unix(),
+		"exp":             time.Now().Add(time.Minute).Unix(),
+		"jti":             "ticket-1",
+		"actor_type":      "consumer",
+		"actor_id":        "paigram",
+		"consumer":        "paigram",
+		"owner_user_id":   float64(1),
+		"binding_id":      float64(101),
+		"platform":        "mihomo",
+		"grant_version":   float64(2),
+		"allowed_actions": []string{"mihomo.profile.read"},
+	})
+	token.Header["kid"] = testTicketKeyID
+	token.Header["typ"] = "paigram-platform-delegation+jwt"
+	raw, err := token.SignedString(testTicketPrivateKey)
+	require.NoError(t, err)
+
+	claims, err := verifier.Verify(raw, testTicketAudience)
+	require.NoError(t, err)
+	require.Equal(t, "paigram", claims.Consumer)
+	require.Equal(t, []string{"mihomo.profile.read"}, claims.Scopes)
+}
 
 const (
 	testTicketIssuer   = "paigram-account-center"
@@ -52,7 +83,7 @@ func TestVerifyServiceTicketRejectsHS256Ticket(t *testing.T) {
 	})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
-	require.ErrorContains(t, err, "unexpected signing method")
+	require.ErrorContains(t, err, "signing method HS256 is invalid")
 }
 
 func TestVerifyServiceTicketRejectsMissingKID(t *testing.T) {
@@ -65,7 +96,7 @@ func TestVerifyServiceTicketRejectsMissingKID(t *testing.T) {
 		"platform":      "mihomo",
 		"consumer":      "paigram",
 		"grant_version": float64(2),
-	}, map[string]any{"typ": "service_ticket"})
+	}, map[string]any{"typ": contractticket.TypeDelegation})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
 	require.ErrorContains(t, err, "kid")
@@ -81,7 +112,7 @@ func TestVerifyServiceTicketRejectsWrongKID(t *testing.T) {
 		"platform":      "mihomo",
 		"consumer":      "paigram",
 		"grant_version": float64(2),
-	}, map[string]any{"kid": "wrong-key", "typ": "service_ticket"})
+	}, map[string]any{"kid": "wrong-key", "typ": contractticket.TypeDelegation})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
 	require.ErrorContains(t, err, "public key")
@@ -100,7 +131,7 @@ func TestVerifyServiceTicketRejectsWrongType(t *testing.T) {
 	}, map[string]any{"kid": testTicketKeyID, "typ": "access_token"})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
-	require.ErrorContains(t, err, "service_ticket")
+	require.ErrorContains(t, err, "typ")
 }
 
 func TestVerifyServiceTicketRejectsMissingType(t *testing.T) {
@@ -116,13 +147,13 @@ func TestVerifyServiceTicketRejectsMissingType(t *testing.T) {
 	}, map[string]any{"kid": testTicketKeyID})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
-	require.ErrorContains(t, err, "service_ticket")
+	require.ErrorContains(t, err, "typ")
 }
 
 func TestVerifyServiceTicketRejectsMissingTypeHeaderWithPayloadType(t *testing.T) {
 	verifier := testTicketVerifier()
 	raw := issueTestTicketWithHeaders(t, map[string]any{
-		"typ":           "service_ticket",
+		"typ":           contractticket.TypeDelegation,
 		"actor_type":    "consumer",
 		"actor_id":      "user-1",
 		"owner_user_id": float64(1),
@@ -133,7 +164,7 @@ func TestVerifyServiceTicketRejectsMissingTypeHeaderWithPayloadType(t *testing.T
 	}, map[string]any{"kid": testTicketKeyID})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
-	require.ErrorContains(t, err, "service_ticket")
+	require.ErrorContains(t, err, "typ")
 }
 
 func TestVerifyServiceTicketRejectsMissingExpiration(t *testing.T) {
@@ -148,7 +179,7 @@ func TestVerifyServiceTicketRejectsMissingExpiration(t *testing.T) {
 		"platform":      "mihomo",
 		"consumer":      "paigram",
 		"grant_version": float64(2),
-	}, map[string]any{"kid": testTicketKeyID, "typ": "service_ticket"})
+	}, map[string]any{"kid": testTicketKeyID, "typ": contractticket.TypeDelegation})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
 	require.ErrorContains(t, err, "exp")
@@ -167,7 +198,7 @@ func TestVerifyServiceTicketRejectsWrongIssuer(t *testing.T) {
 		"platform":      "mihomo",
 		"consumer":      "paigram",
 		"grant_version": float64(2),
-	}, map[string]any{"kid": testTicketKeyID, "typ": "service_ticket"})
+	}, map[string]any{"kid": testTicketKeyID, "typ": contractticket.TypeDelegation})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
 	require.ErrorContains(t, err, "issuer")
@@ -186,7 +217,7 @@ func TestVerifyServiceTicketRejectsWrongAudience(t *testing.T) {
 		"platform":      "mihomo",
 		"consumer":      "paigram",
 		"grant_version": float64(2),
-	}, map[string]any{"kid": testTicketKeyID, "typ": "service_ticket"})
+	}, map[string]any{"kid": testTicketKeyID, "typ": contractticket.TypeDelegation})
 
 	_, err := verifier.Verify(raw, testTicketAudience)
 	require.ErrorContains(t, err, "audience")
@@ -350,7 +381,7 @@ func TestVerifyContextRejectsStaleConsumerGrantVersion(t *testing.T) {
 	require.Equal(t, "paigram", lookup.consumer)
 }
 
-func TestVerifyAllowsNonConsumerActorTypesWithoutConsumerClaim(t *testing.T) {
+func TestVerifyRejectsUnsupportedNonConsumerActorType(t *testing.T) {
 	verifier := testTicketVerifier()
 	raw := issueTestTicket(t, map[string]any{
 		"actor_type":    "robot",
@@ -361,9 +392,8 @@ func TestVerifyAllowsNonConsumerActorTypesWithoutConsumerClaim(t *testing.T) {
 		"scopes":        []string{"mihomo.profile.read"},
 	})
 
-	claims, err := verifier.Verify(raw, testTicketAudience)
-	require.NoError(t, err)
-	require.Equal(t, "robot", claims.ActorType)
+	_, err := verifier.Verify(raw, testTicketAudience)
+	require.ErrorContains(t, err, "unsupported")
 }
 
 func TestVerifyRejectsMismatchedLegacyPlatformAccountRefID(t *testing.T) {
@@ -402,7 +432,11 @@ func testTicketVerifier() *TicketVerifier {
 func issueTestTicket(t *testing.T, claims map[string]any) string {
 	t.Helper()
 
-	return issueTestTicketWithHeaders(t, claims, map[string]any{"kid": testTicketKeyID, "typ": "service_ticket"})
+	typ := contractticket.TypeControl
+	if claims["actor_type"] == "consumer" {
+		typ = contractticket.TypeDelegation
+	}
+	return issueTestTicketWithHeaders(t, claims, map[string]any{"kid": testTicketKeyID, "typ": typ})
 }
 
 func issueTestTicketWithHeaders(t *testing.T, claims map[string]any, headers map[string]any) string {
@@ -411,10 +445,20 @@ func issueTestTicketWithHeaders(t *testing.T, claims map[string]any, headers map
 	baseClaims := jwt.MapClaims{
 		"iss": testTicketIssuer,
 		"aud": []string{testTicketAudience},
+		"iat": time.Now().Add(-time.Second).Unix(),
+		"nbf": time.Now().Add(-time.Second).Unix(),
 		"exp": time.Now().Add(time.Minute).Unix(),
+		"jti": "test-ticket",
 	}
 	for key, value := range claims {
 		baseClaims[key] = value
+	}
+	if _, exists := baseClaims["sub"]; !exists {
+		if consumer, ok := baseClaims["consumer"].(string); ok && consumer != "" {
+			baseClaims["sub"] = "consumer:" + consumer
+		} else {
+			baseClaims["sub"] = "user:1"
+		}
 	}
 	return issueTestTicketWithClaimsAndHeaders(t, baseClaims, headers)
 }
@@ -422,7 +466,7 @@ func issueTestTicketWithHeaders(t *testing.T, claims map[string]any, headers map
 func issueTestTicketWithClaimsAndHeaders(t *testing.T, claims map[string]any, headers map[string]any) string {
 	t.Helper()
 
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims(claims))
+	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, jwt.MapClaims(claims))
 	for key, value := range headers {
 		token.Header[key] = value
 	}
@@ -437,8 +481,12 @@ func issueHS256TestTicket(t *testing.T, claims map[string]any) string {
 
 	baseClaims := jwt.MapClaims{
 		"iss": testTicketIssuer,
+		"sub": "consumer:paigram",
 		"aud": []string{testTicketAudience},
+		"iat": time.Now().Add(-time.Second).Unix(),
+		"nbf": time.Now().Add(-time.Second).Unix(),
 		"exp": time.Now().Add(time.Minute).Unix(),
+		"jti": "test-ticket",
 	}
 	for key, value := range claims {
 		baseClaims[key] = value
@@ -446,7 +494,7 @@ func issueHS256TestTicket(t *testing.T, claims map[string]any) string {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, baseClaims)
 	token.Header["kid"] = testTicketKeyID
-	token.Header["typ"] = "service_ticket"
+	token.Header["typ"] = contractticket.TypeDelegation
 	signed, err := token.SignedString([]byte("0123456789abcdef0123456789abcdef"))
 	require.NoError(t, err)
 

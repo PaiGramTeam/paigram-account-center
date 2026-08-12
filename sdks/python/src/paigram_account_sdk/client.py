@@ -29,17 +29,20 @@ from .errors import (
     TransportError,
 )
 from .models import (
+    AuthKey,
     BotUser,
     CredentialStatus,
+    CredentialStatusResult,
     CredentialSummary,
+    DeviceInfo,
     DeviceSummary,
     PlatformAccountStatus,
     PlatformBinding,
     PlatformDescriptor,
     PlatformEndpoint,
     ProfileSummary,
-    RefreshResult,
     ServiceTicket,
+    ValidationResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +67,13 @@ class PaiGramAccountClient:
         if timeout <= 0:
             logger.warning("PaiGram Account SDK rejected a non-positive timeout")
             raise InvalidRequestError("timeout must be greater than zero")
+        if not account_grpc_target:
+            logger.warning("PaiGram Account SDK rejected an empty account gRPC target")
+            raise InvalidRequestError("gRPC target is required")
+        invalid_platform = next((key for key, endpoint in platform_endpoints.items() if not endpoint.target), None)
+        if invalid_platform is not None:
+            logger.warning("PaiGram Account SDK rejected an empty platform gRPC target for %s", invalid_platform)
+            raise InvalidRequestError(f"platform endpoint target is required: {invalid_platform}")
         self._timeout = timeout
         self._platform_endpoints = dict(platform_endpoints)
         self._http_client = httpx.AsyncClient(
@@ -97,11 +107,18 @@ class PaiGramAccountClient:
     async def close(self) -> None:
         if self._closed:
             return
+        first_error: BaseException | None = None
+        resources = (self._http_client, self._account_channel, *self._platform_channels.values())
+        for resource in resources:
+            try:
+                await resource.aclose() if isinstance(resource, httpx.AsyncClient) else await resource.close()
+            except BaseException as error:
+                logger.error("PaiGram Account SDK failed to close a transport", exc_info=error)
+                if first_error is None:
+                    first_error = error
         self._closed = True
-        await self._http_client.aclose()
-        await self._account_channel.close()
-        for channel in self._platform_channels.values():
-            await channel.close()
+        if first_error is not None:
+            raise first_error
 
     async def resolve_user(self, external_user_id: str, *, request_id: str | None = None) -> BotUser:
         self._ensure_open()
@@ -149,38 +166,12 @@ class PaiGramAccountClient:
         )
         return tuple(_binding_from_proto(binding) for binding in response.bindings)
 
-    async def issue_service_ticket(
-        self,
-        *,
-        external_user_id: str,
-        binding_id: int,
-        requested_scopes: Sequence[str],
-        audience: str,
-        profile_id: int = 0,
-        request_id: str | None = None,
-    ) -> ServiceTicket:
-        self._ensure_open()
-        if not external_user_id or binding_id <= 0 or not requested_scopes or not audience:
-            logger.warning("PaiGram Account SDK rejected an incomplete service ticket request")
-            raise InvalidRequestError(
-                "external_user_id, a positive binding_id, requested_scopes, and audience are required"
-            )
-        return await self._issue_service_ticket(
-            external_user_id=external_user_id,
-            binding_id=binding_id,
-            requested_scopes=requested_scopes,
-            audience=audience,
-            profile_id=profile_id,
-            request_id=self._resolve_request_id(request_id),
-        )
-
     async def _issue_service_ticket(
         self,
         *,
         external_user_id: str,
         binding_id: int,
         requested_scopes: Sequence[str],
-        audience: str,
         profile_id: int,
         request_id: str,
     ) -> ServiceTicket:
@@ -192,7 +183,6 @@ class PaiGramAccountClient:
                     external_user_id=external_user_id,
                     binding_id=binding_id,
                     requested_scopes=requested_scopes,
-                    audience=audience,
                     profile_id=profile_id,
                 ),
                 request_id,
@@ -257,23 +247,23 @@ class PaiGramAccountClient:
         )
         return _credential_summary_from_proto(response)
 
-    async def refresh_credential(
+    async def get_credential_status(
         self,
         *,
         external_user_id: str,
         binding: PlatformBinding,
         request_id: str | None = None,
-    ) -> RefreshResult:
+    ) -> CredentialStatusResult:
         resolved_request_id = self._resolve_request_id(request_id)
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="credential.refresh",
+            action_suffix="status.read",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
-            stub.RefreshCredential(
-                platform_pb2.RefreshCredentialRequest(
+            stub.GetCredentialStatus(
+                platform_pb2.GetCredentialStatusRequest(
                     service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
                 ),
@@ -283,30 +273,154 @@ class PaiGramAccountClient:
             resolved_request_id,
             failed_precondition_error=CredentialError,
         )
-        return RefreshResult(
+        return CredentialStatusResult(
             status=_credential_status(response.status),
-            refreshed_at=_datetime_from_timestamp(response.refreshed_at),
+            last_validated_at=_datetime_from_timestamp(response.last_validated_at),
         )
 
-    async def delete_credential(
+    async def validate_credential(
         self,
         *,
         external_user_id: str,
         binding: PlatformBinding,
         request_id: str | None = None,
-    ) -> bool:
+    ) -> ValidationResult:
         resolved_request_id = self._resolve_request_id(request_id)
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="credential.delete",
+            action_suffix="status.read",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
-            stub.DeleteCredential(
-                platform_pb2.DeleteCredentialRequest(
+            stub.ValidateCredential(
+                platform_pb2.ValidateCredentialRequest(
                     service_ticket=ticket.token,
                     platform_account_id=binding.platform_account_id,
+                ),
+                metadata=_correlation_metadata(resolved_request_id),
+                timeout=self._timeout,
+            ),
+            resolved_request_id,
+            failed_precondition_error=CredentialError,
+        )
+        return ValidationResult(status=_credential_status(response.status), error_code=response.error_code)
+
+    async def list_profiles(
+        self,
+        *,
+        external_user_id: str,
+        binding: PlatformBinding,
+        request_id: str | None = None,
+    ) -> tuple[ProfileSummary, ...]:
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
+            external_user_id=external_user_id,
+            binding=binding,
+            action_suffix="profile.read",
+            request_id=resolved_request_id,
+        )
+        response = await _grpc_call(
+            stub.ListProfiles(
+                platform_pb2.ListProfilesRequest(
+                    service_ticket=ticket.token,
+                    platform_account_id=binding.platform_account_id,
+                ),
+                metadata=_correlation_metadata(resolved_request_id),
+                timeout=self._timeout,
+            ),
+            resolved_request_id,
+            failed_precondition_error=CredentialError,
+        )
+        return tuple(_profile_summary_from_proto(profile) for profile in response.profiles)
+
+    async def get_primary_profile(
+        self,
+        *,
+        external_user_id: str,
+        binding: PlatformBinding,
+        request_id: str | None = None,
+    ) -> ProfileSummary | None:
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
+            external_user_id=external_user_id,
+            binding=binding,
+            action_suffix="profile.read",
+            request_id=resolved_request_id,
+        )
+        response = await _grpc_call(
+            stub.GetPrimaryProfile(
+                platform_pb2.GetPrimaryProfileRequest(
+                    service_ticket=ticket.token,
+                    platform_account_id=binding.platform_account_id,
+                ),
+                metadata=_correlation_metadata(resolved_request_id),
+                timeout=self._timeout,
+            ),
+            resolved_request_id,
+            failed_precondition_error=CredentialError,
+        )
+        return _profile_summary_from_proto(response.profile) if response.HasField("profile") else None
+
+    async def get_auth_key(
+        self,
+        *,
+        external_user_id: str,
+        binding: PlatformBinding,
+        player_id: str,
+        request_id: str | None = None,
+    ) -> AuthKey:
+        if not player_id:
+            raise InvalidRequestError("player_id is required")
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
+            external_user_id=external_user_id,
+            binding=binding,
+            action_suffix="authkey.issue",
+            request_id=resolved_request_id,
+        )
+        response = await _grpc_call(
+            stub.GetAuthKey(
+                platform_pb2.GetAuthKeyRequest(
+                    service_ticket=ticket.token,
+                    platform_account_id=binding.platform_account_id,
+                    player_id=player_id,
+                ),
+                metadata=_correlation_metadata(resolved_request_id),
+                timeout=self._timeout,
+            ),
+            resolved_request_id,
+            failed_precondition_error=CredentialError,
+        )
+        return AuthKey(value=response.authkey, expires_at=_datetime_from_timestamp(response.expires_at))
+
+    async def upsert_device(
+        self,
+        *,
+        external_user_id: str,
+        binding: PlatformBinding,
+        device: DeviceInfo,
+        request_id: str | None = None,
+    ) -> bool:
+        if not device.device_id or not device.device_fp:
+            raise InvalidRequestError("device_id and device_fp are required")
+        resolved_request_id = self._resolve_request_id(request_id)
+        stub, ticket = await self._authorize_platform_action(
+            external_user_id=external_user_id,
+            binding=binding,
+            action_suffix="device.update",
+            request_id=resolved_request_id,
+        )
+        response = await _grpc_call(
+            stub.UpsertDevice(
+                platform_pb2.UpsertDeviceRequest(
+                    service_ticket=ticket.token,
+                    platform_account_id=binding.platform_account_id,
+                    device=platform_pb2.DeviceInfo(
+                        device_id=device.device_id,
+                        device_fp=device.device_fp,
+                        device_name=device.device_name,
+                    ),
                 ),
                 metadata=_correlation_metadata(resolved_request_id),
                 timeout=self._timeout,
@@ -348,7 +462,6 @@ class PaiGramAccountClient:
             external_user_id=external_user_id,
             binding_id=binding.id,
             requested_scopes=(action,),
-            audience=descriptor.service_audience,
             profile_id=0,
             request_id=request_id,
         )
@@ -497,19 +610,20 @@ def _credential_summary_from_proto(response: platform_pb2.GetCredentialSummaryRe
             )
             for device in response.devices
         ),
-        profiles=tuple(
-            ProfileSummary(
-                id=profile.id,
-                platform_account_id=profile.platform_account_id,
-                game_biz=profile.game_biz,
-                region=profile.region,
-                player_id=profile.player_id,
-                nickname=profile.nickname,
-                level=profile.level,
-                is_default=profile.is_default,
-            )
-            for profile in response.profiles
-        ),
+        profiles=tuple(_profile_summary_from_proto(profile) for profile in response.profiles),
+    )
+
+
+def _profile_summary_from_proto(profile: platform_pb2.ProfileSummary) -> ProfileSummary:
+    return ProfileSummary(
+        id=profile.id,
+        platform_account_id=profile.platform_account_id,
+        game_biz=profile.game_biz,
+        region=profile.region,
+        player_id=profile.player_id,
+        nickname=profile.nickname,
+        level=profile.level,
+        is_default=profile.is_default,
     )
 
 

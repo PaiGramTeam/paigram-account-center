@@ -231,6 +231,41 @@ func TestRegisterEmail_Success(t *testing.T) {
 	assert.NotEmpty(t, emailRecord.VerificationToken)
 }
 
+func TestRegisterEmailDispatchesVerificationEmail(t *testing.T) {
+	db := setupTestDB(t)
+	handler := setupTestHandler(db)
+	handler.cfg.RequireEmailVerificationLogin = true
+	handler.frontendCfg = config.FrontendConfig{BaseURL: "https://app.example.com/"}
+
+	var recipient, token, baseURL string
+	handler.sendVerificationEmail = func(_ context.Context, to, plainToken, base string) error {
+		recipient = to
+		token = plainToken
+		baseURL = base
+		return nil
+	}
+
+	router := gin.New()
+	router.POST("/auth/register", handler.RegisterEmail)
+	bodyBytes, err := json.Marshal(registerEmailRequest{
+		Email:       "verify@example.com",
+		Password:    "Password123!",
+		DisplayName: "Verify User",
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Equal(t, "verify@example.com", recipient)
+	assert.NotEmpty(t, token)
+	assert.Equal(t, "https://app.example.com", baseURL)
+	assert.NotContains(t, w.Body.String(), token)
+}
+
 // TestRegister_DoesNotLeakVerificationTokenInResponse verifies V14: the
 // registration response must not return the email-verification token in
 // plaintext. The token is supposed to reach the user only via the

@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
+	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
 	"platform-mihomo-service/internal/usecase"
 )
 
@@ -111,7 +111,7 @@ func signedMihomoSummaryTicketWithoutAccount(t *testing.T) string {
 	claims := jwt.MapClaims{
 		"iss":                  serviceTestIssuer,
 		"aud":                  []string{serviceTestAudience},
-		"actor_type":           "bot",
+		"actor_type":           "user",
 		"actor_id":             "bot-paigram",
 		"owner_user_id":        float64(1),
 		"binding_id":           float64(101),
@@ -160,7 +160,7 @@ func newMihomoCredentialServiceForTest(t *testing.T) *mihomoCredentialServiceTes
 	deviceRepo := newMemoryDeviceRepo()
 	profileRepo := newMemoryProfileRepo()
 	artifactRepo := newMemoryArtifactRepo()
-	client := platformmihomo.StubClient{}
+	client := mihomostub.Client{}
 
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, serviceTestSigningKey, artifactRepo)
 	profileUC := usecase.NewProfileUsecase(profileRepo)

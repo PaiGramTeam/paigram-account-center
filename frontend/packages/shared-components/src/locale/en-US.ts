@@ -7,6 +7,9 @@ export default {
   'menu.account.info': 'Account Info',
   'menu.account.security': 'Security',
   'menu.account.binding': 'Account Binding',
+  'menu.platformAccounts': 'Platform Accounts',
+  'menu.apps': 'App Access',
+  'menu.services': 'Service Registry',
   'menu.users': 'Users',
   'menu.users.list': 'User List',
   'menu.users.roles': 'Roles',
@@ -14,6 +17,7 @@ export default {
   'menu.system': 'System',
   'menu.system.config': 'Configuration',
   'menu.system.logs': 'Audit Logs',
+  'menu.system.settings': 'Configuration',
 
   // Common
   'common.login': 'Login',

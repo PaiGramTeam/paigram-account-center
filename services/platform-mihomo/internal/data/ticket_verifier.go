@@ -5,7 +5,10 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 
 	"platform-mihomo-service/internal/biz"
@@ -67,28 +70,34 @@ func (v *TicketVerifier) Verify(raw string, expectedAudience string) (*biz.Servi
 
 func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expectedAudience string) (*biz.ServiceTicketClaims, error) {
 	claims := &serviceTicketJWTClaims{}
+	ticketType := ""
 
 	parsed, err := jwt.ParseWithClaims(raw, claims, func(token *jwt.Token) (any, error) {
-		if token.Method != jwt.SigningMethodEdDSA {
+		if token.Method.Alg() != contractticket.AlgorithmEd25519 {
 			return nil, fmt.Errorf("unexpected signing method: %s", token.Method.Alg())
 		}
 		kid, ok := token.Header["kid"].(string)
 		if !ok || kid == "" {
 			return nil, fmt.Errorf("service ticket missing kid")
 		}
-		if token.Header["typ"] != "service_ticket" {
-			return nil, fmt.Errorf("service ticket typ must be service_ticket")
+		typ, ok := token.Header["typ"].(string)
+		if !ok || (typ != contractticket.TypeControl && typ != contractticket.TypeDelegation) {
+			return nil, fmt.Errorf("invalid service ticket typ")
 		}
+		ticketType = typ
 		if v.resolver == nil {
 			return nil, fmt.Errorf("service ticket public key resolver is not configured")
 		}
 		return v.resolver.Resolve(ctx, kid)
-	}, jwt.WithAudience(expectedAudience), jwt.WithIssuer(v.issuer), jwt.WithExpirationRequired())
+	}, jwt.WithValidMethods([]string{contractticket.AlgorithmEd25519}), jwt.WithAudience(expectedAudience), jwt.WithIssuer(v.issuer), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithLeeway(30*time.Second))
 	if err != nil {
 		return nil, err
 	}
 	if !parsed.Valid {
 		return nil, fmt.Errorf("invalid service ticket")
+	}
+	if claims.Subject == "" || claims.ID == "" || claims.IssuedAt == nil || claims.NotBefore == nil {
+		return nil, fmt.Errorf("service ticket missing required registered claim")
 	}
 	if claims.ActorType == "" {
 		return nil, fmt.Errorf("service ticket missing actor_type")
@@ -109,11 +118,17 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 		return nil, fmt.Errorf("service ticket missing platform")
 	}
 	if claims.ActorType == "consumer" {
+		if ticketType != contractticket.TypeDelegation {
+			return nil, fmt.Errorf("consumer ticket must use delegation typ")
+		}
 		if claims.Consumer == "" {
 			return nil, fmt.Errorf("service ticket missing consumer")
 		}
 		if claims.GrantVersion == 0 {
 			return nil, fmt.Errorf("service ticket missing grant_version")
+		}
+		if claims.Subject != "consumer:"+claims.Consumer {
+			return nil, fmt.Errorf("service ticket subject does not match consumer")
 		}
 		if v.lookup != nil {
 			minimum, err := v.lookup.MinimumVersion(ctx, claims.BindingID, claims.Consumer)
@@ -123,6 +138,22 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 			if minimum > 0 && claims.GrantVersion < minimum {
 				return nil, ErrGrantVersionRevoked
 			}
+		}
+	} else {
+		if ticketType != contractticket.TypeControl {
+			return nil, fmt.Errorf("non-consumer ticket must use control typ")
+		}
+		switch claims.ActorType {
+		case "user", "admin":
+			if claims.Subject != "user:"+strconv.FormatUint(claims.OwnerUserID, 10) {
+				return nil, fmt.Errorf("service ticket subject does not match owner")
+			}
+		case "system":
+			if claims.Subject != "system:account-center" {
+				return nil, fmt.Errorf("service ticket subject does not match system actor")
+			}
+		default:
+			return nil, fmt.Errorf("unsupported service ticket actor_type")
 		}
 	}
 	userID := claims.OwnerUserID

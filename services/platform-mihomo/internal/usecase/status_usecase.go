@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	v1 "platform-mihomo-service/api/mihomo/v1"
@@ -147,11 +146,10 @@ func toCredentialStatus(status string) v1.CredentialStatus {
 }
 
 func classifyCredentialStatus(err error) string {
-	message := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(message, "challenge"):
+	case platformmihomo.IsErrorKind(err, platformmihomo.ErrorChallengeRequired):
 		return "challenge_required"
-	case strings.Contains(message, "expire"):
+	case platformmihomo.IsErrorKind(err, platformmihomo.ErrorExpiredCredential):
 		return "expired"
 	default:
 		return "invalid"
@@ -159,11 +157,10 @@ func classifyCredentialStatus(err error) string {
 }
 
 func classifyErrorCode(err error) string {
-	message := strings.ToLower(err.Error())
 	switch {
-	case strings.Contains(message, "challenge"):
+	case platformmihomo.IsErrorKind(err, platformmihomo.ErrorChallengeRequired):
 		return "CHALLENGE_REQUIRED"
-	case strings.Contains(message, "expire"):
+	case platformmihomo.IsErrorKind(err, platformmihomo.ErrorExpiredCredential):
 		return "CREDENTIAL_EXPIRED"
 	default:
 		return "INVALID_CREDENTIAL"

@@ -1,253 +1,78 @@
 <template>
-  <div class="admin-dashboard">
-    <a-row :gutter="16" class="mb-6">
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-statistic title="总用户数" :value="statistics.totalUsers" :value-from="0" animation>
-          <template #prefix>
-            <icon-user class="text-blue-500" />
-          </template>
-        </a-statistic>
-      </a-col>
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-statistic title="今日新增" :value="statistics.todayNewUsers" :value-from="0" animation show-group-separator>
-          <template #prefix>
-            <icon-user-add class="text-green-500" />
-          </template>
-          <template #suffix>
-            <span class="text-sm text-green-500">
-              <icon-arrow-rise />
-              {{ statistics.newUserGrowth }}%
-            </span>
-          </template>
-        </a-statistic>
-      </a-col>
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-statistic title="活跃用户" :value="statistics.activeUsers" :value-from="0" animation>
-          <template #prefix>
-            <icon-fire class="text-orange-500" />
-          </template>
-        </a-statistic>
-      </a-col>
-      <a-col :xs="24" :sm="12" :md="6">
-        <a-statistic title="在线用户" :value="statistics.onlineUsers" :value-from="0" animation>
-          <template #prefix>
-            <icon-wifi class="text-purple-500" />
-          </template>
-        </a-statistic>
-      </a-col>
-    </a-row>
+  <div class="space-y-6 p-6">
+    <div>
+      <h1 class="text-2xl font-semibold">管理控制台</h1>
+      <p class="mt-1 text-gray-500">从真实账号数据进入日常管理工作。</p>
+    </div>
 
     <a-row :gutter="16">
       <a-col :xs="24" :lg="16">
-        <a-card title="用户增长趋势" class="mb-6">
-          <template #extra>
-            <a-radio-group v-model="chartPeriod" type="button" size="small">
-              <a-radio value="week">本周</a-radio>
-              <a-radio value="month">本月</a-radio>
-              <a-radio value="year">本年</a-radio>
-            </a-radio-group>
-          </template>
-
-          <div class="h-80">
-            <div class="flex h-full items-center justify-center text-gray-400">
-              <icon-bar-chart class="mr-2" /> 用户增长图表
-            </div>
-          </div>
-        </a-card>
-
         <a-card title="最新注册用户">
-          <template #extra>
-            <a-link @click="$router.push('/users')">查看全部</a-link>
-          </template>
-
-          <a-list :bordered="false">
+          <template #extra><a-link @click="router.push('/users/list')">查看全部</a-link></template>
+          <a-list :loading="loading" :bordered="false">
             <a-list-item v-for="user in latestUsers" :key="user.id">
-              <a-list-item-meta>
+              <a-list-item-meta :title="user.display_name" :description="formatDate(user.created_at)">
                 <template #avatar>
                   <a-avatar>
-                    <img v-if="user.avatar_url" :src="user.avatar_url" />
+                    <img v-if="user.avatar_url" :src="user.avatar_url" alt="用户头像" />
                     <icon-user v-else />
                   </a-avatar>
                 </template>
-                <template #title>
-                  {{ user.display_name }}
-                </template>
-                <template #description>{{ formatRelativeTime(user.created_at) }}</template>
               </a-list-item-meta>
               <template #actions>
-                <a-button type="text" size="small" @click="handleViewUser(user)"> 查看 </a-button>
+                <a-button type="text" @click="router.push(`/users/${user.id}/detail`)">查看</a-button>
               </template>
             </a-list-item>
           </a-list>
+          <a-empty v-if="!loading && latestUsers.length === 0" description="暂无用户" />
         </a-card>
       </a-col>
-
       <a-col :xs="24" :lg="8">
-        <a-card title="系统状态" class="mb-6">
-          <a-descriptions :column="1" :label-style="{ width: '100px' }">
-            <a-descriptions-item label="系统版本"> v1.0.0 </a-descriptions-item>
-            <a-descriptions-item label="运行时间">
-              {{ systemUptime }}
-            </a-descriptions-item>
-            <a-descriptions-item label="数据库状态">
-              <a-tag color="green">正常</a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="缓存状态">
-              <a-tag color="green">正常</a-tag>
-            </a-descriptions-item>
-            <a-descriptions-item label="API 状态">
-              <a-tag color="green">正常</a-tag>
-            </a-descriptions-item>
-          </a-descriptions>
-        </a-card>
-
-        <a-card title="快捷操作" class="mb-6">
+        <a-card title="管理入口">
           <a-space direction="vertical" fill>
-            <a-button long @click="$router.push('/users')">
-              <template #icon>
-                <icon-user-group />
-              </template>
-              用户管理
+            <a-button v-if="hasPermission('user:list')" long @click="router.push('/users/list')">用户管理</a-button>
+            <a-button v-if="hasPermission('role:list')" long @click="router.push('/users/roles')">角色与权限</a-button>
+            <a-button v-if="hasPermission('platform_account:list')" long @click="router.push('/platform-accounts')">
+              平台账号
             </a-button>
-            <a-button long @click="$router.push('/system/logs')">
-              <template #icon>
-                <icon-file />
-              </template>
-              系统日志
-            </a-button>
-            <a-button long @click="$router.push('/system/settings')">
-              <template #icon>
-                <icon-settings />
-              </template>
-              系统设置
-            </a-button>
-            <a-button long @click="handleBackup">
-              <template #icon>
-                <icon-cloud-download />
-              </template>
-              数据备份
-            </a-button>
+            <a-button v-if="hasPermission('audit:list')" long @click="router.push('/system/logs')">审计日志</a-button>
           </a-space>
         </a-card>
-
-        <a-card title="管理员公告">
-          <a-alert
-            type="info"
-            title="系统维护通知"
-            content="计划于本周日凌晨 2:00-4:00 进行系统维护，请提前做好准备。"
-            closable
-          />
-          <a-alert
-            type="warning"
-            title="安全提醒"
-            content="请定期修改管理员密码，确保系统安全。"
-            closable
-            class="mt-3"
-          />
-        </a-card>
+        <a-alert
+          class="mt-4"
+          type="info"
+          title="服务健康状态"
+          content="部署健康与就绪状态由探针和监控系统提供，本页面不展示未验证的模拟数据。"
+        />
       </a-col>
     </a-row>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
-import {
-  IconUser,
-  IconUserAdd,
-  IconArrowRise,
-  IconFire,
-  IconWifi,
-  IconBarChart,
-  IconUserGroup,
-  IconFile,
-  IconSettings,
-  IconCloudDownload,
-} from '@arco-design/web-vue/es/icon'
+import { IconUser } from '@arco-design/web-vue/es/icon'
+import { useUserStore, type UserListItem } from '@paigram/shared-components'
 import { userApi } from '@/api'
-import type { UserListItem } from '@paigram/shared-components'
 
 const router = useRouter()
-
-const statistics = reactive({
-  totalUsers: 15234,
-  todayNewUsers: 128,
-  newUserGrowth: 12.5,
-  activeUsers: 8456,
-  onlineUsers: 1234,
-})
-
-const chartPeriod = ref('month')
-
+const userStore = useUserStore()
+const loading = ref(false)
 const latestUsers = ref<UserListItem[]>([])
 
-const systemUptime = ref('0天0小时')
-let uptimeTimer: ReturnType<typeof setInterval> | null = null
+const hasPermission = (permission: string): boolean => userStore.hasPermission(permission)
+const formatDate = (value: string): string => new Date(value).toLocaleString('zh-CN')
 
-const calculateUptime = () => {
-  const startTime = new Date('2024-01-01').getTime()
-  const now = Date.now()
-  const diff = now - startTime
-
-  const days = Math.floor(diff / 86400000)
-  const hours = Math.floor((diff % 86400000) / 3600000)
-  const minutes = Math.floor((diff % 3600000) / 60000)
-
-  systemUptime.value = `${days}天${hours}小时${minutes}分钟`
-}
-
-const formatRelativeTime = (date: string): string => {
-  const now = Date.now()
-  const then = new Date(date).getTime()
-  const diff = now - then
-
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  return `${days}天前`
-}
-
-const handleViewUser = (user: { id: number }) => {
-  router.push(`/users/${user.id}`)
-}
-
-const handleBackup = () => {
-  Message.loading('正在创建备份...')
-  setTimeout(() => {
-    Message.success('备份创建成功')
-  }, 2000)
-}
-
-const loadDashboardData = async () => {
+const loadDashboard = async (): Promise<void> => {
+  loading.value = true
   try {
-    // TODO: Call the statistics API.
-    // const stats = await api.getStatistics()
-    // Object.assign(statistics, stats)
-
-    const response = await userApi.getList()
-    latestUsers.value = response.data.slice(0, 3)
-  } catch (error) {
-    console.error('Failed to load dashboard data:', error)
+    const response = await userApi.getList({ page: 1, page_size: 5 })
+    latestUsers.value = response.data
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(() => {
-  calculateUptime()
-  uptimeTimer = setInterval(calculateUptime, 60000)
-  loadDashboardData()
-})
-
-onUnmounted(() => {
-  if (uptimeTimer) {
-    clearInterval(uptimeTimer)
-  }
-})
+onMounted(() => void loadDashboard())
 </script>
-
-<style scoped></style>

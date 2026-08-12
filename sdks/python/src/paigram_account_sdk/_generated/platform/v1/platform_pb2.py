@@ -26,7 +26,7 @@ from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1aplatform/v1/platform.proto\x12\x13paigram.platform.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x19\n\x17\x44\x65scribePlatformRequest\"\xc0\x01\n\x18\x44\x65scribePlatformResponse\x12\x14\n\x0cplatform_key\x18\x01 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x02 \x01(\t\x12\x18\n\x10service_audience\x18\x03 \x01(\t\x12\x19\n\x11supported_actions\x18\x04 \x03(\t\x12\x32\n\x11\x63redential_schema\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x0f\n\x07version\x18\x06 \x01(\t\"\x8e\x01\n\rDeviceSummary\x12\x11\n\tdevice_id\x18\x01 \x01(\t\x12\x11\n\tdevice_fp\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65vice_name\x18\x03 \x01(\t\x12\x10\n\x08is_valid\x18\x04 \x01(\x08\x12\x30\n\x0clast_seen_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"\xa3\x01\n\x0eProfileSummary\x12\n\n\x02id\x18\x01 \x01(\x04\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\x12\x10\n\x08game_biz\x18\x03 \x01(\t\x12\x0e\n\x06region\x18\x04 \x01(\t\x12\x11\n\tplayer_id\x18\x05 \x01(\t\x12\x10\n\x08nickname\x18\x06 \x01(\t\x12\r\n\x05level\x18\x07 \x01(\x05\x12\x12\n\nis_default\x18\x08 \x01(\x08\"R\n\x1bGetCredentialSummaryRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"\xcc\x02\n\x1cGetCredentialSummaryResponse\x12\x1b\n\x13platform_account_id\x18\x01 \x01(\t\x12\x35\n\x06status\x18\x02 \x01(\x0e\x32%.paigram.platform.v1.CredentialStatus\x12\x35\n\x11last_validated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x35\n\x11last_refreshed_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x33\n\x07\x64\x65vices\x18\x05 \x03(\x0b\x32\".paigram.platform.v1.DeviceSummary\x12\x35\n\x08profiles\x18\x06 \x03(\x0b\x32#.paigram.platform.v1.ProfileSummary\"l\n\x14PutCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\x12\x1f\n\x17\x63redential_payload_json\x18\x03 \x01(\t\"[\n\x15PutCredentialResponse\x12\x42\n\x07summary\x18\x01 \x01(\x0b\x32\x31.paigram.platform.v1.GetCredentialSummaryResponse\"O\n\x18RefreshCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"\x84\x01\n\x19RefreshCredentialResponse\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.paigram.platform.v1.CredentialStatus\x12\x30\n\x0crefreshed_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"N\n\x17\x44\x65leteCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"+\n\x18\x44\x65leteCredentialResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"}\n\x1eInvalidateConsumerGrantRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x12\n\nbinding_id\x18\x02 \x01(\x04\x12\x10\n\x08\x63onsumer\x18\x03 \x01(\t\x12\x1d\n\x15minimum_grant_version\x18\x04 \x01(\x04\"2\n\x1fInvalidateConsumerGrantResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08*\xbb\x01\n\x10\x43redentialStatus\x12!\n\x1d\x43REDENTIAL_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x43REDENTIAL_STATUS_ACTIVE\x10\x01\x12\x1d\n\x19\x43REDENTIAL_STATUS_EXPIRED\x10\x02\x12\x1d\n\x19\x43REDENTIAL_STATUS_INVALID\x10\x03\x12(\n$CREDENTIAL_STATUS_CHALLENGE_REQUIRED\x10\x04\x32\xd3\x05\n\x0fPlatformService\x12o\n\x10\x44\x65scribePlatform\x12,.paigram.platform.v1.DescribePlatformRequest\x1a-.paigram.platform.v1.DescribePlatformResponse\x12{\n\x14GetCredentialSummary\x12\x30.paigram.platform.v1.GetCredentialSummaryRequest\x1a\x31.paigram.platform.v1.GetCredentialSummaryResponse\x12\x66\n\rPutCredential\x12).paigram.platform.v1.PutCredentialRequest\x1a*.paigram.platform.v1.PutCredentialResponse\x12r\n\x11RefreshCredential\x12-.paigram.platform.v1.RefreshCredentialRequest\x1a..paigram.platform.v1.RefreshCredentialResponse\x12o\n\x10\x44\x65leteCredential\x12,.paigram.platform.v1.DeleteCredentialRequest\x1a-.paigram.platform.v1.DeleteCredentialResponse\x12\x84\x01\n\x17InvalidateConsumerGrant\x12\x33.paigram.platform.v1.InvalidateConsumerGrantRequest\x1a\x34.paigram.platform.v1.InvalidateConsumerGrantResponseBWZUgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1;platformv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1aplatform/v1/platform.proto\x12\x13paigram.platform.v1\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x19\n\x17\x44\x65scribePlatformRequest\"\xc0\x01\n\x18\x44\x65scribePlatformResponse\x12\x14\n\x0cplatform_key\x18\x01 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x02 \x01(\t\x12\x18\n\x10service_audience\x18\x03 \x01(\t\x12\x19\n\x11supported_actions\x18\x04 \x03(\t\x12\x32\n\x11\x63redential_schema\x18\x05 \x01(\x0b\x32\x17.google.protobuf.Struct\x12\x0f\n\x07version\x18\x06 \x01(\t\"\x8e\x01\n\rDeviceSummary\x12\x11\n\tdevice_id\x18\x01 \x01(\t\x12\x11\n\tdevice_fp\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65vice_name\x18\x03 \x01(\t\x12\x10\n\x08is_valid\x18\x04 \x01(\x08\x12\x30\n\x0clast_seen_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"\xa3\x01\n\x0eProfileSummary\x12\n\n\x02id\x18\x01 \x01(\x04\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\x12\x10\n\x08game_biz\x18\x03 \x01(\t\x12\x0e\n\x06region\x18\x04 \x01(\t\x12\x11\n\tplayer_id\x18\x05 \x01(\t\x12\x10\n\x08nickname\x18\x06 \x01(\t\x12\r\n\x05level\x18\x07 \x01(\x05\x12\x12\n\nis_default\x18\x08 \x01(\x08\"R\n\x1bGetCredentialSummaryRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"\xcc\x02\n\x1cGetCredentialSummaryResponse\x12\x1b\n\x13platform_account_id\x18\x01 \x01(\t\x12\x35\n\x06status\x18\x02 \x01(\x0e\x32%.paigram.platform.v1.CredentialStatus\x12\x35\n\x11last_validated_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x35\n\x11last_refreshed_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x33\n\x07\x64\x65vices\x18\x05 \x03(\x0b\x32\".paigram.platform.v1.DeviceSummary\x12\x35\n\x08profiles\x18\x06 \x03(\x0b\x32#.paigram.platform.v1.ProfileSummary\"Q\n\x1aGetCredentialStatusRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"\x8b\x01\n\x1bGetCredentialStatusResponse\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.paigram.platform.v1.CredentialStatus\x12\x35\n\x11last_validated_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"P\n\x19ValidateCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"g\n\x1aValidateCredentialResponse\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.paigram.platform.v1.CredentialStatus\x12\x12\n\nerror_code\x18\x02 \x01(\t\"J\n\x13ListProfilesRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"M\n\x14ListProfilesResponse\x12\x35\n\x08profiles\x18\x01 \x03(\x0b\x32#.paigram.platform.v1.ProfileSummary\"O\n\x18GetPrimaryProfileRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"Q\n\x19GetPrimaryProfileResponse\x12\x34\n\x07profile\x18\x01 \x01(\x0b\x32#.paigram.platform.v1.ProfileSummary\"[\n\x11GetAuthKeyRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\x12\x11\n\tplayer_id\x18\x03 \x01(\t\"U\n\x12GetAuthKeyResponse\x12\x0f\n\x07\x61uthkey\x18\x01 \x01(\t\x12.\n\nexpires_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"G\n\nDeviceInfo\x12\x11\n\tdevice_id\x18\x01 \x01(\t\x12\x11\n\tdevice_fp\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65vice_name\x18\x03 \x01(\t\"{\n\x13UpsertDeviceRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\x12/\n\x06\x64\x65vice\x18\x03 \x01(\x0b\x32\x1f.paigram.platform.v1.DeviceInfo\"\'\n\x14UpsertDeviceResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"l\n\x14PutCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\x12\x1f\n\x17\x63redential_payload_json\x18\x03 \x01(\t\"[\n\x15PutCredentialResponse\x12\x42\n\x07summary\x18\x01 \x01(\x0b\x32\x31.paigram.platform.v1.GetCredentialSummaryResponse\"O\n\x18RefreshCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"\x84\x01\n\x19RefreshCredentialResponse\x12\x35\n\x06status\x18\x01 \x01(\x0e\x32%.paigram.platform.v1.CredentialStatus\x12\x30\n\x0crefreshed_at\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\"N\n\x17\x44\x65leteCredentialRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x02 \x01(\t\"+\n\x18\x44\x65leteCredentialResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"}\n\x1eInvalidateConsumerGrantRequest\x12\x16\n\x0eservice_ticket\x18\x01 \x01(\t\x12\x12\n\nbinding_id\x18\x02 \x01(\x04\x12\x10\n\x08\x63onsumer\x18\x03 \x01(\t\x12\x1d\n\x15minimum_grant_version\x18\x04 \x01(\x04\"2\n\x1fInvalidateConsumerGrantResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08*\xbb\x01\n\x10\x43redentialStatus\x12!\n\x1d\x43REDENTIAL_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x43REDENTIAL_STATUS_ACTIVE\x10\x01\x12\x1d\n\x19\x43REDENTIAL_STATUS_EXPIRED\x10\x02\x12\x1d\n\x19\x43REDENTIAL_STATUS_INVALID\x10\x03\x12(\n$CREDENTIAL_STATUS_CHALLENGE_REQUIRED\x10\x04\x32\xe1\n\n\x0fPlatformService\x12o\n\x10\x44\x65scribePlatform\x12,.paigram.platform.v1.DescribePlatformRequest\x1a-.paigram.platform.v1.DescribePlatformResponse\x12x\n\x13GetCredentialStatus\x12/.paigram.platform.v1.GetCredentialStatusRequest\x1a\x30.paigram.platform.v1.GetCredentialStatusResponse\x12u\n\x12ValidateCredential\x12..paigram.platform.v1.ValidateCredentialRequest\x1a/.paigram.platform.v1.ValidateCredentialResponse\x12{\n\x14GetCredentialSummary\x12\x30.paigram.platform.v1.GetCredentialSummaryRequest\x1a\x31.paigram.platform.v1.GetCredentialSummaryResponse\x12\x63\n\x0cListProfiles\x12(.paigram.platform.v1.ListProfilesRequest\x1a).paigram.platform.v1.ListProfilesResponse\x12r\n\x11GetPrimaryProfile\x12-.paigram.platform.v1.GetPrimaryProfileRequest\x1a..paigram.platform.v1.GetPrimaryProfileResponse\x12]\n\nGetAuthKey\x12&.paigram.platform.v1.GetAuthKeyRequest\x1a\'.paigram.platform.v1.GetAuthKeyResponse\x12\x63\n\x0cUpsertDevice\x12(.paigram.platform.v1.UpsertDeviceRequest\x1a).paigram.platform.v1.UpsertDeviceResponse\x12\x66\n\rPutCredential\x12).paigram.platform.v1.PutCredentialRequest\x1a*.paigram.platform.v1.PutCredentialResponse\x12r\n\x11RefreshCredential\x12-.paigram.platform.v1.RefreshCredentialRequest\x1a..paigram.platform.v1.RefreshCredentialResponse\x12o\n\x10\x44\x65leteCredential\x12,.paigram.platform.v1.DeleteCredentialRequest\x1a-.paigram.platform.v1.DeleteCredentialResponse\x12\x84\x01\n\x17InvalidateConsumerGrant\x12\x33.paigram.platform.v1.InvalidateConsumerGrantRequest\x1a\x34.paigram.platform.v1.InvalidateConsumerGrantResponseBWZUgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1;platformv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,8 +34,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'platform.v1.platform_pb2', 
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'ZUgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1;platformv1'
-  _globals['_CREDENTIALSTATUS']._serialized_start=1790
-  _globals['_CREDENTIALSTATUS']._serialized_end=1977
+  _globals['_CREDENTIALSTATUS']._serialized_start=2940
+  _globals['_CREDENTIALSTATUS']._serialized_end=3127
   _globals['_DESCRIBEPLATFORMREQUEST']._serialized_start=114
   _globals['_DESCRIBEPLATFORMREQUEST']._serialized_end=139
   _globals['_DESCRIBEPLATFORMRESPONSE']._serialized_start=142
@@ -48,22 +48,48 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETCREDENTIALSUMMARYREQUEST']._serialized_end=729
   _globals['_GETCREDENTIALSUMMARYRESPONSE']._serialized_start=732
   _globals['_GETCREDENTIALSUMMARYRESPONSE']._serialized_end=1064
-  _globals['_PUTCREDENTIALREQUEST']._serialized_start=1066
-  _globals['_PUTCREDENTIALREQUEST']._serialized_end=1174
-  _globals['_PUTCREDENTIALRESPONSE']._serialized_start=1176
-  _globals['_PUTCREDENTIALRESPONSE']._serialized_end=1267
-  _globals['_REFRESHCREDENTIALREQUEST']._serialized_start=1269
-  _globals['_REFRESHCREDENTIALREQUEST']._serialized_end=1348
-  _globals['_REFRESHCREDENTIALRESPONSE']._serialized_start=1351
-  _globals['_REFRESHCREDENTIALRESPONSE']._serialized_end=1483
-  _globals['_DELETECREDENTIALREQUEST']._serialized_start=1485
-  _globals['_DELETECREDENTIALREQUEST']._serialized_end=1563
-  _globals['_DELETECREDENTIALRESPONSE']._serialized_start=1565
-  _globals['_DELETECREDENTIALRESPONSE']._serialized_end=1608
-  _globals['_INVALIDATECONSUMERGRANTREQUEST']._serialized_start=1610
-  _globals['_INVALIDATECONSUMERGRANTREQUEST']._serialized_end=1735
-  _globals['_INVALIDATECONSUMERGRANTRESPONSE']._serialized_start=1737
-  _globals['_INVALIDATECONSUMERGRANTRESPONSE']._serialized_end=1787
-  _globals['_PLATFORMSERVICE']._serialized_start=1980
-  _globals['_PLATFORMSERVICE']._serialized_end=2703
+  _globals['_GETCREDENTIALSTATUSREQUEST']._serialized_start=1066
+  _globals['_GETCREDENTIALSTATUSREQUEST']._serialized_end=1147
+  _globals['_GETCREDENTIALSTATUSRESPONSE']._serialized_start=1150
+  _globals['_GETCREDENTIALSTATUSRESPONSE']._serialized_end=1289
+  _globals['_VALIDATECREDENTIALREQUEST']._serialized_start=1291
+  _globals['_VALIDATECREDENTIALREQUEST']._serialized_end=1371
+  _globals['_VALIDATECREDENTIALRESPONSE']._serialized_start=1373
+  _globals['_VALIDATECREDENTIALRESPONSE']._serialized_end=1476
+  _globals['_LISTPROFILESREQUEST']._serialized_start=1478
+  _globals['_LISTPROFILESREQUEST']._serialized_end=1552
+  _globals['_LISTPROFILESRESPONSE']._serialized_start=1554
+  _globals['_LISTPROFILESRESPONSE']._serialized_end=1631
+  _globals['_GETPRIMARYPROFILEREQUEST']._serialized_start=1633
+  _globals['_GETPRIMARYPROFILEREQUEST']._serialized_end=1712
+  _globals['_GETPRIMARYPROFILERESPONSE']._serialized_start=1714
+  _globals['_GETPRIMARYPROFILERESPONSE']._serialized_end=1795
+  _globals['_GETAUTHKEYREQUEST']._serialized_start=1797
+  _globals['_GETAUTHKEYREQUEST']._serialized_end=1888
+  _globals['_GETAUTHKEYRESPONSE']._serialized_start=1890
+  _globals['_GETAUTHKEYRESPONSE']._serialized_end=1975
+  _globals['_DEVICEINFO']._serialized_start=1977
+  _globals['_DEVICEINFO']._serialized_end=2048
+  _globals['_UPSERTDEVICEREQUEST']._serialized_start=2050
+  _globals['_UPSERTDEVICEREQUEST']._serialized_end=2173
+  _globals['_UPSERTDEVICERESPONSE']._serialized_start=2175
+  _globals['_UPSERTDEVICERESPONSE']._serialized_end=2214
+  _globals['_PUTCREDENTIALREQUEST']._serialized_start=2216
+  _globals['_PUTCREDENTIALREQUEST']._serialized_end=2324
+  _globals['_PUTCREDENTIALRESPONSE']._serialized_start=2326
+  _globals['_PUTCREDENTIALRESPONSE']._serialized_end=2417
+  _globals['_REFRESHCREDENTIALREQUEST']._serialized_start=2419
+  _globals['_REFRESHCREDENTIALREQUEST']._serialized_end=2498
+  _globals['_REFRESHCREDENTIALRESPONSE']._serialized_start=2501
+  _globals['_REFRESHCREDENTIALRESPONSE']._serialized_end=2633
+  _globals['_DELETECREDENTIALREQUEST']._serialized_start=2635
+  _globals['_DELETECREDENTIALREQUEST']._serialized_end=2713
+  _globals['_DELETECREDENTIALRESPONSE']._serialized_start=2715
+  _globals['_DELETECREDENTIALRESPONSE']._serialized_end=2758
+  _globals['_INVALIDATECONSUMERGRANTREQUEST']._serialized_start=2760
+  _globals['_INVALIDATECONSUMERGRANTREQUEST']._serialized_end=2885
+  _globals['_INVALIDATECONSUMERGRANTRESPONSE']._serialized_start=2887
+  _globals['_INVALIDATECONSUMERGRANTRESPONSE']._serialized_end=2937
+  _globals['_PLATFORMSERVICE']._serialized_start=3130
+  _globals['_PLATFORMSERVICE']._serialized_end=4507
 # @@protoc_insertion_point(module_scope)

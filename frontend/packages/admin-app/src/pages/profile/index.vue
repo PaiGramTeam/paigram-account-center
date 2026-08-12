@@ -98,13 +98,9 @@
               <div class="flex items-center justify-between rounded bg-gray-50 p-4">
                 <div>
                   <p class="font-medium">两步验证</p>
-                  <p class="text-sm text-gray-500">为您的账户添加额外的安全保护</p>
+                  <p class="text-sm text-gray-500">请在用户端安全中心管理两步验证</p>
                 </div>
-                <a-switch
-                  v-model="twoFactorEnabled"
-                  :loading="toggling2FA"
-                  @change="(value: string | number | boolean) => handleToggle2FA(value as boolean)"
-                />
+                <a-switch v-model="twoFactorEnabled" disabled />
               </div>
             </div>
           </a-tab-pane>
@@ -113,13 +109,13 @@
             <div class="max-w-3xl">
               <h3 class="mb-4 text-lg font-semibold">活跃会话</h3>
               <a-list>
-                <a-list-item v-for="session in activeSessions" :key="session.id">
+                <a-list-item v-for="session in activeSessions" :key="session.device_id">
                   <a-list-item-meta>
-                    <template #title> {{ session.device }} - {{ session.browser }} </template>
+                    <template #title> {{ session.device_name }} - {{ session.device_type || '未知类型' }} </template>
                     <template #description>
                       <div class="text-sm text-gray-500">
                         <p>IP地址: {{ session.ip }}</p>
-                        <p>最后活动: {{ formatDate(session.last_activity) }}</p>
+                        <p>最后活动: {{ formatDate(session.last_active_at) }}</p>
                       </div>
                     </template>
                   </a-list-item-meta>
@@ -128,7 +124,7 @@
                       v-if="!session.is_current"
                       size="small"
                       status="danger"
-                      @click="handleRevokeSession(session.id)"
+                      @click="handleRevokeSession(session.device_id)"
                     >
                       注销
                     </a-button>
@@ -150,7 +146,8 @@ import { Message } from '@arco-design/web-vue'
 import type { FormInstance } from '@arco-design/web-vue'
 import { IconUser } from '@arco-design/web-vue/es/icon'
 import { PageHeader, useUserStore } from '@paigram/shared-components'
-import { profileApi } from '@/api'
+import type { Device } from '@paigram/shared-components'
+import { profileApi, securityApi } from '@/api'
 
 const userStore = useUserStore()
 
@@ -159,7 +156,6 @@ const passwordFormRef = ref<FormInstance>()
 
 const saving = ref(false)
 const changingPassword = ref(false)
-const toggling2FA = ref(false)
 
 const profileForm = reactive({
   display_name: '',
@@ -176,24 +172,7 @@ const passwordForm = reactive({
 
 const twoFactorEnabled = ref(false)
 
-const activeSessions = ref([
-  {
-    id: '1',
-    device: 'Windows PC',
-    browser: 'Chrome 120.0',
-    ip: '192.168.1.100',
-    last_activity: new Date(),
-    is_current: true,
-  },
-  {
-    id: '2',
-    device: 'iPhone 15',
-    browser: 'Safari 17.0',
-    ip: '192.168.1.101',
-    last_activity: new Date(Date.now() - 3600000),
-    is_current: false,
-  },
-])
+const activeSessions = ref<Device[]>([])
 
 const profileRules = {
   display_name: [
@@ -232,7 +211,7 @@ const passwordRules = {
   ],
 }
 
-const formatDate = (date: Date): string => {
+const formatDate = (date: string): string => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
@@ -250,8 +229,8 @@ const loadProfile = async () => {
 }
 
 const handleSaveProfile = async () => {
-  const valid = await profileFormRef.value?.validate()
-  if (!valid) return
+  const errors = await profileFormRef.value?.validate()
+  if (errors) return
 
   saving.value = true
   try {
@@ -279,12 +258,18 @@ const handleResetForm = () => {
 }
 
 const handleChangePassword = async () => {
-  const valid = await passwordFormRef.value?.validate()
-  if (!valid) return
+  const errors = await passwordFormRef.value?.validate()
+  if (errors) return
 
   changingPassword.value = true
   try {
-    // TODO: Call the password change API.
+    if (!userStore.userId) {
+      throw new Error('用户信息未加载')
+    }
+    await securityApi.changePassword(userStore.userId, {
+      old_password: passwordForm.current_password,
+      new_password: passwordForm.new_password,
+    })
     Message.success('密码修改成功，请重新登录')
     passwordForm.current_password = ''
     passwordForm.new_password = ''
@@ -296,30 +281,34 @@ const handleChangePassword = async () => {
   }
 }
 
-const handleToggle2FA = async (value: boolean) => {
-  toggling2FA.value = true
-  try {
-    // TODO: Call the API that toggles two-factor authentication.
-    Message.success(value ? '两步验证已开启' : '两步验证已关闭')
-  } catch (_error) {
-    Message.error('操作失败，请稍后重试')
-    twoFactorEnabled.value = !value
-  } finally {
-    toggling2FA.value = false
-  }
-}
-
 const handleRevokeSession = async (sessionId: string) => {
   try {
-    // TODO: Call the API that revokes the session.
+    if (!userStore.userId) {
+      throw new Error('用户信息未加载')
+    }
+    await securityApi.removeDevice(userStore.userId, sessionId)
     Message.success('会话已注销')
-    activeSessions.value = activeSessions.value.filter((s) => s.id !== sessionId)
+    activeSessions.value = activeSessions.value.filter((session) => session.device_id !== sessionId)
   } catch (_error) {
     Message.error('注销失败，请稍后重试')
   }
 }
 
+const loadSecurity = async (): Promise<void> => {
+  if (!userStore.userId) return
+  try {
+    const [sessions, overview] = await Promise.all([
+      securityApi.getDevices(userStore.userId),
+      securityApi.getOverview(),
+    ])
+    activeSessions.value = sessions.data.data
+    twoFactorEnabled.value = overview.data.two_factor_enabled
+  } catch (_error) {
+    Message.error('加载安全信息失败')
+  }
+}
+
 onMounted(() => {
-  loadProfile()
+  void Promise.all([loadProfile(), loadSecurity()])
 })
 </script>

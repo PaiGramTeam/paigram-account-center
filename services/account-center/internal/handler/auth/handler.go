@@ -40,6 +40,7 @@ type Handler struct {
 	// override this so they can capture the URL the handler hands to the
 	// email layer without spinning up SMTP. Do not set in production.
 	sendPasswordResetEmail func(ctx context.Context, to, token, baseURL string) error
+	sendVerificationEmail  func(ctx context.Context, to, token, baseURL string) error
 }
 
 // NewHandler constructs an auth Handler.

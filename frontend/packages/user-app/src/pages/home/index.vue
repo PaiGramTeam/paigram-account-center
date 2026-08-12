@@ -27,7 +27,7 @@
     </section>
 
     <!-- Features Section -->
-    <section class="py-24">
+    <section id="features" class="py-24">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="text-center">
           <h2 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-gray-100">核心功能</h2>
@@ -64,12 +64,6 @@
           <p class="mx-auto mt-4 max-w-2xl text-lg text-white/90">立即注册账号，体验 Paigram 带来的便捷服务</p>
           <div class="mt-8 flex items-center justify-center gap-x-4">
             <a-button size="large" @click="handleRegister"> 注册账号 </a-button>
-            <a-button type="text" size="large" class="!text-white hover:!text-white/80" @click="handleContactUs">
-              联系我们
-              <template #icon>
-                <icon-arrow-right />
-              </template>
-            </a-button>
           </div>
         </div>
       </div>
@@ -82,7 +76,6 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { Message } from '@arco-design/web-vue'
 import {
   IconLock,
   IconUser,
@@ -99,8 +92,6 @@ const router = useRouter()
 const navigationItems = [
   { key: 'home', label: '首页', path: '/' },
   { key: 'features', label: '功能', path: '#features' },
-  { key: 'about', label: '关于', path: '#about' },
-  { key: 'contact', label: '联系', path: '#contact' },
 ]
 
 const features = [
@@ -141,15 +132,11 @@ const handleGetStarted = (): void => {
 }
 
 const handleLearnMore = (): void => {
-  Message.info('功能开发中...')
+  document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })
 }
 
 const handleRegister = (): void => {
   router.push('/register')
-}
-
-const handleContactUs = (): void => {
-  router.push('/contact')
 }
 </script>
 

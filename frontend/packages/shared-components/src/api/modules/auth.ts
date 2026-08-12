@@ -11,6 +11,9 @@ import type {
   InitiateOAuthRequest,
   InitiateOAuthResponse,
   OAuthCallbackRequest,
+  OAuthCallbackResponse,
+  ForgotPasswordRequest,
+  PublicResetPasswordRequest,
 } from '../types'
 
 export function createAuthApi(request: ReturnType<typeof createRequest>) {
@@ -39,8 +42,16 @@ export function createAuthApi(request: ReturnType<typeof createRequest>) {
       return request.post(`/auth/oauth/${provider}/init`, data, { skipErrorToast: true })
     },
 
-    async handleOAuthCallback(provider: string, data: OAuthCallbackRequest): Promise<LoginResponse> {
+    async handleOAuthCallback(provider: string, data: OAuthCallbackRequest): Promise<OAuthCallbackResponse> {
       return request.post(`/auth/oauth/${provider}/callback`, data, { skipErrorToast: true })
+    },
+
+    async forgotPassword(data: ForgotPasswordRequest): Promise<void> {
+      await request.post('/auth/forgot-password', data, { skipErrorToast: true })
+    },
+
+    async resetPassword(data: PublicResetPasswordRequest): Promise<void> {
+      await request.post('/auth/reset-password', data, { skipErrorToast: true })
     },
   }
 }

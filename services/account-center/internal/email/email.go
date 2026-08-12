@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -213,7 +214,8 @@ func (s *Service) Close() error {
 
 // SendVerificationEmail sends an email verification email
 func (s *Service) SendVerificationEmail(ctx context.Context, to, token, baseURL string) error {
-	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", baseURL, token)
+	query := url.Values{"email": {to}, "token": {token}}
+	verifyURL := fmt.Sprintf("%s/verify-email?%s", baseURL, query.Encode())
 
 	data := &EmailVerificationData{
 		VerifyURL: verifyURL,
@@ -255,7 +257,7 @@ If you did not create an account, please ignore this email.
 
 // SendPasswordResetEmail sends a password reset email
 func (s *Service) SendPasswordResetEmail(ctx context.Context, to, token, baseURL string) error {
-	resetURL := fmt.Sprintf("%s/reset-password?token=%s", baseURL, token)
+	resetURL := fmt.Sprintf("%s/reset-password?token=%s", baseURL, url.QueryEscape(token))
 
 	data := &PasswordResetData{
 		ResetURL: resetURL,

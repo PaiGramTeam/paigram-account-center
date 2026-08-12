@@ -37,6 +37,80 @@ services:
       retries: 20
     networks: [account-center]
 
+  platform-postgres:
+    image: public.ecr.aws/docker/library/postgres:16-alpine
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-platform-postgres"
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: platform_mihomo
+      POSTGRES_USER: platform_mihomo
+      POSTGRES_PASSWORD: "${PAI_PLATFORM_POSTGRES_PASSWORD:?set PAI_PLATFORM_POSTGRES_PASSWORD in .env}"
+    volumes:
+      - platform-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_mihomo -d platform_mihomo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [account-center]
+
+  platform-redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-platform-redis"
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: "${PAI_PLATFORM_REDIS_PASSWORD:?set PAI_PLATFORM_REDIS_PASSWORD in .env}"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - "${PAI_PLATFORM_REDIS_PASSWORD:?set PAI_PLATFORM_REDIS_PASSWORD in .env}"
+    volumes:
+      - platform-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [account-center]
+
+  platform-mihomo:
+    build:
+      context: ../..
+      dockerfile: deploy/podman/platform-mihomo.Containerfile
+    image: "localhost/${PAI_INSTANCE:-paigram-account-center}-platform-mihomo:${PAI_IMAGE_TAG:-latest}"
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-platform-mihomo"
+    restart: unless-stopped
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+      platform-redis:
+        condition: service_healthy
+    environment:
+      PAI_PLATFORM_DATABASE_DSN: "postgres://platform_mihomo:${PAI_PLATFORM_POSTGRES_PASSWORD:?set PAI_PLATFORM_POSTGRES_PASSWORD in .env}@platform-postgres:5432/platform_mihomo?sslmode=disable"
+      PAI_PLATFORM_REDIS_ADDR: "platform-redis:6379"
+      PAI_PLATFORM_REDIS_PASSWORD: "${PAI_PLATFORM_REDIS_PASSWORD:?set PAI_PLATFORM_REDIS_PASSWORD in .env}"
+      PAI_PLATFORM_CREDENTIAL_ENCRYPTION_KEY: "${PAI_PLATFORM_CREDENTIAL_ENCRYPTION_KEY:?set PAI_PLATFORM_CREDENTIAL_ENCRYPTION_KEY in .env}"
+      PAI_SERVICE_TICKET_PUBLIC_KEY_PEM: "${PAI_SERVICE_TICKET_PUBLIC_KEY_PEM:?set PAI_SERVICE_TICKET_PUBLIC_KEY_PEM in .env}"
+      PAI_MIHOMO_UPSTREAM_BASE_URL: "${PAI_MIHOMO_UPSTREAM_BASE_URL:?set PAI_MIHOMO_UPSTREAM_BASE_URL in .env}"
+      PAI_MIHOMO_UPSTREAM_BEARER_TOKEN_FILE: "${PAI_MIHOMO_UPSTREAM_BEARER_TOKEN_FILE:-}"
+    ports:
+      - "${PAI_PLATFORM_GRPC_BIND:-127.0.0.1}:${PAI_PLATFORM_GRPC_PORT:-19000}:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 9000"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges
+    networks: [account-center]
+
   account-center:
     build:
       context: ../..
@@ -52,7 +126,9 @@ services:
     environment:
       PAI_DATABASE_DSN: "postgres://paigram:${PAI_POSTGRES_PASSWORD:?set PAI_POSTGRES_PASSWORD in .env}@postgres:5432/paigram?sslmode=disable"
       PAI_REDIS_PASSWORD: "${PAI_REDIS_PASSWORD:?set PAI_REDIS_PASSWORD in .env}"
-      PAI_AUTH_SERVICE_TICKET_SIGNING_KEY: "${PAI_SERVICE_TICKET_SIGNING_KEY:?set PAI_SERVICE_TICKET_SIGNING_KEY in .env}"
+      PAI_AUTH_SERVICE_TICKET_PRIVATE_KEY_PEM: "${PAI_SERVICE_TICKET_PRIVATE_KEY_PEM:?set PAI_SERVICE_TICKET_PRIVATE_KEY_PEM in .env}"
+      PAI_AUTH_OAUTH_SIGNING_KEY: "${PAI_OAUTH_SIGNING_KEY:?set PAI_OAUTH_SIGNING_KEY in .env}"
+      PAI_AUTH_REQUIRE_VERIFIED_EMAIL_LOGIN: "${PAI_REQUIRE_EMAIL_VERIFICATION:-false}"
       PAI_SECURITY_ENCRYPTION_KEY: "${PAI_SECURITY_ENCRYPTION_KEY:?set PAI_SECURITY_ENCRYPTION_KEY in .env}"
       PAI_FRONTEND_BASE_URL: "${PAI_FRONTEND_BASE_URL:-http://localhost:18080}"
       ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
@@ -109,3 +185,7 @@ volumes:
     name: "${PAI_INSTANCE:-paigram-account-center}-postgres-data"
   redis-data:
     name: "${PAI_INSTANCE:-paigram-account-center}-redis-data"
+  platform-postgres-data:
+    name: "${PAI_INSTANCE:-paigram-account-center}-platform-postgres-data"
+  platform-redis-data:
+    name: "${PAI_INSTANCE:-paigram-account-center}-platform-redis-data"

@@ -7,6 +7,9 @@ export default {
   'menu.account.info': '账号信息',
   'menu.account.security': '安全设置',
   'menu.account.binding': '账号绑定',
+  'menu.platformAccounts': '平台账号',
+  'menu.apps': '应用授权',
+  'menu.services': '服务注册',
   'menu.users': '用户管理',
   'menu.users.list': '用户列表',
   'menu.users.roles': '角色管理',
@@ -14,6 +17,7 @@ export default {
   'menu.system': '系统设置',
   'menu.system.config': '系统配置',
   'menu.system.logs': '操作日志',
+  'menu.system.settings': '系统配置',
 
   // Common
   'common.login': '登录',

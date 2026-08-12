@@ -12,6 +12,8 @@ import type {
   RemoveDeviceResponse,
 } from '../types'
 
+export type SecurityOverview = components['schemas']['SecurityOverview']
+
 /**
  */
 export function createSecurityApi(request: ReturnType<typeof createRequest>) {
@@ -74,7 +76,7 @@ export function createSecurityApi(request: ReturnType<typeof createRequest>) {
       return request.delete(`/me/sessions/${deviceId}`)
     },
 
-    async getOverview(): Promise<{ data: components['schemas']['SecurityOverview'] }> {
+    async getOverview(): Promise<{ data: SecurityOverview }> {
       return request.get('/me/security/overview')
     },
   }

@@ -1,7 +1,10 @@
 package openapidoc
 
 import (
+	"crypto/ed25519"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,7 +35,11 @@ func Generate() (contents []byte, returnErr error) {
 		returnErr = errors.Join(returnErr, sqlDB.Close())
 	}()
 
-	engine, err := router.New(documentationConfig(), sessioncache.NewNoopStore(), db, nil, nil)
+	documentationConfig, err := newDocumentationConfig()
+	if err != nil {
+		return nil, err
+	}
+	engine, err := router.New(documentationConfig, sessioncache.NewNoopStore(), db, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build OpenAPI route catalog: %w", err)
 	}
@@ -69,7 +76,13 @@ func normalize(raw []byte) ([]byte, error) {
 	return append(contents, '\n'), nil
 }
 
-func documentationConfig() *config.Config {
+func newDocumentationConfig() (*config.Config, error) {
+	privateKey := ed25519.NewKeyFromSeed([]byte("0123456789abcdef0123456789abcdef"))
+	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("encode OpenAPI service ticket key: %w", err)
+	}
+
 	return &config.Config{
 		App: config.AppConfig{
 			Name:           "Paigram Account Center",
@@ -82,10 +95,12 @@ func documentationConfig() *config.Config {
 			RefreshTokenTTLSeconds:     604800,
 			ServiceTicketTTLSeconds:    300,
 			ServiceTicketIssuer:        "paigram-account-center",
-			ServiceTicketSigningKey:    documentationSigningKey,
+			ServiceTicketKeyID:         "openapi-test-key",
+			ServiceTicketPrivateKeyPEM: string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
 			OAuthIssuer:                "account-center",
 			OAuthAccessTokenTTLSeconds: 3600,
+			OAuthSigningKey:            documentationSigningKey,
 		},
 		Security: config.SecurityConfig{BcryptCost: 10},
-	}
+	}, nil
 }

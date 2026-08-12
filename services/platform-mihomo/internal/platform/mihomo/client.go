@@ -1,6 +1,40 @@
 package mihomo
 
-import "context"
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+)
+
+type ErrorKind string
+
+const (
+	ErrorInvalidCredential ErrorKind = "invalid_credential"
+	ErrorExpiredCredential ErrorKind = "expired_credential"
+	ErrorChallengeRequired ErrorKind = "challenge_required"
+	ErrorRateLimited       ErrorKind = "rate_limited"
+	ErrorUnavailable       ErrorKind = "unavailable"
+	ErrorInvalidResponse   ErrorKind = "invalid_response"
+)
+
+type UpstreamError struct {
+	Kind       ErrorKind
+	StatusCode int
+	RetryAfter time.Duration
+}
+
+func (e *UpstreamError) Error() string {
+	if e == nil {
+		return "mihomo upstream error"
+	}
+	return fmt.Sprintf("mihomo upstream request failed: %s", e.Kind)
+}
+
+func IsErrorKind(err error, kind ErrorKind) bool {
+	var upstreamErr *UpstreamError
+	return errors.As(err, &upstreamErr) && upstreamErr.Kind == kind
+}
 
 type DiscoveredProfile struct {
 	GameBiz  string

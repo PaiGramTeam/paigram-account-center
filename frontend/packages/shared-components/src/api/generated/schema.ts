@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get-api-v1-admin-permissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/platform-accounts": {
         parameters: {
             query?: never;
@@ -1432,6 +1448,7 @@ export interface components {
             message: string;
         };
         ConsumerGrantView: {
+            actions: string[] | null;
             /** Format: int64 */
             binding_id: number;
             consumer: string;
@@ -1465,6 +1482,7 @@ export interface components {
         };
         CredentialView: {
             audiences: string[] | null;
+            bot_id: string;
             client_id: string;
             /** Format: date-time */
             created_at: string;
@@ -2212,6 +2230,111 @@ export interface operations {
             };
         };
     };
+    "get-api-v1-admin-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["Permission"][] | null;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
     "get-api-v1-admin-platform-accounts": {
         parameters: {
             query?: {
@@ -2826,6 +2949,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    actions?: string[] | null;
                     enabled: boolean | null;
                 };
             };
@@ -5131,6 +5255,7 @@ export interface operations {
             content: {
                 "application/json": {
                     audiences: string[] | null;
+                    bot_id: string;
                     client_id: string;
                     description: string;
                     display_name: string;
@@ -13527,6 +13652,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    actions?: string[] | null;
                     enabled: boolean | null;
                 };
             };

@@ -139,8 +139,8 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 	if err != nil {
 		return nil, err
 	}
-	if req.GetExternalUserId() == "" || req.GetBindingId() == 0 || req.GetAudience() == "" {
-		return nil, status.Error(codes.InvalidArgument, "external_user_id, binding_id, and audience are required")
+	if req.GetExternalUserId() == "" || req.GetBindingId() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "external_user_id and binding_id are required")
 	}
 
 	_, binding, grant, err := s.accountRefService.GetGrantedBindingForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetBindingId(), req.GetProfileId())
@@ -148,9 +148,10 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 		s.recordTicketAudit(ctx, caller.bot, nil, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
 		return nil, mapBotAccessError("get granted binding", err)
 	}
-	if req.GetAudience() != binding.PlatformServiceKey {
-		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", "audience_mismatch", nil)
-		return nil, status.Error(codes.InvalidArgument, "audience does not match binding platform service key")
+	audience, err := s.serviceAudienceForBinding(binding)
+	if err != nil {
+		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", "platform_service_unavailable", nil)
+		return nil, mapBotAccessError("resolve platform service audience", err)
 	}
 	grantedScopes, err := s.accountRefService.GetGrantedScopesForConsumer(caller.consumer, binding.ID)
 	if err != nil {
@@ -163,7 +164,7 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 		return nil, mapBotAccessError("validate requested scopes", err)
 	}
 
-	ticket, expiresAt, err := s.ticketService.Issue(caller.bot.Id, grant.Consumer, binding, scopes, req.GetAudience(), req.GetProfileId(), grant.TicketVersion)
+	ticket, expiresAt, err := s.ticketService.Issue(caller.bot.Id, grant.Consumer, binding, scopes, audience, req.GetProfileId(), grant.TicketVersion)
 	if err != nil {
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), map[string]any{"consumer": grant.Consumer})
 		return nil, mapBotAccessError("issue service ticket", err)
@@ -172,39 +173,58 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 
 	return &pb.IssueServiceTicketResponse{
 		Ticket:    ticket,
-		Audience:  req.GetAudience(),
+		Audience:  audience,
 		ExpiresAt: timestamppb.New(expiresAt),
 		Binding:   platformBindingToProto(*binding),
 	}, nil
 }
 
+func (s *BotAccessService) serviceAudienceForBinding(binding *model.PlatformAccountBinding) (string, error) {
+	if s == nil || s.db == nil || binding == nil {
+		return "", botaccess.ErrPlatformServiceNotEnabled
+	}
+	var platform model.PlatformService
+	err := s.db.Where(
+		"platform_key = ? AND service_key = ? AND enabled = ?",
+		binding.Platform,
+		binding.PlatformServiceKey,
+		true,
+	).First(&platform).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", botaccess.ErrPlatformServiceNotEnabled
+		}
+		return "", err
+	}
+	if strings.TrimSpace(platform.ServiceAudience) == "" {
+		return "", botaccess.ErrPlatformServiceNotEnabled
+	}
+	return platform.ServiceAudience, nil
+}
+
 // botAccessCaller is the (bot, consumer) pair derived from the request's
-// OAuth access token. Under Path D Option D, both fields are the
-// credential's client_id — there is no separate consumer slug or legacy
-// bot-id map.
+// OAuth access token. The consumer is the credential client_id while bot_id
+// identifies the logical Bot shared by one or more service credentials.
 type botAccessCaller struct {
 	bot      *Bot
 	consumer string
 }
 
 // botAccessCallerFromContext extracts the validated AccessClaims, enforces
-// the required scope, and projects (bot, consumer) out of the client_id.
-// Per Path D §10 Option D the bot_id and consumer name are both the
-// authenticated client_id directly — no consumer_slug lookup, no mi_
-// prefix check, no legacy ConsumerForBotID map.
+// the required scope, and projects the explicit (bot_id, client_id) mapping.
 func botAccessCallerFromContext(ctx context.Context, requiredScope string) (*botAccessCaller, error) {
 	claims, ok := interceptor.CredentialClaimsFromContext(ctx)
 	if !ok || claims == nil {
 		return nil, status.Error(codes.Unauthenticated, "credential claims missing")
 	}
-	if strings.TrimSpace(claims.ClientID) == "" {
-		return nil, status.Error(codes.Unauthenticated, "credential client_id missing")
+	if strings.TrimSpace(claims.ClientID) == "" || strings.TrimSpace(claims.BotID) == "" {
+		return nil, status.Error(codes.Unauthenticated, "credential identity mapping missing")
 	}
 	if !credentials.HasScope(claims, requiredScope) {
 		return nil, status.Error(codes.PermissionDenied, "required bot access scope missing")
 	}
 	return &botAccessCaller{
-		bot:      &Bot{Id: claims.ClientID},
+		bot:      &Bot{Id: claims.BotID},
 		consumer: claims.ClientID,
 	}, nil
 }
@@ -217,10 +237,10 @@ func botFromContext(ctx context.Context) (*Bot, error) {
 	if !ok || claims == nil {
 		return nil, status.Error(codes.Unauthenticated, "credential claims missing")
 	}
-	if strings.TrimSpace(claims.ClientID) == "" {
-		return nil, status.Error(codes.Unauthenticated, "credential client_id missing")
+	if strings.TrimSpace(claims.BotID) == "" {
+		return nil, status.Error(codes.Unauthenticated, "credential bot_id missing")
 	}
-	return &Bot{Id: claims.ClientID}, nil
+	return &Bot{Id: claims.BotID}, nil
 }
 
 func platformBindingToProto(binding model.PlatformAccountBinding) *pb.PlatformAccountBinding {
@@ -315,7 +335,7 @@ func (s *BotAccessService) recordTicketAudit(ctx context.Context, bot *Bot, bind
 		targetID = strconv.FormatUint(binding.ID, 10)
 		ownerUserID = &binding.OwnerUserID
 	}
-	writeMetadata := map[string]any{"bot_id": bot.Id, "external_user_id": req.GetExternalUserId(), "audience": req.GetAudience()}
+	writeMetadata := map[string]any{"bot_id": bot.Id, "external_user_id": req.GetExternalUserId()}
 	for key, value := range metadata {
 		writeMetadata[key] = value
 	}

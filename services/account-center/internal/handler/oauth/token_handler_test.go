@@ -34,7 +34,7 @@ type tokenHandlerFixture struct {
 // single seed credential is created so tests can drive the happy and
 // failure paths without each having to do their own setup boilerplate.
 //
-// The service_credentials table is created directly via DDL rather than
+// The credential tables are created directly via DDL rather than
 // AutoMigrate: GORM would walk ServiceCredential's `Owner User`
 // association and try to migrate the User model, whose column defaults
 // use database-specific types and defaults that SQLite cannot parse.
@@ -47,8 +47,22 @@ func newTokenHandlerFixture(t *testing.T) *tokenHandlerFixture {
 	})
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`DROP TABLE IF EXISTS service_credentials`).Error)
+	require.NoError(t, db.Exec(`DROP TABLE IF EXISTS bots`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE bots (
+		id TEXT PRIMARY KEY,
+		display_name TEXT NOT NULL,
+		description TEXT,
+		type TEXT NOT NULL,
+		status TEXT NOT NULL,
+		owner_user_id INTEGER NOT NULL,
+		allow_legacy_binding_write INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME,
+		updated_at DATETIME,
+		deleted_at DATETIME
+	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE service_credentials (
 		client_id TEXT PRIMARY KEY,
+		bot_id TEXT NOT NULL,
 		display_name TEXT NOT NULL,
 		secret_hash TEXT NOT NULL,
 		audiences TEXT NOT NULL,

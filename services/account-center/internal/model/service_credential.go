@@ -14,17 +14,12 @@ const (
 	ServiceCredentialStatusDisabled = "disabled"
 )
 
-// ServiceCredential is the OAuth 2.0 client_credentials (RFC 6749 §4.4)
-// registry row. It replaces the f27c395-era machine_identities +
-// machine_identity_secrets + machine_tokens + signing_keys quartet with a
-// single bcrypt-secret-per-row record.
-//
-// `client_id` is human-readable (e.g. "telegram-service", "paigram-genshin")
-// and serves both as the OAuth client identifier AND as the consumer name
-// that consumer_grants rows reference (per Path D Option D — consumer ==
-// client_id, no extra indirection table).
+// ServiceCredential is an OAuth 2.0 client_credentials registry row.
+// ClientID is the OAuth client identifier and consumer grant principal.
+// BotID maps that service credential to the stable logical Bot identity.
 type ServiceCredential struct {
 	ClientID    string         `gorm:"primaryKey;size:96"                       json:"client_id"`
+	BotID       string         `gorm:"size:64;not null;index"                   json:"bot_id"`
 	DisplayName string         `gorm:"size:255;not null"                        json:"display_name"`
 	SecretHash  string         `gorm:"size:255;not null"                        json:"-"`
 	Audiences   datatypes.JSON `gorm:"type:jsonb;not null"                       json:"audiences"`
@@ -38,6 +33,7 @@ type ServiceCredential struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index"                                    json:"-"`
 
 	Owner User `gorm:"foreignKey:OwnerUserID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"-"`
+	Bot   Bot  `gorm:"foreignKey:BotID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT" json:"-"`
 }
 
 // TableName pins the GORM table name; without it GORM would use the

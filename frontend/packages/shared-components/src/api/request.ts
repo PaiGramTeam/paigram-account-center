@@ -2,6 +2,7 @@ import axios from 'axios'
 import { Message } from '@arco-design/web-vue'
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiResponse, ApiError } from './types'
+import { AuthRefreshCoordinator } from './auth-refresh-coordinator'
 
 export interface NormalizedApiError {
   error?: string
@@ -12,6 +13,7 @@ export interface NormalizedApiError {
 
 export interface RequestOptions extends AxiosRequestConfig {
   skipErrorToast?: boolean
+  authRetryAttempted?: boolean
 }
 
 export interface RequestConfig {
@@ -41,6 +43,11 @@ export function createRequest(config: RequestConfig = {}) {
     },
   })
 
+  const refreshCoordinator = new AuthRefreshCoordinator<{
+    accessToken: string
+    refreshToken: string
+  }>()
+
   instance.interceptors.request.use(
     (config) => {
       const token = getToken?.()
@@ -67,29 +74,46 @@ export function createRequest(config: RequestConfig = {}) {
       if (response) {
         const { status, data } = response
 
-        if (status === 401 && config.url !== '/auth/refresh') {
+        if (status === 401 && config.url !== '/auth/refresh' && !requestConfig.authRetryAttempted) {
           const refreshToken = getRefreshToken?.()
 
           if (refreshToken && setAuthData) {
             try {
-              const refreshResponse = await instance.post('/auth/refresh', {
-                refresh_token: refreshToken,
-              })
+              requestConfig.authRetryAttempted = true
+              const authData = await refreshCoordinator.run(
+                async () => {
+                  const refreshResponse = await instance.post(
+                    '/auth/refresh',
+                    {
+                      refresh_token: refreshToken,
+                    },
+                    { skipErrorToast: true } as RequestOptions
+                  )
+                  const refreshed = {
+                    accessToken: refreshResponse.data.access_token,
+                    refreshToken: refreshResponse.data.refresh_token,
+                  }
 
-              setAuthData({
-                accessToken: refreshResponse.data.access_token,
-                refreshToken: refreshResponse.data.refresh_token,
-              })
+                  if (getRefreshToken?.() !== refreshToken) {
+                    throw new Error('Session changed while refreshing')
+                  }
 
-              config.headers.Authorization = `Bearer ${refreshResponse.data.access_token}`
+                  setAuthData(refreshed)
+                  return refreshed
+                },
+                () => onUnauthorized?.()
+              )
+
+              config.headers.Authorization = `Bearer ${authData.accessToken}`
               return instance(config)
             } catch (refreshError) {
-              onUnauthorized?.()
               return Promise.reject(refreshError)
             }
           } else {
             onUnauthorized?.()
           }
+        } else if (status === 401 && requestConfig.authRetryAttempted) {
+          onUnauthorized?.()
         }
 
         const errorData = normalizeApiError(data as ApiError)

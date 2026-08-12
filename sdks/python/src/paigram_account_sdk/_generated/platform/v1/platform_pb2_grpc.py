@@ -39,10 +39,40 @@ class PlatformServiceStub:
                 request_serializer=platform_dot_v1_dot_platform__pb2.DescribePlatformRequest.SerializeToString,
                 response_deserializer=platform_dot_v1_dot_platform__pb2.DescribePlatformResponse.FromString,
                 _registered_method=True)
+        self.GetCredentialStatus = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/GetCredentialStatus',
+                request_serializer=platform_dot_v1_dot_platform__pb2.GetCredentialStatusRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.GetCredentialStatusResponse.FromString,
+                _registered_method=True)
+        self.ValidateCredential = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/ValidateCredential',
+                request_serializer=platform_dot_v1_dot_platform__pb2.ValidateCredentialRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.ValidateCredentialResponse.FromString,
+                _registered_method=True)
         self.GetCredentialSummary = channel.unary_unary(
                 '/paigram.platform.v1.PlatformService/GetCredentialSummary',
                 request_serializer=platform_dot_v1_dot_platform__pb2.GetCredentialSummaryRequest.SerializeToString,
                 response_deserializer=platform_dot_v1_dot_platform__pb2.GetCredentialSummaryResponse.FromString,
+                _registered_method=True)
+        self.ListProfiles = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/ListProfiles',
+                request_serializer=platform_dot_v1_dot_platform__pb2.ListProfilesRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.ListProfilesResponse.FromString,
+                _registered_method=True)
+        self.GetPrimaryProfile = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/GetPrimaryProfile',
+                request_serializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileResponse.FromString,
+                _registered_method=True)
+        self.GetAuthKey = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/GetAuthKey',
+                request_serializer=platform_dot_v1_dot_platform__pb2.GetAuthKeyRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.GetAuthKeyResponse.FromString,
+                _registered_method=True)
+        self.UpsertDevice = channel.unary_unary(
+                '/paigram.platform.v1.PlatformService/UpsertDevice',
+                request_serializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceRequest.SerializeToString,
+                response_deserializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceResponse.FromString,
                 _registered_method=True)
         self.PutCredential = channel.unary_unary(
                 '/paigram.platform.v1.PlatformService/PutCredential',
@@ -75,7 +105,43 @@ class PlatformServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetCredentialStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ValidateCredential(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetCredentialSummary(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListProfiles(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetPrimaryProfile(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAuthKey(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpsertDevice(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -113,10 +179,40 @@ def add_PlatformServiceServicer_to_server(servicer, server):
                     request_deserializer=platform_dot_v1_dot_platform__pb2.DescribePlatformRequest.FromString,
                     response_serializer=platform_dot_v1_dot_platform__pb2.DescribePlatformResponse.SerializeToString,
             ),
+            'GetCredentialStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetCredentialStatus,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.GetCredentialStatusRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.GetCredentialStatusResponse.SerializeToString,
+            ),
+            'ValidateCredential': grpc.unary_unary_rpc_method_handler(
+                    servicer.ValidateCredential,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.ValidateCredentialRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.ValidateCredentialResponse.SerializeToString,
+            ),
             'GetCredentialSummary': grpc.unary_unary_rpc_method_handler(
                     servicer.GetCredentialSummary,
                     request_deserializer=platform_dot_v1_dot_platform__pb2.GetCredentialSummaryRequest.FromString,
                     response_serializer=platform_dot_v1_dot_platform__pb2.GetCredentialSummaryResponse.SerializeToString,
+            ),
+            'ListProfiles': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListProfiles,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.ListProfilesRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.ListProfilesResponse.SerializeToString,
+            ),
+            'GetPrimaryProfile': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetPrimaryProfile,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.GetPrimaryProfileResponse.SerializeToString,
+            ),
+            'GetAuthKey': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAuthKey,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.GetAuthKeyRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.GetAuthKeyResponse.SerializeToString,
+            ),
+            'UpsertDevice': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpsertDevice,
+                    request_deserializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceRequest.FromString,
+                    response_serializer=platform_dot_v1_dot_platform__pb2.UpsertDeviceResponse.SerializeToString,
             ),
             'PutCredential': grpc.unary_unary_rpc_method_handler(
                     servicer.PutCredential,
@@ -177,6 +273,60 @@ class PlatformService:
             _registered_method=True)
 
     @staticmethod
+    def GetCredentialStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/GetCredentialStatus',
+            platform_dot_v1_dot_platform__pb2.GetCredentialStatusRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.GetCredentialStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ValidateCredential(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/ValidateCredential',
+            platform_dot_v1_dot_platform__pb2.ValidateCredentialRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.ValidateCredentialResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def GetCredentialSummary(request,
             target,
             options=(),
@@ -193,6 +343,114 @@ class PlatformService:
             '/paigram.platform.v1.PlatformService/GetCredentialSummary',
             platform_dot_v1_dot_platform__pb2.GetCredentialSummaryRequest.SerializeToString,
             platform_dot_v1_dot_platform__pb2.GetCredentialSummaryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListProfiles(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/ListProfiles',
+            platform_dot_v1_dot_platform__pb2.ListProfilesRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.ListProfilesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetPrimaryProfile(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/GetPrimaryProfile',
+            platform_dot_v1_dot_platform__pb2.GetPrimaryProfileRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.GetPrimaryProfileResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAuthKey(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/GetAuthKey',
+            platform_dot_v1_dot_platform__pb2.GetAuthKeyRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.GetAuthKeyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpsertDevice(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.platform.v1.PlatformService/UpsertDevice',
+            platform_dot_v1_dot_platform__pb2.UpsertDeviceRequest.SerializeToString,
+            platform_dot_v1_dot_platform__pb2.UpsertDeviceResponse.FromString,
             options,
             channel_credentials,
             insecure,

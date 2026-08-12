@@ -9,6 +9,7 @@ from paigram_account_sdk import (
     AuthenticationError,
     CredentialError,
     CredentialStatus,
+    DeviceInfo,
     NotFoundError,
     PaiGramAccountClient,
     PlatformAccountStatus,
@@ -43,15 +44,20 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
 
     async def IssueServiceTicket(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         await require_account_metadata(context)
-        if request.audience != "mihomo-service" or list(request.requested_scopes) not in (
-            ["mihomo.credential.read_meta"],
-            ["mihomo.credential.refresh"],
-            ["mihomo.credential.delete"],
-        ):
+        allowed_scopes = {
+            "mihomo.authkey.issue",
+            "mihomo.credential.delete",
+            "mihomo.credential.read_meta",
+            "mihomo.credential.refresh",
+            "mihomo.device.update",
+            "mihomo.profile.read",
+            "mihomo.status.read",
+        }
+        if len(request.requested_scopes) != 1 or request.requested_scopes[0] not in allowed_scopes:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "unexpected ticket request")
         return bot_access_pb2.IssueServiceTicketResponse(
             ticket="service-ticket",
-            audience=request.audience,
+            audience="mihomo-service",
             binding=binding_proto(),
         )
 
@@ -67,6 +73,10 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
                 "mihomo.credential.read_meta",
                 "mihomo.credential.refresh",
                 "mihomo.credential.delete",
+                "mihomo.status.read",
+                "mihomo.profile.read",
+                "mihomo.authkey.issue",
+                "mihomo.device.update",
             ],
             version="v1",
         )
@@ -106,6 +116,30 @@ class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
         await require_request_id(context)
         return platform_pb2.DeleteCredentialResponse(success=True)
 
+    async def GetCredentialStatus(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return platform_pb2.GetCredentialStatusResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
+
+    async def ValidateCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return platform_pb2.ValidateCredentialResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
+
+    async def ListProfiles(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return platform_pb2.ListProfilesResponse(profiles=[profile_proto(request.platform_account_id)])
+
+    async def GetPrimaryProfile(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return platform_pb2.GetPrimaryProfileResponse(profile=profile_proto(request.platform_account_id))
+
+    async def GetAuthKey(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return platform_pb2.GetAuthKeyResponse(authkey=f"authkey-{request.player_id}")
+
+    async def UpsertDevice(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_request_id(context)
+        return platform_pb2.UpsertDeviceResponse(success=bool(request.device.device_id))
+
 
 class PreconditionPlatformService(PlatformService):
     async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
@@ -135,6 +169,18 @@ def binding_proto():  # type: ignore[no-untyped-def]
         platform_account_id="binding_7_10001",
         display_name="Traveler",
         status=bot_access_pb2.PLATFORM_ACCOUNT_STATUS_ACTIVE,
+    )
+
+
+def profile_proto(platform_account_id):  # type: ignore[no-untyped-def]
+    return platform_pb2.ProfileSummary(
+        id=99,
+        platform_account_id=platform_account_id,
+        game_biz="hk4e_global",
+        player_id="10001",
+        nickname="Traveler",
+        level=60,
+        is_default=True,
     )
 
 
@@ -275,7 +321,7 @@ async def test_get_credential_summary_orchestrates_service_ticket() -> None:
 
 
 @pytest.mark.asyncio
-async def test_refresh_and_delete_credentials_use_authorized_platform_calls() -> None:
+async def test_platform_consumer_methods_use_public_models() -> None:
     async with (
         account_server() as account_target,
         platform_server() as platform_target,
@@ -290,19 +336,37 @@ async def test_refresh_and_delete_credentials_use_authorized_platform_calls() ->
         ) as client,
     ):
         binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
-        refreshed = await client.refresh_credential(
+        status_result = await client.get_credential_status(
+            external_user_id="telegram:10001", binding=binding, request_id="request-123"
+        )
+        validation = await client.validate_credential(
+            external_user_id="telegram:10001", binding=binding, request_id="request-123"
+        )
+        profiles = await client.list_profiles(
+            external_user_id="telegram:10001", binding=binding, request_id="request-123"
+        )
+        primary = await client.get_primary_profile(
+            external_user_id="telegram:10001", binding=binding, request_id="request-123"
+        )
+        authkey = await client.get_auth_key(
             external_user_id="telegram:10001",
             binding=binding,
+            player_id="10001",
             request_id="request-123",
         )
-        deleted = await client.delete_credential(
+        device_updated = await client.upsert_device(
             external_user_id="telegram:10001",
             binding=binding,
+            device=DeviceInfo(device_id="device-id", device_fp="device-fp", device_name="Phone"),
             request_id="request-123",
         )
 
-    assert refreshed.status is CredentialStatus.ACTIVE
-    assert deleted is True
+    assert status_result.status is CredentialStatus.ACTIVE
+    assert validation.status is CredentialStatus.ACTIVE
+    assert profiles[0].nickname == "Traveler"
+    assert primary is not None and primary.is_default
+    assert authkey.value == "authkey-10001"
+    assert device_updated is True
 
 
 @pytest.mark.asyncio

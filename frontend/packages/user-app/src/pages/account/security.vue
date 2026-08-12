@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <a-card title="修改密码" :bordered="false" class="shadow-sm">
-      <a-form :model="passwordForm" layout="vertical" @submit="handleChangePassword">
+      <a-form :model="passwordForm" layout="vertical" @submit-success="handleChangePassword">
         <a-form-item label="当前密码" field="old_password" :rules="[{ required: true, message: '请输入当前密码' }]">
           <a-input-password
             v-model="passwordForm.old_password"
@@ -137,7 +137,7 @@
     <a-modal v-model:visible="enable2FAModalVisible" title="启用双因素认证" :footer="false" width="500px">
       <div class="space-y-4">
         <a-spin :loading="twoFactorLoading" class="w-full">
-          <a-form v-if="!twoFactorData" :model="setup2FAForm" layout="vertical" @submit="handleEnable2FA">
+          <a-form v-if="!twoFactorData" :model="setup2FAForm" layout="vertical" @submit-success="handleEnable2FA">
             <a-alert type="info" class="mb-4">启用双因素认证前，请先验证当前密码。</a-alert>
             <a-form-item label="当前密码" field="password" :rules="[{ required: true, message: '请输入当前密码' }]">
               <a-input-password
@@ -180,7 +180,7 @@
               </div>
             </div>
 
-            <a-form :model="confirm2FAForm" layout="vertical" @submit="handleConfirm2FA">
+            <a-form :model="confirm2FAForm" layout="vertical" @submit-success="handleConfirm2FA">
               <a-form-item label="验证码" field="code" :rules="[{ required: true, message: '请输入 6 位验证码' }]">
                 <a-input
                   v-model="confirm2FAForm.code"
@@ -202,7 +202,7 @@
     </a-modal>
 
     <a-modal v-model:visible="disable2FAModalVisible" title="禁用双因素认证" :footer="false" width="400px">
-      <a-form :model="disable2FAForm" layout="vertical" @submit="handleDisable2FA">
+      <a-form :model="disable2FAForm" layout="vertical" @submit-success="handleDisable2FA">
         <a-alert type="warning" class="mb-4"> 禁用双因素认证会降低您的账号安全性，请谨慎操作 </a-alert>
         <a-form-item label="密码" field="password" :rules="[{ required: true, message: '请输入密码' }]">
           <a-input-password

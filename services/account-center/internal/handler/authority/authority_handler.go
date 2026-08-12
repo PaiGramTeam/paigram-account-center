@@ -354,6 +354,25 @@ func (h *AuthorityHandler) GetRolePermissions(c *gin.Context) {
 // @Tags      Authority
 // @Security  BearerAuth
 // @Produce   json
+// @Success   200  {object}  response.Response{data=[]model.Permission}
+// @Failure   401  {object}  response.Response
+// @Failure   403  {object}  response.Response
+// @Failure   500  {object}  response.Response
+// @Router    /api/v1/admin/permissions [get]
+func (h *AuthorityHandler) ListPermissions(c *gin.Context) {
+	permissions, err := h.service.ListPermissions()
+	if err != nil {
+		logging.Error("list permissions failed", zap.Error(err))
+		response.InternalServerError(c, "获取权限列表失败")
+		return
+	}
+
+	response.Success(c, permissions)
+}
+
+// @Tags      Authority
+// @Security  BearerAuth
+// @Produce   json
 // @Success   200  {object}  response.Response{data=[]AuthorityUserItem}
 // @Failure   400  {object}  response.Response
 // @Failure   401  {object}  response.Response

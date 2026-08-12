@@ -2,10 +2,12 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
@@ -144,13 +146,9 @@ type AuthConfig struct {
 	RequireEmailVerificationLogin bool                           `mapstructure:"require_verified_email_login"`
 	ServiceTicketTTLSeconds       int                            `mapstructure:"service_ticket_ttl"`
 	ServiceTicketIssuer           string                         `mapstructure:"service_ticket_issuer"`
-	// ServiceTicketSigningKey is the deployment-wide SHARED_TICKET_KEY
-	// (≥ 32 bytes). Path D §1.4 reuses this single HS256 key for BOTH
-	// the per-Dispatch service ticket (botaccess.TicketService) AND the
-	// OAuth 2.0 access token issued by /oauth/token. The two contexts
-	// are kept distinct by their `iss` claim — account-center for OAuth
-	// tokens, the value in ServiceTicketIssuer for tickets.
-	ServiceTicketSigningKey string `mapstructure:"service_ticket_signing_key"`
+	ServiceTicketKeyID            string                         `mapstructure:"service_ticket_key_id"`
+	ServiceTicketPrivateKeyPEM    string                         `mapstructure:"service_ticket_private_key_pem"`
+	OAuthSigningKey               string                         `mapstructure:"oauth_signing_key"`
 	// OAuthIssuer is the `iss` claim stamped onto every OAuth access
 	// token issued by /oauth/token. Defaults to "account-center" — the
 	// same string the gRPC interceptor's audience check expects.
@@ -358,8 +356,11 @@ func Load(paths ...string) (*Config, error) {
 			err = validateErr
 			return
 		}
+		if validateErr := validateEmailDeliveryConfig(localCfg); validateErr != nil {
+			err = validateErr
+			return
+		}
 		warnIfFrontendBaseURLMissing(localCfg)
-		warnIfVerificationEmailDispatchMissing(localCfg)
 
 		cfg = localCfg
 	})
@@ -386,17 +387,34 @@ func validateServiceTicketConfig(cfg *Config) error {
 	if auth.ServiceTicketIssuer == "" {
 		return fmt.Errorf("auth.service_ticket_issuer must not be empty")
 	}
-	// Path D §1.4 + §1.5: the shared HS256 signing key backs BOTH the
-	// per-Dispatch service ticket AND the OAuth 2.0 access token issued
-	// by /oauth/token. There is no longer a deployment mode in which
-	// account-center starts without one — leaving the key empty would
-	// allow tickets/tokens to be minted (and trivially forged) with a
-	// zero-byte key. Fail closed at config load.
-	if auth.ServiceTicketSigningKey == "" {
-		return fmt.Errorf("auth.service_ticket_signing_key must be configured (Path D §1.4 SHARED_TICKET_KEY, ≥ 32 bytes)")
+	if auth.ServiceTicketTTLSeconds > 300 {
+		return fmt.Errorf("auth.service_ticket_ttl must not exceed 300 seconds")
 	}
-	if len(auth.ServiceTicketSigningKey) < 32 {
-		return fmt.Errorf("auth.service_ticket_signing_key must be at least 32 bytes when configured")
+	if auth.ServiceTicketKeyID == "" {
+		return fmt.Errorf("auth.service_ticket_key_id must not be empty")
+	}
+	if _, err := contractticket.ParsePrivateKeyPEM(auth.ServiceTicketPrivateKeyPEM); err != nil {
+		return fmt.Errorf("auth.service_ticket_private_key_pem: %w", err)
+	}
+	if len(auth.OAuthSigningKey) < 32 {
+		return fmt.Errorf("auth.oauth_signing_key must be at least 32 bytes")
+	}
+	return nil
+}
+
+func validateEmailDeliveryConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
+	if !strings.EqualFold(strings.TrimSpace(cfg.App.Mode), "release") || !cfg.Auth.RequireEmailVerificationLogin {
+		return nil
+	}
+	if !cfg.Email.Enabled {
+		return fmt.Errorf("email.enabled must be true when release mode requires email verification")
+	}
+	frontendURL, err := url.Parse(strings.TrimSpace(cfg.Frontend.BaseURL))
+	if err != nil || frontendURL.Scheme != "https" || frontendURL.Host == "" {
+		return fmt.Errorf("frontend.base_url must be an absolute HTTPS URL when release mode requires email verification")
 	}
 	return nil
 }
@@ -452,35 +470,6 @@ func warnIfFrontendBaseURLMissing(cfg *Config) {
 	logging.Warn(
 		"frontend.base_url is not configured; password-reset and similar emails will be suppressed",
 		zap.String("setting", "frontend.base_url"),
-	)
-}
-
-// warnIfVerificationEmailDispatchMissing covers a deployment-blocking
-// gap surfaced by V14: the registration handler stores a hashed
-// verification token but does not yet dispatch the verification email
-// containing the plaintext token (see handler/auth/email.go::
-// RegisterEmail KNOWN GAP). Until that wiring lands, an operator who
-// turns on auth.require_verified_email_login=true will lock all new
-// users out of login because there is no path by which a freshly
-// registered user can obtain the plaintext token. We log a loud
-// warning rather than failing Load: existing deployments with
-// require_verified_email_login=false are unaffected, and operators
-// using OAuth-only login should not be blocked from starting.
-//
-// This warning will become a hard validation error once the
-// verification email dispatch is wired up; remove this function then.
-func warnIfVerificationEmailDispatchMissing(cfg *Config) {
-	if cfg == nil {
-		return
-	}
-	if !cfg.Auth.RequireEmailVerificationLogin {
-		return
-	}
-	logging.Warn(
-		"auth.require_verified_email_login=true but the registration handler does not dispatch verification emails yet; "+
-			"newly registered email-password users will be unable to log in until verification email dispatch is wired up. "+
-			"See KNOWN GAP in internal/handler/auth/email.go::RegisterEmail.",
-		zap.String("setting", "auth.require_verified_email_login"),
 	)
 }
 
@@ -544,7 +533,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.require_verified_email_login", true)
 	v.SetDefault("auth.service_ticket_ttl", 300)
 	v.SetDefault("auth.service_ticket_issuer", "paigram-account-center")
-	v.SetDefault("auth.service_ticket_signing_key", "")
+	v.SetDefault("auth.service_ticket_key_id", "")
+	v.SetDefault("auth.service_ticket_private_key_pem", "")
+	v.SetDefault("auth.oauth_signing_key", "")
 	// Path D §3.2 + §1.6: OAuth 2.0 client_credentials defaults. Issuer
 	// matches the gRPC interceptor's audience-check constant
 	// (machineTokenAudience = "account-center"). 3600-second TTL is the

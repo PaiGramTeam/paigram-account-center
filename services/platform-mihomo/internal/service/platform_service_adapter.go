@@ -26,8 +26,16 @@ type GenericPlatformService struct {
 	ticketVerifier   *data.TicketVerifier
 	bindUC           *usecase.BindUsecase
 	statusUC         *usecase.StatusUsecase
+	profileUC        *usecase.ProfileUsecase
+	authkeyUC        *usecase.AuthkeyUsecase
 	managementUC     *usecase.ManagementUsecase
 	invalidationRepo grantInvalidationStore
+}
+
+func (s *GenericPlatformService) WithConsumerUsecases(profileUC *usecase.ProfileUsecase, authkeyUC *usecase.AuthkeyUsecase) *GenericPlatformService {
+	s.profileUC = profileUC
+	s.authkeyUC = authkeyUC
+	return s
 }
 
 func NewGenericPlatformService(ticketVerifier *data.TicketVerifier, bindUC *usecase.BindUsecase, statusUC *usecase.StatusUsecase, managementUC *usecase.ManagementUsecase, invalidationRepo grantInvalidationStore) *GenericPlatformService {
@@ -81,6 +89,135 @@ func (s *GenericPlatformService) GetCredentialSummary(ctx context.Context, req *
 	return toGenericCredentialSummary(output), nil
 }
 
+func (s *GenericPlatformService) GetCredentialStatus(ctx context.Context, req *platformv1.GetCredentialStatusRequest) (*platformv1.GetCredentialStatusResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if _, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionStatusRead, true); err != nil {
+		return nil, err
+	}
+	output, err := s.statusUC.GetCredentialStatus(ctx, req.GetPlatformAccountId())
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return &platformv1.GetCredentialStatusResponse{
+		Status:          toGenericCredentialStatus(output.Status),
+		LastValidatedAt: toTimestamp(output.LastValidatedAt),
+	}, nil
+}
+
+func (s *GenericPlatformService) ValidateCredential(ctx context.Context, req *platformv1.ValidateCredentialRequest) (*platformv1.ValidateCredentialResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if _, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionStatusRead, true); err != nil {
+		return nil, err
+	}
+	output, err := s.statusUC.ValidateCredential(ctx, req.GetPlatformAccountId())
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return &platformv1.ValidateCredentialResponse{
+		Status:    toGenericCredentialStatus(output.Status),
+		ErrorCode: output.ErrorCode,
+	}, nil
+}
+
+func (s *GenericPlatformService) ListProfiles(ctx context.Context, req *platformv1.ListProfilesRequest) (*platformv1.ListProfilesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if s.profileUC == nil {
+		return nil, status.Error(codes.FailedPrecondition, "profile service is not configured")
+	}
+	guard, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionProfileRead, false)
+	if err != nil {
+		return nil, err
+	}
+	profiles, err := s.profileUC.ListProfilesWithScope(ctx, guard, req.GetPlatformAccountId())
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	items := make([]*platformv1.ProfileSummary, 0, len(profiles))
+	for _, profile := range profiles {
+		items = append(items, toGenericProfileSummary(profile))
+	}
+	return &platformv1.ListProfilesResponse{Profiles: items}, nil
+}
+
+func (s *GenericPlatformService) GetPrimaryProfile(ctx context.Context, req *platformv1.GetPrimaryProfileRequest) (*platformv1.GetPrimaryProfileResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if s.profileUC == nil {
+		return nil, status.Error(codes.FailedPrecondition, "profile service is not configured")
+	}
+	guard, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionProfileRead, false)
+	if err != nil {
+		return nil, err
+	}
+	profile, err := s.profileUC.GetPrimaryProfileWithScope(ctx, guard, req.GetPlatformAccountId())
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return &platformv1.GetPrimaryProfileResponse{Profile: toGenericProfileSummary(profile)}, nil
+}
+
+func (s *GenericPlatformService) GetAuthKey(ctx context.Context, req *platformv1.GetAuthKeyRequest) (*platformv1.GetAuthKeyResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if s.profileUC == nil || s.authkeyUC == nil {
+		return nil, status.Error(codes.FailedPrecondition, "authkey service is not configured")
+	}
+	guard, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionAuthKeyIssue, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.profileUC.RequireProfileAccessByPlayerID(ctx, guard, req.GetPlatformAccountId(), req.GetPlayerId()); err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	output, err := s.authkeyUC.GetAuthKey(ctx, req.GetPlatformAccountId(), req.GetPlayerId())
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return &platformv1.GetAuthKeyResponse{Authkey: output.AuthKey, ExpiresAt: toTimestamp(&output.ExpiresAt)}, nil
+}
+
+func (s *GenericPlatformService) UpsertDevice(ctx context.Context, req *platformv1.UpsertDeviceRequest) (*platformv1.UpsertDeviceResponse, error) {
+	if req == nil || req.GetDevice() == nil {
+		return nil, status.Error(codes.InvalidArgument, "request and device are required")
+	}
+	if _, err := s.authorizePlatformAccount(ctx, req.GetServiceTicket(), req.GetPlatformAccountId(), usecase.ActionDeviceUpdate, true); err != nil {
+		return nil, err
+	}
+	device := req.GetDevice()
+	if err := s.bindUC.UpsertDevice(ctx, req.GetPlatformAccountId(), device.GetDeviceId(), device.GetDeviceFp(), device.GetDeviceName()); err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return &platformv1.UpsertDeviceResponse{Success: true}, nil
+}
+
+func (s *GenericPlatformService) authorizePlatformAccount(ctx context.Context, ticket, platformAccountID, action string, bindingWide bool) (usecase.ScopeGuard, error) {
+	if platformAccountID == "" {
+		return usecase.ScopeGuard{}, status.Error(codes.InvalidArgument, "platform_account_id is required")
+	}
+	claims, err := s.ticketVerifier.VerifyContext(ctx, ticket, serviceTicketAudience)
+	if err != nil {
+		return usecase.ScopeGuard{}, mapTicketVerificationError(err)
+	}
+	guard, err := scopedGuardForPlatformAccount(claims, platformAccountID, action)
+	if err != nil {
+		return usecase.ScopeGuard{}, mapUsecaseError(err)
+	}
+	if bindingWide {
+		if err := guard.RequireBindingWide(); err != nil {
+			return usecase.ScopeGuard{}, mapUsecaseError(err)
+		}
+	}
+	return guard, nil
+}
+
 func (s *GenericPlatformService) PutCredential(ctx context.Context, req *platformv1.PutCredentialRequest) (*platformv1.PutCredentialResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
@@ -100,7 +237,7 @@ func (s *GenericPlatformService) PutCredential(ctx context.Context, req *platfor
 
 	payload, err := decodeGenericCredentialPayload(req.GetCredentialPayloadJson())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, status.Error(codes.InvalidArgument, "credential payload must be valid JSON")
 	}
 	bindInput := usecase.BindCredentialInput{
 		BindingID:        claims.BindingID,
@@ -269,16 +406,7 @@ func decodeGenericCredentialPayload(raw string) (*genericCredentialPayload, erro
 func toGenericCredentialSummary(output *usecase.CredentialSummaryOutput) *platformv1.GetCredentialSummaryResponse {
 	profiles := make([]*platformv1.ProfileSummary, 0, len(output.Profiles))
 	for _, profile := range output.Profiles {
-		profiles = append(profiles, &platformv1.ProfileSummary{
-			Id:                profile.Id,
-			PlatformAccountId: profile.PlatformAccountId,
-			GameBiz:           profile.GameBiz,
-			Region:            profile.Region,
-			PlayerId:          profile.PlayerId,
-			Nickname:          profile.Nickname,
-			Level:             profile.Level,
-			IsDefault:         profile.IsDefault,
-		})
+		profiles = append(profiles, toGenericProfileSummary(profile))
 	}
 
 	devices := make([]*platformv1.DeviceSummary, 0, len(output.Devices))
@@ -299,6 +427,22 @@ func toGenericCredentialSummary(output *usecase.CredentialSummaryOutput) *platfo
 		LastRefreshedAt:   toTimestamp(output.LastRefreshedAt),
 		Devices:           devices,
 		Profiles:          profiles,
+	}
+}
+
+func toGenericProfileSummary(profile *mihomoapiv1.ProfileSummary) *platformv1.ProfileSummary {
+	if profile == nil {
+		return nil
+	}
+	return &platformv1.ProfileSummary{
+		Id:                profile.Id,
+		PlatformAccountId: profile.PlatformAccountId,
+		GameBiz:           profile.GameBiz,
+		Region:            profile.Region,
+		PlayerId:          profile.PlayerId,
+		Nickname:          profile.Nickname,
+		Level:             profile.Level,
+		IsDefault:         profile.IsDefault,
 	}
 }
 

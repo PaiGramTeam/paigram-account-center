@@ -58,10 +58,12 @@ var permissionPolicies = map[string][]PolicyRule{
 	},
 	model.BuildPermissionName(model.ResourcePermission, model.ActionCreate): {},
 	model.BuildPermissionName(model.ResourcePermission, model.ActionRead): {
+		{Path: "/api/v1/admin/permissions", Method: "GET"},
 		{Path: "/api/v1/admin/users/:id/permissions", Method: "GET"},
 	},
 	model.BuildPermissionName(model.ResourcePermission, model.ActionDelete): {},
 	model.BuildPermissionName(model.ResourcePermission, model.ActionList): {
+		{Path: "/api/v1/admin/permissions", Method: "GET"},
 		{Path: "/api/v1/admin/users/:id/permissions", Method: "GET"},
 	},
 	model.BuildPermissionName(model.ResourceSystem, model.ActionRead): {
@@ -113,11 +115,17 @@ var permissionPolicies = map[string][]PolicyRule{
 	model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionDelete): {
 		{Path: "/api/v1/admin/platform-accounts/:bindingId", Method: "DELETE"},
 	},
-	model.BuildPermissionName(model.ResourceBot, model.ActionCreate): {},
-	model.BuildPermissionName(model.ResourceBot, model.ActionRead):   {},
-	model.BuildPermissionName(model.ResourceBot, model.ActionUpdate): {},
+	model.BuildPermissionName(model.ResourceBot, model.ActionCreate): {
+		{Path: "/api/v1/admin/service-credentials", Method: "POST"},
+	},
+	model.BuildPermissionName(model.ResourceBot, model.ActionRead): {},
+	model.BuildPermissionName(model.ResourceBot, model.ActionUpdate): {
+		{Path: "/api/v1/admin/service-credentials/:client_id/secret", Method: "POST"},
+	},
 	model.BuildPermissionName(model.ResourceBot, model.ActionDelete): {},
-	model.BuildPermissionName(model.ResourceBot, model.ActionList):   {},
+	model.BuildPermissionName(model.ResourceBot, model.ActionList): {
+		{Path: "/api/v1/admin/service-credentials", Method: "GET"},
+	},
 	model.BuildPermissionName(model.ResourceBot, model.ActionManage): {},
 	model.BuildPermissionName(model.ResourceSession, model.ActionRead): {
 		{Path: "/api/v1/admin/users/:id/sessions", Method: "GET"},

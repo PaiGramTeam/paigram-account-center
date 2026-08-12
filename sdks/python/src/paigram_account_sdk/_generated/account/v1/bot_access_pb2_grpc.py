@@ -39,11 +39,6 @@ class BotAccessServiceStub:
                 request_serializer=account_dot_v1_dot_bot__access__pb2.ResolveBotUserRequest.SerializeToString,
                 response_deserializer=account_dot_v1_dot_bot__access__pb2.ResolveBotUserResponse.FromString,
                 _registered_method=True)
-        self.UpsertPlatformBinding = channel.unary_unary(
-                '/paigram.v1.BotAccessService/UpsertPlatformBinding',
-                request_serializer=account_dot_v1_dot_bot__access__pb2.UpsertPlatformBindingRequest.SerializeToString,
-                response_deserializer=account_dot_v1_dot_bot__access__pb2.UpsertPlatformBindingResponse.FromString,
-                _registered_method=True)
         self.ListAccessibleBindings = channel.unary_unary(
                 '/paigram.v1.BotAccessService/ListAccessibleBindings',
                 request_serializer=account_dot_v1_dot_bot__access__pb2.ListAccessibleBindingsRequest.SerializeToString,
@@ -61,15 +56,6 @@ class BotAccessServiceServicer:
 
     def ResolveBotUser(self, request, context):
         """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def UpsertPlatformBinding(self, request, context):
-        """UpsertPlatformBinding is a legacy migration-only RPC.
-        Normal bot runtime must use ResolveBotUser, ListAccessibleBindings,
-        and IssueServiceTicket instead of creating or updating bindings.
-        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -93,11 +79,6 @@ def add_BotAccessServiceServicer_to_server(servicer, server):
                     servicer.ResolveBotUser,
                     request_deserializer=account_dot_v1_dot_bot__access__pb2.ResolveBotUserRequest.FromString,
                     response_serializer=account_dot_v1_dot_bot__access__pb2.ResolveBotUserResponse.SerializeToString,
-            ),
-            'UpsertPlatformBinding': grpc.unary_unary_rpc_method_handler(
-                    servicer.UpsertPlatformBinding,
-                    request_deserializer=account_dot_v1_dot_bot__access__pb2.UpsertPlatformBindingRequest.FromString,
-                    response_serializer=account_dot_v1_dot_bot__access__pb2.UpsertPlatformBindingResponse.SerializeToString,
             ),
             'ListAccessibleBindings': grpc.unary_unary_rpc_method_handler(
                     servicer.ListAccessibleBindings,
@@ -137,33 +118,6 @@ class BotAccessService:
             '/paigram.v1.BotAccessService/ResolveBotUser',
             account_dot_v1_dot_bot__access__pb2.ResolveBotUserRequest.SerializeToString,
             account_dot_v1_dot_bot__access__pb2.ResolveBotUserResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def UpsertPlatformBinding(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/paigram.v1.BotAccessService/UpsertPlatformBinding',
-            account_dot_v1_dot_bot__access__pb2.UpsertPlatformBindingRequest.SerializeToString,
-            account_dot_v1_dot_bot__access__pb2.UpsertPlatformBindingResponse.FromString,
             options,
             channel_credentials,
             insecure,

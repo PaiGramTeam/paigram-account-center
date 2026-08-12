@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 
@@ -26,8 +27,8 @@ func TestVerifyServiceTicketAcceptsExpectedClaims(t *testing.T) {
 	signed := signedStatusUsecaseTicket(t, jwt.MapClaims{
 		"iss":                  "paigram-account-center",
 		"aud":                  []string{"platform-mihomo-service"},
-		"actor_type":           "bot",
-		"actor_id":             "bot-paigram",
+		"actor_type":           "user",
+		"actor_id":             "user-paigram",
 		"owner_user_id":        float64(1),
 		"binding_id":           float64(101),
 		"bot_id":               "bot-paigram",
@@ -41,8 +42,8 @@ func TestVerifyServiceTicketAcceptsExpectedClaims(t *testing.T) {
 	claims, err := verifier.Verify(signed, "platform-mihomo-service")
 	require.NoError(t, err)
 	require.Equal(t, "bot-paigram", claims.BotID)
-	require.Equal(t, "bot", claims.ActorType)
-	require.Equal(t, "bot-paigram", claims.ActorID)
+	require.Equal(t, "user", claims.ActorType)
+	require.Equal(t, "user-paigram", claims.ActorID)
 	require.Equal(t, uint64(1), claims.OwnerUserID)
 	require.Equal(t, uint64(101), claims.BindingID)
 	require.Equal(t, "mihomo", claims.Platform)
@@ -66,9 +67,14 @@ func TestVerifyServiceTicketRejectsMissingRequiredClaims(t *testing.T) {
 func signedStatusUsecaseTicket(t *testing.T, claims jwt.MapClaims) string {
 	t.Helper()
 
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	now := time.Now()
+	claims["sub"] = "user:1"
+	claims["iat"] = now.Unix()
+	claims["nbf"] = now.Add(-time.Second).Unix()
+	claims["jti"] = "status-usecase-test-ticket"
+	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, claims)
 	token.Header["kid"] = statusUsecaseTicketKeyID
-	token.Header["typ"] = "service_ticket"
+	token.Header["typ"] = contractticket.TypeControl
 	signed, err := token.SignedString(statusUsecaseTicketPrivateKey)
 	require.NoError(t, err)
 	return signed
@@ -87,7 +93,7 @@ func TestRefreshCredentialDoesNotMarkRefreshedOnValidationFailure(t *testing.T) 
 		CredentialVersion: "v1",
 		Status:            "active",
 	}
-	uc := NewStatusUsecase(credentialRepo, failingStatusClient{err: errors.New("credential expired")}, testEncryptionKey)
+	uc := NewStatusUsecase(credentialRepo, failingStatusClient{err: &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorExpiredCredential}}, testEncryptionKey)
 
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
@@ -136,7 +142,7 @@ func TestValidateCredentialMapsChallengeRequiredStatus(t *testing.T) {
 		CredentialVersion: "v1",
 		Status:            "active",
 	}
-	uc := NewStatusUsecase(credentialRepo, failingStatusClient{err: errors.New("challenge required by upstream")}, testEncryptionKey)
+	uc := NewStatusUsecase(credentialRepo, failingStatusClient{err: &platformmihomo.UpstreamError{Kind: platformmihomo.ErrorChallengeRequired}}, testEncryptionKey)
 
 	resp, err := uc.ValidateCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)

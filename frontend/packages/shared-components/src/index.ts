@@ -18,7 +18,7 @@ export { default as AuthTwoFactorStep } from './components/business/AuthTwoFacto
 export { default as TurnstileWidget } from './components/business/TurnstileWidget.vue'
 export { default as ResetPasswordModal } from './components/business/ResetPasswordModal.vue'
 
-export { useUserStore } from './stores/user'
+export { configureUserLogout, useUserStore } from './stores/user'
 export { useAppStore } from './stores/app'
 export { usePermissionStore } from './stores/permission'
 

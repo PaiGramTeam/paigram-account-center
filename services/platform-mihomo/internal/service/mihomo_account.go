@@ -10,6 +10,7 @@ import (
 	v1 "platform-mihomo-service/api/mihomo/v1"
 	"platform-mihomo-service/internal/biz"
 	"platform-mihomo-service/internal/data"
+	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/usecase"
 )
 
@@ -360,26 +361,37 @@ func (s *MihomoAccountService) verifyServiceTicket(ctx context.Context, raw stri
 
 func mapTicketVerificationError(err error) error {
 	if errors.Is(err, data.ErrGrantVersionRevoked) {
-		return status.Error(codes.PermissionDenied, err.Error())
+		return status.Error(codes.PermissionDenied, "service ticket grant has been revoked")
 	}
 	return status.Error(codes.Unauthenticated, "invalid service ticket")
 }
 
 func mapUsecaseError(err error) error {
 	if errors.Is(err, usecase.ErrCredentialNotFound) {
-		return status.Error(codes.NotFound, err.Error())
+		return status.Error(codes.NotFound, "credential not found")
 	}
 	if errors.Is(err, usecase.ErrProfileNotFound) {
-		return status.Error(codes.NotFound, err.Error())
+		return status.Error(codes.NotFound, "profile not found")
 	}
 	if errors.Is(err, usecase.ErrPlatformAccountMismatch) {
-		return status.Error(codes.InvalidArgument, err.Error())
+		return status.Error(codes.PermissionDenied, "platform account is outside ticket scope")
 	}
 	if errors.Is(err, usecase.ErrActionScopeDenied) || errors.Is(err, usecase.ErrBindingScopeDenied) || errors.Is(err, usecase.ErrProfileScopeDenied) {
-		return status.Error(codes.PermissionDenied, err.Error())
+		return status.Error(codes.PermissionDenied, "request is outside ticket scope")
+	}
+	var upstreamErr *platformmihomo.UpstreamError
+	if errors.As(err, &upstreamErr) {
+		switch upstreamErr.Kind {
+		case platformmihomo.ErrorRateLimited:
+			return status.Error(codes.ResourceExhausted, "platform upstream rate limit exceeded")
+		case platformmihomo.ErrorUnavailable, platformmihomo.ErrorInvalidResponse:
+			return status.Error(codes.Unavailable, "platform upstream is unavailable")
+		case platformmihomo.ErrorInvalidCredential, platformmihomo.ErrorExpiredCredential, platformmihomo.ErrorChallengeRequired:
+			return status.Error(codes.FailedPrecondition, "platform credential requires user attention")
+		}
 	}
 
-	return status.Error(codes.Internal, err.Error())
+	return status.Error(codes.Internal, "platform operation failed")
 }
 
 func scopedGuardForPlatformAccount(claims *biz.ServiceTicketClaims, platformAccountID string, requiredActions ...string) (usecase.ScopeGuard, error) {

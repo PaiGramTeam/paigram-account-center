@@ -426,6 +426,15 @@
       "ConsumerGrantView": {
         "additionalProperties": false,
         "properties": {
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "binding_id": {
             "format": "int64",
             "minimum": 0,
@@ -452,6 +461,7 @@
           "binding_id",
           "consumer",
           "status",
+          "actions",
           "revoked_at"
         ],
         "type": "object"
@@ -529,6 +539,9 @@
               "null"
             ]
           },
+          "bot_id": {
+            "type": "string"
+          },
           "client_id": {
             "type": "string"
           },
@@ -566,6 +579,7 @@
         },
         "required": [
           "client_id",
+          "bot_id",
           "display_name",
           "status",
           "owner_user_id",
@@ -3049,6 +3063,275 @@
         }
       }
     },
+    "/api/v1/admin/permissions": {
+      "get": {
+        "operationId": "get-api-v1-admin-permissions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/Permission"
+                      },
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "data",
+                    "message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "data": {},
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "data",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "data": {},
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "data",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "data": {},
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "data",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "data": {},
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "data",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "data": {},
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "data",
+                        "message"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "$ref": "#/components/schemas/CodedCompatibilityErrorDetail"
+                        }
+                      },
+                      "required": [
+                        "error"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ],
+        "x-access": {
+          "authenticated": true,
+          "dynamicPermissions": [
+            "casbin:path-and-method"
+          ],
+          "public": false,
+          "requiredRoles": [
+            "admin"
+          ]
+        }
+      }
+    },
     "/api/v1/admin/platform-accounts": {
       "get": {
         "operationId": "get-api-v1-admin-platform-accounts",
@@ -4646,6 +4929,15 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "actions": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
                   "enabled": {
                     "type": [
                       "boolean",
@@ -10671,6 +10963,9 @@
                       "null"
                     ]
                   },
+                  "bot_id": {
+                    "type": "string"
+                  },
                   "client_id": {
                     "type": "string"
                   },
@@ -10692,6 +10987,7 @@
                 },
                 "required": [
                   "client_id",
+                  "bot_id",
                   "display_name",
                   "description",
                   "audiences",
@@ -32166,6 +32462,15 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "actions": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
                   "enabled": {
                     "type": [
                       "boolean",

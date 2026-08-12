@@ -3,9 +3,9 @@ package data
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
+
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 )
 
 type PublicKeyResolver interface {
@@ -36,20 +36,9 @@ func (r *StaticPublicKeyResolver) Resolve(_ context.Context, kid string) (ed2551
 }
 
 func ParseEd25519PublicKeyPEM(publicKeyPEM string) (ed25519.PublicKey, error) {
-	block, _ := pem.Decode([]byte(publicKeyPEM))
-	if block == nil {
-		return nil, fmt.Errorf("service ticket public key PEM is invalid")
-	}
-	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	key, err := contractticket.ParsePublicKeyPEM(publicKeyPEM)
 	if err != nil {
-		return nil, fmt.Errorf("parse service ticket public key PEM: %w", err)
+		return nil, fmt.Errorf("service ticket public key PEM is invalid: %w", err)
 	}
-	key, ok := parsed.(ed25519.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("service ticket public key PEM must contain an Ed25519 public key")
-	}
-	if len(key) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("service ticket public key PEM has invalid Ed25519 key size")
-	}
-	return append(ed25519.PublicKey(nil), key...), nil
+	return key, nil
 }

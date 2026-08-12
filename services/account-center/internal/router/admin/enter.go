@@ -68,4 +68,9 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 		roles.PUT("/:id/permissions", permissionCheck, authorityHandler.AssignPermissions)
 		roles.GET("/:id/permissions", permissionCheck, authorityHandler.GetRolePermissions)
 	}
+	permissions := httpserver.WithAccess(rg.Group("/admin/permissions"), httpserver.Access{
+		Authenticated: true, DynamicPermissions: []string{"casbin:path-and-method"}, RequiredRoles: []string{"admin"},
+	})
+	permissions.Use(adminGate)
+	permissions.GET("", permissionCheck, authorityHandler.ListPermissions)
 }

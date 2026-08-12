@@ -1,0 +1,66 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: paigram_test
+          POSTGRES_PASSWORD: paigram_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U paigram_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      CI: "true"
+      GH_TOKEN: ${{ github.token }}
+      PAI_REQUIRE_DATABASE_TESTS: "true"
+      PAI_TEST_DATABASE_DSN: postgres://paigram_test:paigram_test_password@127.0.0.1:5432/postgres?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: |
+            contracts/gen/go/go.sum
+            contracts/runtime/go/go.sum
+            services/account-center/go.sum
+            services/platform-mihomo/go.sum
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+
+      - uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+
+      - name: Verify repository
+        shell: pwsh
+        run: ./scripts/verify.ps1

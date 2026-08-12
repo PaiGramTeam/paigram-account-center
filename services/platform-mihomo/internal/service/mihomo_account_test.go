@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -16,8 +17,29 @@ import (
 	"platform-mihomo-service/internal/biz"
 	"platform-mihomo-service/internal/data"
 	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
+	mihomostub "platform-mihomo-service/internal/testkit/mihomostub"
 	"platform-mihomo-service/internal/usecase"
 )
+
+func TestMapUsecaseErrorPreservesTypedUpstreamSemantics(t *testing.T) {
+	tests := []struct {
+		kind platformmihomo.ErrorKind
+		want codes.Code
+	}{
+		{kind: platformmihomo.ErrorRateLimited, want: codes.ResourceExhausted},
+		{kind: platformmihomo.ErrorUnavailable, want: codes.Unavailable},
+		{kind: platformmihomo.ErrorInvalidCredential, want: codes.FailedPrecondition},
+		{kind: platformmihomo.ErrorExpiredCredential, want: codes.FailedPrecondition},
+		{kind: platformmihomo.ErrorChallengeRequired, want: codes.FailedPrecondition},
+	}
+	for _, test := range tests {
+		t.Run(string(test.kind), func(t *testing.T) {
+			err := mapUsecaseError(&platformmihomo.UpstreamError{Kind: test.kind})
+			require.Equal(t, test.want, status.Code(err))
+			require.NotContains(t, status.Convert(err).Message(), "mihomo upstream request failed")
+		})
+	}
+}
 
 func TestBindCredentialReturnsDiscoveredProfiles(t *testing.T) {
 	svc := newMihomoAccountServiceForTest(t)
@@ -471,7 +493,7 @@ func TestConfirmPrimaryProfileRejectsExpiredTicket(t *testing.T) {
 	claims := jwt.MapClaims{
 		"iss":                  serviceTestIssuer,
 		"aud":                  []string{serviceTestAudience},
-		"actor_type":           "bot",
+		"actor_type":           "user",
 		"actor_id":             "bot-paigram",
 		"owner_user_id":        float64(1),
 		"binding_id":           float64(101),
@@ -560,7 +582,7 @@ func signedServiceTicketForAccount(t *testing.T, platformAccountID string, scope
 	claims := jwt.MapClaims{
 		"iss":                  serviceTestIssuer,
 		"aud":                  []string{serviceTestAudience},
-		"actor_type":           "bot",
+		"actor_type":           "user",
 		"actor_id":             "bot-paigram",
 		"owner_user_id":        float64(1),
 		"binding_id":           float64(101),
@@ -584,7 +606,7 @@ func signedServiceTicketForProfile(t *testing.T, platformAccountID string, profi
 	claims := jwt.MapClaims{
 		"iss":                  serviceTestIssuer,
 		"aud":                  []string{serviceTestAudience},
-		"actor_type":           "bot",
+		"actor_type":           "user",
 		"actor_id":             "bot-paigram",
 		"owner_user_id":        float64(1),
 		"binding_id":           float64(101),
@@ -605,9 +627,32 @@ func signedServiceTicketForProfile(t *testing.T, platformAccountID string, profi
 func signedServiceTestJWT(t *testing.T, claims jwt.MapClaims) string {
 	t.Helper()
 
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	now := time.Now()
+	if _, ok := claims["iat"]; !ok {
+		claims["iat"] = now.Unix()
+	}
+	if _, ok := claims["nbf"]; !ok {
+		claims["nbf"] = now.Add(-time.Second).Unix()
+	}
+	if _, ok := claims["jti"]; !ok {
+		claims["jti"] = "service-test-ticket"
+	}
+	ticketType := contractticket.TypeControl
+	actorType, _ := claims["actor_type"].(string)
+	switch actorType {
+	case "consumer":
+		ticketType = contractticket.TypeDelegation
+		consumer, _ := claims["consumer"].(string)
+		claims["sub"] = "consumer:" + consumer
+	case "system":
+		claims["sub"] = "system:account-center"
+	default:
+		claims["sub"] = "user:1"
+	}
+
+	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, claims)
 	token.Header["kid"] = serviceTestKeyID
-	token.Header["typ"] = "service_ticket"
+	token.Header["typ"] = ticketType
 	signed, err := token.SignedString(serviceTestTicketPrivateKey)
 	require.NoError(t, err)
 	return signed
@@ -636,7 +681,7 @@ func newMihomoAccountServiceForTest(t *testing.T) *MihomoAccountService {
 	deviceRepo := newMemoryDeviceRepo()
 	profileRepo := newMemoryProfileRepo()
 	artifactRepo := newMemoryArtifactRepo()
-	client := platformmihomo.StubClient{}
+	client := mihomostub.Client{}
 
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, serviceTestSigningKey, artifactRepo)
 	statusUC := usecase.NewStatusUsecase(credentialRepo, client, serviceTestSigningKey)
@@ -1076,4 +1121,4 @@ var _ biz.DeviceRepository = (*memoryDeviceRepo)(nil)
 var _ biz.ProfileRepository = (*memoryProfileRepo)(nil)
 var _ biz.ArtifactRepository = (*memoryArtifactRepo)(nil)
 var _ biz.CredentialManagementRepository = (*memoryManagementRepo)(nil)
-var _ platformmihomo.Client = platformmihomo.StubClient{}
+var _ platformmihomo.Client = mihomostub.Client{}

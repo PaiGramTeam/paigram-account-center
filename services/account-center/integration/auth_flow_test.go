@@ -136,29 +136,16 @@ func TestAuthMiddlewareRefreshesSlidingSessionExpiryWhenUpdateAgeIsUnset(t *test
 
 func TestAuthMiddlewareUsesDBWhenCachedAccessExpiryIsStale(t *testing.T) {
 	stack := newIntegrationStackWithConfig(t, func(cfg *config.Config) {
-		cfg.Auth.AccessTokenTTLSeconds = 2
-		cfg.Auth.RefreshTokenTTLSeconds = 60
-		cfg.Auth.SessionUpdateAgeSeconds = 1
+		cfg.Auth.AccessTokenTTLSeconds = 60
+		cfg.Auth.RefreshTokenTTLSeconds = 120
 	})
 
 	_, accessToken, refreshToken, _, _ := registerVerifyAndLogin(t, stack, "stale-cache-expiry")
 	session := requireSessionForRefreshToken(t, stack.DB, refreshToken)
-
-	staleUpdatedAt := time.Now().UTC().Add(-2 * time.Second)
+	databaseExpiry := time.Now().UTC().Add(30 * time.Second)
 	require.NoError(t, stack.DB.Model(&model.UserSession{}).
 		Where("id = ?", session.ID).
-		Update("updated_at", staleUpdatedAt).Error)
-
-	untilFirstRequest := time.Until(session.AccessExpiry.Add(-500 * time.Millisecond))
-	if untilFirstRequest > 0 {
-		time.Sleep(untilFirstRequest)
-	}
-
-	firstRes := performJSONRequest(t, stack.Router, http.MethodGet, "/api/v1/me", nil, authHeaders(accessToken))
-	require.Equal(t, http.StatusOK, firstRes.Code, firstRes.Body.String())
-
-	refreshed := requireSessionForRefreshToken(t, stack.DB, refreshToken)
-	assert.True(t, refreshed.AccessExpiry.After(session.AccessExpiry), "expected db expiry to extend")
+		Update("access_expiry", databaseExpiry).Error)
 
 	staleCachePayload, err := json.Marshal(struct {
 		SessionID     uint64     `json:"session_id"`
@@ -167,21 +154,16 @@ func TestAuthMiddlewareUsesDBWhenCachedAccessExpiryIsStale(t *testing.T) {
 		RefreshExpiry time.Time  `json:"refresh_expiry"`
 		RevokedAt     *time.Time `json:"revoked_at,omitempty"`
 	}{
-		SessionID:     refreshed.ID,
-		UserID:        refreshed.UserID,
-		AccessExpiry:  session.AccessExpiry,
-		RefreshExpiry: refreshed.RefreshExpiry,
+		SessionID:     session.ID,
+		UserID:        session.UserID,
+		AccessExpiry:  time.Now().UTC().Add(-time.Second),
+		RefreshExpiry: session.RefreshExpiry,
 	})
 	require.NoError(t, err)
 	require.NoError(t, stack.Redis.Set(context.Background(), fmt.Sprintf("%s:session:access:%s", stack.RedisPrefix, accessToken), staleCachePayload, time.Minute).Err())
 
-	untilOriginalExpiryPasses := time.Until(session.AccessExpiry.Add(200 * time.Millisecond))
-	if untilOriginalExpiryPasses > 0 {
-		time.Sleep(untilOriginalExpiryPasses)
-	}
-
-	secondRes := performJSONRequest(t, stack.Router, http.MethodGet, "/api/v1/me", nil, authHeaders(accessToken))
-	require.Equal(t, http.StatusOK, secondRes.Code, secondRes.Body.String())
+	res := performJSONRequest(t, stack.Router, http.MethodGet, "/api/v1/me", nil, authHeaders(accessToken))
+	require.Equal(t, http.StatusOK, res.Code, res.Body.String())
 }
 
 func TestRevokedSessionCannotBeReusedWhileAccessTokenIsCached(t *testing.T) {

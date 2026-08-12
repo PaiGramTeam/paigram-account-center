@@ -20,7 +20,6 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	BotAccessService_ResolveBotUser_FullMethodName         = "/paigram.v1.BotAccessService/ResolveBotUser"
-	BotAccessService_UpsertPlatformBinding_FullMethodName  = "/paigram.v1.BotAccessService/UpsertPlatformBinding"
 	BotAccessService_ListAccessibleBindings_FullMethodName = "/paigram.v1.BotAccessService/ListAccessibleBindings"
 	BotAccessService_IssueServiceTicket_FullMethodName     = "/paigram.v1.BotAccessService/IssueServiceTicket"
 )
@@ -30,10 +29,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BotAccessServiceClient interface {
 	ResolveBotUser(ctx context.Context, in *ResolveBotUserRequest, opts ...grpc.CallOption) (*ResolveBotUserResponse, error)
-	// UpsertPlatformBinding is a legacy migration-only RPC.
-	// Normal bot runtime must use ResolveBotUser, ListAccessibleBindings,
-	// and IssueServiceTicket instead of creating or updating bindings.
-	UpsertPlatformBinding(ctx context.Context, in *UpsertPlatformBindingRequest, opts ...grpc.CallOption) (*UpsertPlatformBindingResponse, error)
 	ListAccessibleBindings(ctx context.Context, in *ListAccessibleBindingsRequest, opts ...grpc.CallOption) (*ListAccessibleBindingsResponse, error)
 	IssueServiceTicket(ctx context.Context, in *IssueServiceTicketRequest, opts ...grpc.CallOption) (*IssueServiceTicketResponse, error)
 }
@@ -50,16 +45,6 @@ func (c *botAccessServiceClient) ResolveBotUser(ctx context.Context, in *Resolve
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveBotUserResponse)
 	err := c.cc.Invoke(ctx, BotAccessService_ResolveBotUser_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *botAccessServiceClient) UpsertPlatformBinding(ctx context.Context, in *UpsertPlatformBindingRequest, opts ...grpc.CallOption) (*UpsertPlatformBindingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UpsertPlatformBindingResponse)
-	err := c.cc.Invoke(ctx, BotAccessService_UpsertPlatformBinding_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,10 +76,6 @@ func (c *botAccessServiceClient) IssueServiceTicket(ctx context.Context, in *Iss
 // for forward compatibility.
 type BotAccessServiceServer interface {
 	ResolveBotUser(context.Context, *ResolveBotUserRequest) (*ResolveBotUserResponse, error)
-	// UpsertPlatformBinding is a legacy migration-only RPC.
-	// Normal bot runtime must use ResolveBotUser, ListAccessibleBindings,
-	// and IssueServiceTicket instead of creating or updating bindings.
-	UpsertPlatformBinding(context.Context, *UpsertPlatformBindingRequest) (*UpsertPlatformBindingResponse, error)
 	ListAccessibleBindings(context.Context, *ListAccessibleBindingsRequest) (*ListAccessibleBindingsResponse, error)
 	IssueServiceTicket(context.Context, *IssueServiceTicketRequest) (*IssueServiceTicketResponse, error)
 	mustEmbedUnimplementedBotAccessServiceServer()
@@ -109,9 +90,6 @@ type UnimplementedBotAccessServiceServer struct{}
 
 func (UnimplementedBotAccessServiceServer) ResolveBotUser(context.Context, *ResolveBotUserRequest) (*ResolveBotUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveBotUser not implemented")
-}
-func (UnimplementedBotAccessServiceServer) UpsertPlatformBinding(context.Context, *UpsertPlatformBindingRequest) (*UpsertPlatformBindingResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpsertPlatformBinding not implemented")
 }
 func (UnimplementedBotAccessServiceServer) ListAccessibleBindings(context.Context, *ListAccessibleBindingsRequest) (*ListAccessibleBindingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAccessibleBindings not implemented")
@@ -154,24 +132,6 @@ func _BotAccessService_ResolveBotUser_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BotAccessServiceServer).ResolveBotUser(ctx, req.(*ResolveBotUserRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _BotAccessService_UpsertPlatformBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpsertPlatformBindingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(BotAccessServiceServer).UpsertPlatformBinding(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: BotAccessService_UpsertPlatformBinding_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BotAccessServiceServer).UpsertPlatformBinding(ctx, req.(*UpsertPlatformBindingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -222,10 +182,6 @@ var BotAccessService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveBotUser",
 			Handler:    _BotAccessService_ResolveBotUser_Handler,
-		},
-		{
-			MethodName: "UpsertPlatformBinding",
-			Handler:    _BotAccessService_UpsertPlatformBinding_Handler,
 		},
 		{
 			MethodName: "ListAccessibleBindings",

@@ -4,6 +4,8 @@ import {
   createUserApi,
   createProfileApi,
   createSecurityApi,
+  configureUserLogout,
+  createPlatformAccountsApi,
 } from '@paigram/shared-components'
 import { useUserStore } from '@paigram/shared-components'
 import router from '@/routes'
@@ -25,12 +27,16 @@ export const request = createRequest({
   },
   onUnauthorized: () => {
     const userStore = useUserStore()
-    userStore.logout()
-    router.push('/login')
+    userStore.reset()
+    void router.push('/login')
   },
 })
 
 export const authApi = createAuthApi(request)
+configureUserLogout(async (token) => {
+  await authApi.logout({ token })
+})
 export const userApi = createUserApi(request)
 export const profileApi = createProfileApi(request)
 export const securityApi = createSecurityApi(request)
+export const platformAccountsApi = createPlatformAccountsApi(request)

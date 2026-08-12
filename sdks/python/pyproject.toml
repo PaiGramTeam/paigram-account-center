@@ -7,9 +7,9 @@ requires-python = ">=3.10,<4.0"
 license = { text = "AGPL-3.0-only" }
 authors = [{ name = "PaiGramTeam" }]
 dependencies = [
-    "grpcio>=1.74.0,<2.0.0",
+    "grpcio>=1.81.1,<2.0.0",
     "httpx>=0.28.0,<1.0.0",
-    "protobuf>=5.29.0,<7.0.0",
+    "protobuf>=6.33.5,<7.0.0",
 ]
 
 [build-system]
@@ -21,7 +21,7 @@ packages = ["src/paigram_account_sdk"]
 
 [dependency-groups]
 dev = [
-    "grpcio-tools>=1.74.0,<2.0.0",
+    "grpcio-tools>=1.81.1,<2.0.0",
     "mypy>=1.17.0,<2.0.0",
     "pytest>=9.0.0,<10.0.0",
     "pytest-asyncio>=1.0.0,<2.0.0",

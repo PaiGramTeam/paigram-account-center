@@ -67,7 +67,8 @@ type CreateBindingRequest struct {
 }
 
 type PutConsumerGrantRequest struct {
-	Enabled *bool `json:"enabled"`
+	Enabled *bool    `json:"enabled"`
+	Actions []string `json:"actions,omitempty"`
 }
 
 type PatchBindingRequest struct {
@@ -485,6 +486,7 @@ func putConsumerGrant(c *gin.Context, grantService grantService, bindingID, acto
 		grant, _, err := grantService.UpsertGrant(serviceplatformbinding.UpsertGrantInput{
 			BindingID: bindingID,
 			Consumer:  consumer,
+			Actions:   req.Actions,
 			GrantedBy: grantedBy,
 			GrantedAt: time.Now().UTC(),
 		})
@@ -537,6 +539,7 @@ func putConsumerGrantForOwner(c *gin.Context, grantService grantService, ownerUs
 		grant, _, err := grantService.UpsertGrantForOwner(ownerUserID, serviceplatformbinding.UpsertGrantInput{
 			BindingID: bindingID,
 			Consumer:  consumer,
+			Actions:   req.Actions,
 			GrantedBy: grantedBy,
 			GrantedAt: time.Now().UTC(),
 		})
@@ -587,6 +590,8 @@ func writeBindingError(c *gin.Context, err error, fallback string) {
 		response.ErrorWithCode(c, http.StatusUnprocessableEntity, pkgerrors.ErrorCodePlatformCredentialValidationFailed, "platform credential validation failed", nil)
 	case errors.Is(err, serviceplatformbinding.ErrConsumerNotSupported):
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "consumer is not supported", nil)
+	case errors.Is(err, serviceplatformbinding.ErrGrantActionNotAllowed):
+		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "consumer grant action is not allowed", nil)
 	case errors.Is(err, serviceplatformbinding.ErrInvalidBindingMutation):
 		response.BadRequestWithCode(c, response.ErrCodeInvalidInput, "invalid platform binding mutation", nil)
 	case errors.Is(err, serviceplatformbinding.ErrBindingRuntimeSummaryNotReady):

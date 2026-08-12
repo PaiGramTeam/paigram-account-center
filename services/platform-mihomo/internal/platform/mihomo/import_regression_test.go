@@ -7,7 +7,7 @@ import (
 )
 
 func TestInternalPlatformPackagePathUsesMihomo(t *testing.T) {
-	var client platformmihomo.Client = platformmihomo.UnconfiguredClient{}
+	var client platformmihomo.Client = &platformmihomo.HTTPClient{}
 	if client == nil {
 		t.Fatal("expected internal mihomo client package to be available")
 	}
