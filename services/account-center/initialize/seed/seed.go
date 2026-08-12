@@ -64,34 +64,55 @@ var DefaultRoles = []struct {
 
 // SeedPermissions creates default permissions if they don't exist.
 func SeedPermissions(db *gorm.DB) error {
-	for _, p := range DefaultPermissions {
-		var existing model.Permission
-		err := db.Where("name = ?", p.Name).First(&existing).Error
-
-		if err == nil {
-			// Permission already exists, skip
-			continue
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := deleteRetiredPermissions(tx); err != nil {
+			return err
 		}
+		for _, p := range DefaultPermissions {
+			var existing model.Permission
+			err := tx.Where("name = ?", p.Name).First(&existing).Error
 
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("check permission %s: %w", p.Name, err)
+			if err == nil {
+				// Permission already exists, skip
+				continue
+			}
+
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("check permission %s: %w", p.Name, err)
+			}
+
+			// Create permission
+			perm := model.Permission{
+				Name:        p.Name,
+				Resource:    p.Resource,
+				Action:      p.Action,
+				Description: p.Description,
+			}
+
+			if err := tx.Create(&perm).Error; err != nil {
+				return fmt.Errorf("create permission %s: %w", p.Name, err)
+			}
+
+			log.Printf("Created permission: %s", p.Name)
 		}
+		return nil
+	})
+}
 
-		// Create permission
-		perm := model.Permission{
-			Name:        p.Name,
-			Resource:    p.Resource,
-			Action:      p.Action,
-			Description: p.Description,
-		}
-
-		if err := db.Create(&perm).Error; err != nil {
-			return fmt.Errorf("create permission %s: %w", p.Name, err)
-		}
-
-		log.Printf("Created permission: %s", p.Name)
+func deleteRetiredPermissions(tx *gorm.DB) error {
+	var permissionIDs []uint64
+	if err := tx.Model(&model.Permission{}).Where("name IN ?", casbin.RetiredPermissionNames()).Pluck("id", &permissionIDs).Error; err != nil {
+		return fmt.Errorf("find retired permissions: %w", err)
 	}
-
+	if len(permissionIDs) == 0 {
+		return nil
+	}
+	if err := tx.Where("permission_id IN ?", permissionIDs).Delete(&model.RolePermission{}).Error; err != nil {
+		return fmt.Errorf("delete retired role permissions: %w", err)
+	}
+	if err := tx.Unscoped().Where("id IN ?", permissionIDs).Delete(&model.Permission{}).Error; err != nil {
+		return fmt.Errorf("delete retired permissions: %w", err)
+	}
 	return nil
 }
 

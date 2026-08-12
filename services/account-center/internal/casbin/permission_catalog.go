@@ -59,7 +59,21 @@ var permissionDefinitions = []PermissionDefinition{
 	{Name: model.PermAuditList, Resource: model.ResourceAudit, Action: model.ActionList, Description: "List audit logs"},
 }
 
+var retiredPermissionNames = []string{
+	"user:write",
+	"user:manage",
+	"role:write",
+	"permission:write",
+	"permission:manage",
+	"bot:write",
+}
+
 // AllPermissionDefinitions returns a copy of the assignable permission catalog.
 func AllPermissionDefinitions() []PermissionDefinition {
 	return append([]PermissionDefinition(nil), permissionDefinitions...)
+}
+
+// RetiredPermissionNames returns permission names that must not remain assignable.
+func RetiredPermissionNames() []string {
+	return append([]string(nil), retiredPermissionNames...)
 }

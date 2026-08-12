@@ -67,6 +67,31 @@ func TestSeedPermissions_Idempotent(t *testing.T) {
 	assert.Equal(t, int64(len(DefaultPermissions)), count)
 }
 
+func TestSeedPermissions_RemovesRetiredPermissionsAndAssignments(t *testing.T) {
+	db := setupTestDB(t)
+	role := model.Role{Name: "legacy-role", DisplayName: "Legacy Role"}
+	require.NoError(t, db.Create(&role).Error)
+
+	for index, permissionName := range casbin.RetiredPermissionNames() {
+		permission := model.Permission{
+			Name:     permissionName,
+			Resource: "legacy",
+			Action:   "legacy",
+		}
+		require.NoError(t, db.Create(&permission).Error)
+		require.NoError(t, db.Create(&model.RolePermission{RoleID: role.ID, PermissionID: permission.ID}).Error, index)
+	}
+
+	require.NoError(t, SeedPermissions(db))
+
+	var permissionCount int64
+	require.NoError(t, db.Unscoped().Model(&model.Permission{}).Where("name IN ?", casbin.RetiredPermissionNames()).Count(&permissionCount).Error)
+	assert.Zero(t, permissionCount)
+	var assignmentCount int64
+	require.NoError(t, db.Model(&model.RolePermission{}).Where("role_id = ?", role.ID).Count(&assignmentCount).Error)
+	assert.Zero(t, assignmentCount)
+}
+
 func TestSeedRoles(t *testing.T) {
 	db := setupTestDB(t)
 
