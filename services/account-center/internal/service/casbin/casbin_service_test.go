@@ -7,11 +7,13 @@ import (
 
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/glebarez/sqlite"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	internalcasbin "paigram/internal/casbin"
+	pkgerrors "paigram/pkg/errors"
 )
 
 func TestReplaceAuthorityPoliciesKeepsPreviousPoliciesOnInsertFailure(t *testing.T) {
@@ -101,6 +103,30 @@ func TestReplaceAuthorityPoliciesRestoresPreviousPoliciesOnLoadFailure(t *testin
 	require.NoError(t, enforcer.LoadPolicy())
 	assert.Equal(t, [][]string{{"9", "/api/v1/authorities", "GET"}}, enforcer.GetFilteredPolicy(0, fmt.Sprint(9)))
 	assert.False(t, enforcer.HasPolicy("9", "/api/v1/casbin/authorities/:id/policies", "GET"))
+}
+
+func TestReplaceAuthorityPoliciesMapsAdministratorGuardViolation(t *testing.T) {
+	internalcasbin.Reset()
+	t.Cleanup(internalcasbin.Reset)
+
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, createTestRolesTable(db))
+	require.NoError(t, db.Exec("INSERT INTO roles (id, name, display_name) VALUES (?, ?, ?)", 10, "role-10", "Role 10").Error)
+	_, err = internalcasbin.InitEnforcer(db)
+	require.NoError(t, err)
+
+	callbackName := "test:administrator-guard-violation"
+	require.NoError(t, db.Callback().Delete().Before("gorm:delete").Register(callbackName, func(tx *gorm.DB) {
+		tx.AddError(&pgconn.PgError{Code: "23514", ConstraintName: "active_administrator_required"})
+	}))
+	t.Cleanup(func() {
+		_ = db.Callback().Delete().Remove(callbackName)
+	})
+
+	service := &CasbinService{db: db}
+	err = service.ReplaceAuthorityPolicies(10, nil)
+	require.ErrorIs(t, err, pkgerrors.ErrSystemRoleProtect)
 }
 
 func createTestRolesTable(db *gorm.DB) error {

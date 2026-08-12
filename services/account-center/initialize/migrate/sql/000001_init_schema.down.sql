@@ -8,7 +8,9 @@ DROP TRIGGER IF EXISTS active_administrator_guard_role_permissions ON role_permi
 DROP TRIGGER IF EXISTS active_administrator_guard_permissions_update ON permissions;
 DROP TRIGGER IF EXISTS active_administrator_guard_permissions_delete ON permissions;
 DROP TRIGGER IF EXISTS active_administrator_guard_casbin_rules ON casbin_rule;
+DROP TRIGGER IF EXISTS admin_guard_prevent_downgrade ON admin_guard;
 DROP TRIGGER IF EXISTS admin_guard_prevent_delete ON admin_guard;
+DROP FUNCTION IF EXISTS prevent_admin_guard_downgrade();
 DROP FUNCTION IF EXISTS prevent_admin_guard_removal();
 DROP FUNCTION IF EXISTS enforce_active_administrator_guard();
 DROP FUNCTION IF EXISTS validate_active_administrator_guard();

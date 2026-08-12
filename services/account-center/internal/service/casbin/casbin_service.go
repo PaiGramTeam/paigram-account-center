@@ -6,6 +6,7 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"gorm.io/gorm"
 	internalcasbin "paigram/internal/casbin"
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 	"paigram/pkg/errors"
 )
@@ -38,6 +39,9 @@ func (s *CasbinService) ReplaceAuthorityPolicies(roleID uint, policies []CasbinP
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		return replaceAuthorityPolicyRules(tx, roleIDStr, policies)
 	}); err != nil {
+		if dberror.IsActiveAdministratorGuardViolation(err) {
+			return errors.ErrSystemRoleProtect
+		}
 		return fmt.Errorf("replace authority policies: %w", err)
 	}
 
@@ -88,6 +92,9 @@ func (s *CasbinService) SyncAuthorityPermissionPolicies(roleID uint) error {
 
 		return replaceAuthorityPolicyRules(tx, roleIDStr, mergeCustomAndManagedPolicies(existingRules, managedPolicies))
 	}); err != nil {
+		if dberror.IsActiveAdministratorGuardViolation(err) {
+			return errors.ErrSystemRoleProtect
+		}
 		return fmt.Errorf("sync authority policies: %w", err)
 	}
 
@@ -151,6 +158,9 @@ func (s *CasbinService) DeleteAuthorityPolicies(roleID uint) error {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		return tx.Where("ptype = ? AND v0 = ?", "p", roleIDStr).Delete(&gormadapter.CasbinRule{}).Error
 	}); err != nil {
+		if dberror.IsActiveAdministratorGuardViolation(err) {
+			return errors.ErrSystemRoleProtect
+		}
 		return fmt.Errorf("delete authority policies: %w", err)
 	}
 

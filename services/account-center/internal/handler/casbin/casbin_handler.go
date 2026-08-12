@@ -62,6 +62,10 @@ func (h *CasbinHandler) ReplaceAuthorityPolicies(c *gin.Context) {
 			response.NotFound(c, "角色不存在")
 			return
 		}
+		if errors.Is(err, pkgerrors.ErrSystemRoleProtect) {
+			response.ForbiddenWithCode(c, response.ErrCodePermissionDenied, "at least one active administrator is required", nil)
+			return
+		}
 		logging.Error("replace authority policies failed", zap.Error(err), zap.Uint64("role_id", roleID))
 		response.InternalServerError(c, "更新API权限失败")
 		return

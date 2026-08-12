@@ -45,6 +45,12 @@ func TestLastAdministratorMutationsReturnForbidden(t *testing.T) {
 			body:   map[string]any{"role_ids": []uint64{}},
 		},
 		{
+			name:   "clear role members",
+			method: http.MethodPut,
+			path:   fmt.Sprintf("/api/v1/admin/roles/%d/users", adminRole.ID),
+			body:   map[string]any{"user_ids": []uint64{}},
+		},
+		{
 			name:   "clear recovery permissions",
 			method: http.MethodPut,
 			path:   fmt.Sprintf("/api/v1/admin/roles/%d/permissions", adminRole.ID),

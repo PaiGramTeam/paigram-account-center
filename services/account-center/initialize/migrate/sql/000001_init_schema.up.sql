@@ -291,6 +291,7 @@ CREATE TABLE casbin_rule (
 CREATE TABLE admin_guard (
     singleton BOOLEAN PRIMARY KEY DEFAULT TRUE,
     armed BOOLEAN NOT NULL DEFAULT FALSE,
+    revision BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT ck_admin_guard_singleton CHECK (singleton)
 );
@@ -301,10 +302,10 @@ DECLARE
     guard_armed BOOLEAN;
     administrator_exists BOOLEAN;
 BEGIN
-    SELECT armed INTO guard_armed
-    FROM admin_guard
+    UPDATE admin_guard
+    SET revision = revision + 1
     WHERE singleton = TRUE
-    FOR UPDATE;
+    RETURNING armed INTO guard_armed;
     IF NOT FOUND THEN
         RAISE EXCEPTION USING
             ERRCODE = '23514',
@@ -377,6 +378,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE FUNCTION prevent_admin_guard_downgrade() RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.armed AND NOT NEW.armed THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23514',
+            CONSTRAINT = 'admin_guard_cannot_disarm',
+            MESSAGE = 'administrator guard cannot be disarmed';
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE CONSTRAINT TRIGGER active_administrator_guard_user_roles
     AFTER INSERT OR UPDATE OR DELETE ON user_roles
     DEFERRABLE INITIALLY DEFERRED
@@ -435,6 +448,10 @@ CREATE CONSTRAINT TRIGGER active_administrator_guard_casbin_rules
 CREATE TRIGGER admin_guard_prevent_delete
     BEFORE DELETE OR TRUNCATE ON admin_guard
     FOR EACH STATEMENT EXECUTE FUNCTION prevent_admin_guard_removal();
+
+CREATE TRIGGER admin_guard_prevent_downgrade
+    BEFORE UPDATE OF armed ON admin_guard
+    FOR EACH ROW EXECUTE FUNCTION prevent_admin_guard_downgrade();
 
 CREATE TABLE bots (
     id VARCHAR(64) PRIMARY KEY,

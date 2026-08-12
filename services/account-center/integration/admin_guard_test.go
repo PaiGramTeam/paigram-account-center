@@ -5,10 +5,13 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 
 	"paigram/internal/model"
@@ -54,24 +57,25 @@ func TestActiveAdministratorGuardSerializesDestructiveMutations(t *testing.T) {
 	close(results)
 
 	successes := 0
-	failures := 0
+	var failure error
 	for commitErr := range results {
 		if commitErr == nil {
 			successes++
 		} else {
-			failures++
+			require.Nil(t, failure)
+			failure = commitErr
 		}
 	}
 	require.Equal(t, 1, successes)
-	require.Equal(t, 1, failures)
+	requireAdminGuardViolation(t, failure)
 
 	remainingAdminID := requireSingleActiveAdmin(t, ctx, stack.SQLDB, adminRoleID)
 	_, err = stack.SQLDB.ExecContext(ctx, `UPDATE users SET status = 'suspended' WHERE id = $1`, remainingAdminID)
-	require.Error(t, err, "last active administrator must not be suspended")
+	requireAdminGuardViolation(t, err)
 	_, err = stack.SQLDB.ExecContext(ctx, `UPDATE users SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1`, remainingAdminID)
-	require.Error(t, err, "last active administrator must not be soft deleted")
+	requireAdminGuardViolation(t, err)
 	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, remainingAdminID)
-	require.Error(t, err, "last active administrator must not be hard deleted")
+	requireAdminGuardViolation(t, err)
 
 	replacementAdminID := insertActiveGuardUser(t, ctx, stack.SQLDB)
 	transfer, err := stack.SQLDB.BeginTx(ctx, nil)
@@ -89,20 +93,22 @@ func TestActiveAdministratorGuardSerializesDestructiveMutations(t *testing.T) {
 	viewerRole := model.Role{Name: "guard-viewer", DisplayName: "Guard Viewer"}
 	require.NoError(t, stack.DB.Create(&viewerRole).Error)
 	_, err = stack.SQLDB.ExecContext(ctx, `UPDATE user_roles SET role_id = $1 WHERE user_id = $2 AND role_id = $3`, viewerRole.ID, replacementAdminID, adminRoleID)
-	require.Error(t, err, "last active administrator assignment must not be changed")
+	requireAdminGuardViolation(t, err)
 	_, err = stack.SQLDB.ExecContext(ctx, `UPDATE roles SET name = 'former-admin' WHERE id = $1`, adminRoleID)
-	require.Error(t, err, "administrator role must not be renamed while it is the last active role")
+	requireAdminGuardViolation(t, err)
 	_, err = stack.SQLDB.ExecContext(ctx, `UPDATE roles SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1`, adminRoleID)
-	require.Error(t, err, "administrator role must not be soft deleted while it is the last active role")
+	requireAdminGuardViolation(t, err)
 	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM roles WHERE id = $1`, adminRoleID)
-	require.Error(t, err, "administrator role must not be hard deleted while it is the last active role")
+	requireAdminGuardViolation(t, err)
 	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM role_permissions WHERE role_id = $1`, adminRoleID)
-	require.Error(t, err, "administrator recovery permission must not be cleared")
-	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM casbin_rule WHERE v0 = $1 AND v2 = 'PUT'`, adminRoleID)
-	require.Error(t, err, "administrator recovery policies must not be cleared")
+	requireAdminGuardViolation(t, err)
+	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM casbin_rule WHERE v0 = $1 AND v2 = 'PUT'`, strconv.FormatUint(adminRoleID, 10))
+	requireAdminGuardViolation(t, err)
 
 	_, err = stack.SQLDB.ExecContext(ctx, `DELETE FROM admin_guard WHERE singleton = TRUE`)
-	require.Error(t, err, "administrator guard singleton must not be removable")
+	requirePostgresViolation(t, err, "23514", "ck_admin_guard_singleton")
+	_, err = stack.SQLDB.ExecContext(ctx, `UPDATE admin_guard SET armed = FALSE WHERE singleton = TRUE`)
+	requirePostgresViolation(t, err, "23514", "admin_guard_cannot_disarm")
 }
 
 func TestActiveAdministratorGuardSerializesConcurrentSuspensions(t *testing.T) {
@@ -131,6 +137,36 @@ func TestActiveAdministratorGuardSerializesConcurrentSuspensions(t *testing.T) {
 	results := collectCommitResults(startConcurrentCommits(firstTx, secondTx))
 	require.Equal(t, 1, countNilErrors(results))
 	require.Equal(t, []string{"23514"}, failedSQLStates(t, results))
+	require.NotZero(t, requireSingleActiveAdmin(t, ctx, stack.SQLDB, adminRoleID))
+}
+
+func TestActiveAdministratorGuardRejectsRepeatableReadWriteSkew(t *testing.T) {
+	stack := newIntegrationStack(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	adminRoleID := ensureGuardAdminRole(t, stack)
+	firstAdminID := insertActiveGuardUser(t, ctx, stack.SQLDB)
+	secondAdminID := insertActiveGuardUser(t, ctx, stack.SQLDB)
+	insertGuardAdminAssignment(t, ctx, stack.SQLDB, firstAdminID, adminRoleID)
+	insertGuardAdminAssignment(t, ctx, stack.SQLDB, secondAdminID, adminRoleID)
+
+	options := &sql.TxOptions{Isolation: sql.LevelRepeatableRead}
+	firstTx, err := stack.SQLDB.BeginTx(ctx, options)
+	require.NoError(t, err)
+	secondTx, err := stack.SQLDB.BeginTx(ctx, options)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = firstTx.Rollback()
+		_ = secondTx.Rollback()
+	})
+	_, err = firstTx.ExecContext(ctx, `UPDATE users SET status = 'suspended' WHERE id = $1`, firstAdminID)
+	require.NoError(t, err)
+	_, err = secondTx.ExecContext(ctx, `UPDATE users SET status = 'suspended' WHERE id = $1`, secondAdminID)
+	require.NoError(t, err)
+
+	results := collectCommitResults(startConcurrentCommits(firstTx, secondTx))
+	require.Equal(t, 1, countNilErrors(results))
+	require.Equal(t, []string{"40001"}, failedSQLStates(t, results))
 	require.NotZero(t, requireSingleActiveAdmin(t, ctx, stack.SQLDB, adminRoleID))
 }
 
@@ -205,4 +241,18 @@ func requireSingleActiveAdmin(t *testing.T, ctx context.Context, db *sql.DB, rol
 	require.NoError(t, rows.Err())
 	require.Len(t, adminIDs, 1)
 	return adminIDs[0]
+}
+
+func requireAdminGuardViolation(t *testing.T, err error) {
+	t.Helper()
+	requirePostgresViolation(t, err, "23514", "active_administrator_required")
+}
+
+func requirePostgresViolation(t *testing.T, err error, code, constraint string) {
+	t.Helper()
+	require.Error(t, err)
+	var postgresError *pgconn.PgError
+	require.True(t, errors.As(err, &postgresError), "expected PostgreSQL error, got %T: %v", err, err)
+	require.Equal(t, code, postgresError.Code)
+	require.Equal(t, constraint, postgresError.ConstraintName)
 }

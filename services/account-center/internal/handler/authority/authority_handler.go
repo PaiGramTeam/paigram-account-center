@@ -458,7 +458,7 @@ func (h *AuthorityHandler) ReplaceAuthorityUsers(c *gin.Context) {
 			return
 		}
 		if errors.Is(err, pkgerrors.ErrSystemRoleProtect) {
-			response.Forbidden(c, "系统角色至少需要保留一名成员")
+			response.ForbiddenWithCode(c, response.ErrCodePermissionDenied, "at least one active administrator is required", nil)
 			return
 		}
 		if errors.Is(err, gorm.ErrRecordNotFound) {
