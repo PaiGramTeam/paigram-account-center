@@ -140,16 +140,17 @@ func (s *OrchestrationService) deliverNonSensitiveCredentialOperation(ctx contex
 		var summary *RuntimeSummary
 		summary, err = s.gateway.RefreshCredential(ctx, endpoint, ticket, intent.OperationID, binding)
 		if err == nil {
-			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, summary)
+			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, 0, summary)
 			return err
 		}
 	case "OPERATION_KIND_DELETE_CREDENTIAL":
 		err = s.gateway.DeleteCredential(ctx, endpoint, ticket, intent.OperationID, binding)
 	case "OPERATION_KIND_SET_PRIMARY_PROFILE":
 		var summary *RuntimeSummary
-		summary, err = s.gateway.SetPrimaryProfile(ctx, endpoint, ticket, intent.OperationID, binding, intent.ProfileRef)
+		operationBinding := bindingAtProfileRevision(binding, intent.ProfileRevision)
+		summary, err = s.gateway.SetPrimaryProfile(ctx, endpoint, ticket, intent.OperationID, operationBinding, intent.ProfileRef)
 		if err == nil {
-			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, summary)
+			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, intent.ProfileRevision, summary)
 			return err
 		}
 	}
@@ -221,7 +222,7 @@ func isNonSensitiveCredentialOperation(kind string) bool {
 }
 
 func (s *OrchestrationService) applyResolvedCredentialOperation(ctx context.Context, intent *model.PlatformOperationIntent, binding *model.PlatformAccountBinding, summary *RuntimeSummary, endpoint string) error {
-	if !validOperationSummary(intent.Kind, intent.TargetGeneration, summary) {
+	if !validOperationSummary(intent.Kind, intent.TargetGeneration, intent.ProfileRevision, summary) {
 		_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "terminal_generation_mismatch")
 		return ErrBindingGenerationConflict
 	}
@@ -333,6 +334,15 @@ func bindingAtGeneration(binding *model.PlatformAccountBinding, generation uint6
 	}
 	clone := *binding
 	clone.Generation = generation
+	return &clone
+}
+
+func bindingAtProfileRevision(binding *model.PlatformAccountBinding, revision uint64) *model.PlatformAccountBinding {
+	if binding == nil {
+		return nil
+	}
+	clone := *binding
+	clone.ProfileRevision = revision
 	return &clone
 }
 

@@ -115,6 +115,9 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey strin
 			ProfileObservedRevision: credential.ProfileObservedRevision,
 		}, nil
 	}
+	if err := platformmihomo.ValidateRefreshResult(refreshResult, now); err != nil {
+		return nil, err
+	}
 	if credential.AccountID != "" && credential.AccountID != refreshResult.AccountID {
 		return nil, errors.New("discovered account does not match credential")
 	}

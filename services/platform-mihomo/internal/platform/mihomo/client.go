@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -50,6 +51,18 @@ type RefreshResult struct {
 	Region               string
 	Profiles             []DiscoveredProfile
 	ExpiresAt            time.Time
+}
+
+func ValidateRefreshResult(result RefreshResult, now time.Time) error {
+	if strings.TrimSpace(result.CredentialBundleJSON) == "" || strings.TrimSpace(result.AccountID) == "" || strings.TrimSpace(result.Region) == "" || !result.ExpiresAt.After(now.UTC()) || result.Profiles == nil {
+		return &UpstreamError{Kind: ErrorInvalidResponse}
+	}
+	for _, profile := range result.Profiles {
+		if strings.TrimSpace(profile.GameBiz) == "" || strings.TrimSpace(profile.Region) == "" || strings.TrimSpace(profile.PlayerID) == "" || strings.TrimSpace(profile.Nickname) == "" {
+			return &UpstreamError{Kind: ErrorInvalidResponse}
+		}
+	}
+	return nil
 }
 
 type CredentialRefresher interface {

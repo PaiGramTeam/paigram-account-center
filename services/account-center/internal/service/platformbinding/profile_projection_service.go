@@ -96,17 +96,17 @@ func (s *ProfileProjectionService) SyncProfiles(input SyncProfilesInput) ([]mode
 			profiles = append(profiles, profile)
 		}
 
+		if err := tx.Model(&model.PlatformAccountBinding{}).
+			Where("id = ?", input.BindingID).
+			Update("primary_profile_id", nullablePrimaryProfileUpdate(primaryProfileID)).Error; err != nil {
+			return err
+		}
+
 		deleteQuery := tx.Where("binding_id = ?", input.BindingID)
 		if len(profileKeys) > 0 {
 			deleteQuery = deleteQuery.Where("platform_profile_key NOT IN ?", profileKeys)
 		}
-		if err := deleteQuery.Delete(&model.PlatformAccountProfile{}).Error; err != nil {
-			return err
-		}
-
-		return tx.Model(&model.PlatformAccountBinding{}).
-			Where("id = ?", input.BindingID).
-			Update("primary_profile_id", nullablePrimaryProfileUpdate(primaryProfileID)).Error
+		return deleteQuery.Delete(&model.PlatformAccountProfile{}).Error
 	})
 	if err != nil {
 		return nil, err

@@ -79,7 +79,7 @@ func (s *OrchestrationService) SetPrimaryProfileForOwner(ctx context.Context, ow
 		s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", reasonCode(mapped), uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profileID})
 		return nil, mapped
 	}
-	updated, err := s.applyAuthoritativeSummary(ctx, operationID, kind.String(), binding, binding.Generation, summary)
+	updated, err := s.applyAuthoritativeSummary(ctx, operationID, kind.String(), binding, binding.Generation, binding.ProfileRevision, summary)
 	if err != nil {
 		return nil, err
 	}

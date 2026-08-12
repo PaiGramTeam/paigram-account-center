@@ -184,7 +184,7 @@ func TestRefreshCredentialReturnsCompleteEmptySnapshot(t *testing.T) {
 	require.NoError(t, profileRepo.Save(context.Background(), &biz.Profile{
 		BindingRef: "binding-101", AccountKey: "hoyo_10001", ProfileRef: "old-primary", Region: "cn_gf01", PlayerID: "deleted-player", IsDefault: true,
 	}))
-	uc := NewStatusUsecase(credentialRepo, profileRepo, discoveryStatusClient{}, testEncryptionKey)
+	uc := NewStatusUsecase(credentialRepo, profileRepo, discoveryStatusClient{profiles: []platformmihomo.DiscoveredProfile{}}, testEncryptionKey)
 
 	resp, err := uc.RefreshCredential(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
@@ -195,6 +195,33 @@ func TestRefreshCredentialReturnsCompleteEmptySnapshot(t *testing.T) {
 	primary, err := NewProfileUsecase(profileRepo).GetPrimaryProfile(context.Background(), "hoyo_10001")
 	require.NoError(t, err)
 	require.Nil(t, primary)
+}
+
+func TestRefreshCredentialRejectsMissingProfilesWithoutDeletingSnapshot(t *testing.T) {
+	credentialRepo := newMemoryCredentialRepo()
+	profileRepo := newMemoryProfileRepo()
+	encryptedBlob, err := internalcrypto.EncryptString(testEncryptionKey, `{"account_id":"10001","cookie_token":"abc"}`)
+	require.NoError(t, err)
+	require.NoError(t, credentialRepo.Save(context.Background(), &biz.Credential{
+		BindingRef: "binding-101", AccountKey: "hoyo_10001", Generation: 5,
+		Platform: "mihomo", AccountID: "10001", Region: "cn_gf01", CredentialBlob: encryptedBlob, CredentialVersion: "v1", Status: "active",
+	}))
+	require.NoError(t, profileRepo.Save(context.Background(), &biz.Profile{
+		BindingRef: "binding-101", AccountKey: "hoyo_10001", ProfileRef: "old-primary",
+		GameBiz: "hk4e_cn", Region: "cn_gf01", PlayerID: "1008611", Nickname: "Traveler", IsDefault: true,
+	}))
+	client := refreshingStatusClient{result: platformmihomo.RefreshResult{
+		CredentialBundleJSON: `{}`, AccountID: "10001", Region: "cn_gf01", Profiles: nil, ExpiresAt: time.Now().UTC().Add(time.Hour),
+	}}
+	uc := NewStatusUsecase(credentialRepo, profileRepo, client, testEncryptionKey)
+
+	_, err = uc.RefreshCredential(context.Background(), "hoyo_10001")
+	require.Error(t, err)
+	require.True(t, platformmihomo.IsErrorKind(err, platformmihomo.ErrorInvalidResponse))
+	profiles, listErr := profileRepo.ListByAccountKey(context.Background(), "hoyo_10001")
+	require.NoError(t, listErr)
+	require.Len(t, profiles, 1)
+	require.Equal(t, "old-primary", profiles[0].ProfileRef)
 }
 
 func TestRefreshCredentialRotatesCredentialAndAdvancesProfileRevision(t *testing.T) {

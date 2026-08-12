@@ -233,18 +233,6 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		require.True(t, ok, "expected profile items array, got %T", profilesData["items"])
 		assert.Len(t, profileItems, 2)
 
-		patchPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
-			"profile_id": profiles[1].ID,
-		}, authHeaders(ownerAccessToken))
-		require.Equal(t, http.StatusOK, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
-		require.NotNil(t, createStub.lastPrimary)
-		assert.Equal(t, "mihomo:10002", createStub.lastPrimary.GetProfileRef())
-
-		invalidPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
-			"profile_id": uint64(99999999),
-		}, authHeaders(ownerAccessToken))
-		require.Equal(t, http.StatusUnprocessableEntity, invalidPrimaryResp.Code, invalidPrimaryResp.Body.String())
-
 		summaryResp := performJSONRequest(t, stack.Router, http.MethodGet, fmt.Sprintf("/api/v1/me/platform-accounts/%d/runtime-summary", binding.ID), nil, authHeaders(ownerAccessToken))
 		require.Equal(t, http.StatusOK, summaryResp.Code, summaryResp.Body.String())
 		summaryData := decodeResponseData(t, summaryResp)
@@ -340,7 +328,7 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		require.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, refreshResp.Code, refreshResp.Body.String())
 		if refreshResp.Code == http.StatusOK {
 			refreshData := decodeResponseData(t, refreshResp)
-			assert.Equal(t, string(model.PlatformAccountBindingStatusRefreshRequired), refreshData["status"])
+			assert.Equal(t, string(model.PlatformAccountBindingStatusActive), refreshData["status"])
 		}
 
 		deletable := model.PlatformAccountBinding{

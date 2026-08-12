@@ -3,6 +3,7 @@ package mihomo
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,6 +77,46 @@ func TestHTTPClientRefreshesCredentialAndExpiry(t *testing.T) {
 	require.JSONEq(t, `{"cookie_token":"rotated"}`, result.CredentialBundleJSON)
 	require.Equal(t, expiresAt, result.ExpiresAt)
 	require.Len(t, result.Profiles, 1)
+}
+
+func TestHTTPClientRefreshRequiresExplicitCompleteProfiles(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
+	responses := map[string]string{
+		"missing": fmt.Sprintf(`{"credential_bundle_json":"{}","account_id":"10001","region":"cn_gf01","expires_at":%q}`, expiresAt),
+		"null":    fmt.Sprintf(`{"credential_bundle_json":"{}","account_id":"10001","region":"cn_gf01","profiles":null,"expires_at":%q}`, expiresAt),
+		"invalid": fmt.Sprintf(`{"credential_bundle_json":"{}","account_id":"10001","region":"cn_gf01","profiles":[{"GameBiz":"hk4e_cn","Region":"cn_gf01","PlayerID":"","Nickname":"Traveler"}],"expires_at":%q}`, expiresAt),
+	}
+	for name, response := range responses {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(response))
+			}))
+			defer server.Close()
+			client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+			require.NoError(t, err)
+
+			_, err = client.RefreshCredential(context.Background(), `{}`, "")
+			require.Error(t, err)
+			require.True(t, IsErrorKind(err, ErrorInvalidResponse))
+		})
+	}
+}
+
+func TestHTTPClientRefreshAcceptsExplicitCompleteEmptyProfiles(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"credential_bundle_json":"{}","account_id":"10001","region":"cn_gf01","profiles":[],"expires_at":%q}`, expiresAt)
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, AllowInsecureHTTP: true})
+	require.NoError(t, err)
+
+	result, err := client.RefreshCredential(context.Background(), `{}`, "")
+	require.NoError(t, err)
+	require.NotNil(t, result.Profiles)
+	require.Empty(t, result.Profiles)
 }
 
 func TestHTTPClientRequiresHTTPSByDefault(t *testing.T) {

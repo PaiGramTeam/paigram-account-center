@@ -24,6 +24,9 @@ type fakeCredentialOperationResolver struct {
 	deleteCalled   bool
 	deliveryErr    error
 	refreshSummary *RuntimeSummary
+	primarySummary *RuntimeSummary
+	primaryCalled  bool
+	primaryBinding *model.PlatformAccountBinding
 }
 
 func (f *fakeCredentialOperationResolver) ResolveCredentialOperation(_ context.Context, _, _ string, reference CredentialOperationReference) (*CredentialOperationResolution, error) {
@@ -43,6 +46,12 @@ func (f *fakeCredentialOperationResolver) RefreshCredential(context.Context, str
 func (f *fakeCredentialOperationResolver) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
 	f.deleteCalled = true
 	return f.deliveryErr
+}
+
+func (f *fakeCredentialOperationResolver) SetPrimaryProfile(_ context.Context, _, _ string, _ string, binding *model.PlatformAccountBinding, _ string) (*RuntimeSummary, error) {
+	f.primaryCalled = true
+	f.primaryBinding = binding
+	return f.primarySummary, f.deliveryErr
 }
 
 func newCredentialReconcileService(t *testing.T, resolver *fakeCredentialOperationResolver) (*OrchestrationService, *OperationIntentService, *fakeRuntimeSummaryBindingReader) {
@@ -195,6 +204,39 @@ func TestReconcileDeliversPendingNonSensitiveRefresh(t *testing.T) {
 	assert.True(t, resolver.refreshCalled)
 	assert.Equal(t, model.PlatformAccountBindingStatusActive, reader.binding.Status)
 	intent, getErr := store.Get(context.Background(), "op_refresh")
+	require.NoError(t, getErr)
+	assert.Equal(t, model.PlatformOperationIntentStateSucceeded, intent.State)
+}
+
+func TestReconcilePrimaryReplayUsesIntentProfileRevision(t *testing.T) {
+	store := NewOperationIntentService(openOperationIntentTestDB(t))
+	input := CredentialOperationIntentInput{
+		OperationID: "op_primary", BindingID: 101, BindingRef: "bind_test", Kind: "OPERATION_KIND_SET_PRIMARY_PROFILE",
+		PreGeneration: 4, TargetGeneration: 4, RequestFingerprint: "primary-fingerprint",
+		ProfileRef: "profile-stable", ProfileRevision: 7, ActorType: "user", ActorID: "session:test",
+	}
+	_, err := store.Admit(context.Background(), input)
+	require.NoError(t, err)
+	binding := &model.PlatformAccountBinding{
+		ID: 101, BindingRef: "bind_test", OwnerUserID: 7, Platform: "mihomo", PlatformServiceKey: "platform-mihomo-service",
+		Generation: 4, ProfileRevision: 8, ExternalAccountKey: sql.NullString{String: "account-101", Valid: true}, Status: model.PlatformAccountBindingStatusActive,
+	}
+	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway: &fakeCredentialGateway{},
+		primarySummary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 4, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 8, ProfileObservedRevision: 8,
+		},
+	}
+	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
+	service := NewOrchestrationService(reader, platformService, resolver, store)
+
+	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), input.OperationID))
+	require.True(t, resolver.primaryCalled)
+	require.NotNil(t, resolver.primaryBinding)
+	assert.Equal(t, uint64(7), resolver.primaryBinding.ProfileRevision)
+	intent, getErr := store.Get(context.Background(), input.OperationID)
 	require.NoError(t, getErr)
 	assert.Equal(t, model.PlatformOperationIntentStateSucceeded, intent.State)
 }

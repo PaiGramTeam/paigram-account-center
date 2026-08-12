@@ -108,16 +108,17 @@ func (c *HTTPClient) RefreshCredential(ctx context.Context, cookieBundleJSON str
 	}, &response); err != nil {
 		return RefreshResult{}, err
 	}
-	if strings.TrimSpace(response.CredentialBundleJSON) == "" || strings.TrimSpace(response.AccountID) == "" || strings.TrimSpace(response.Region) == "" || !response.ExpiresAt.After(time.Now().UTC()) {
-		return RefreshResult{}, &UpstreamError{Kind: ErrorInvalidResponse}
-	}
-	return RefreshResult{
+	result := RefreshResult{
 		CredentialBundleJSON: response.CredentialBundleJSON,
 		AccountID:            response.AccountID,
 		Region:               response.Region,
 		Profiles:             response.Profiles,
 		ExpiresAt:            response.ExpiresAt.UTC(),
-	}, nil
+	}
+	if err := ValidateRefreshResult(result, time.Now().UTC()); err != nil {
+		return RefreshResult{}, err
+	}
+	return result, nil
 }
 
 func (c *HTTPClient) IssueAuthKey(ctx context.Context, cookieBundleJSON string, playerID string) (string, int64, error) {
