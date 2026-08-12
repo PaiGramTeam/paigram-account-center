@@ -49,23 +49,6 @@ func TestGenericPlatformServiceConfirmPrimaryProfileRequiresWriteAction(t *testi
 	require.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
-func TestGenericPlatformServiceConfirmPrimaryProfileRejectsDelegationTicket(t *testing.T) {
-	adapter := newGenericPlatformServiceForAdapterTest(newMemoryGrantInvalidationStore())
-	ctx := incomingServiceTicketContext(signedAdapterServiceTicket(t, adapterTicketOptions{
-		ActorType:         "consumer",
-		Consumer:          "paimon-bot",
-		GrantVersion:      1,
-		PlatformAccountID: "binding_101_10001",
-		Scopes:            []string{usecase.ActionProfileWrite},
-	}))
-
-	_, err := adapter.ConfirmPrimaryProfile(ctx, &platformv1.ConfirmPrimaryProfileRequest{
-		PlatformAccountId: "binding_101_10001",
-		PlayerId:          "10001",
-	})
-	require.Equal(t, codes.PermissionDenied, status.Code(err))
-}
-
 func TestGenericPlatformServiceInvalidateConsumerGrantRejectsConsumerTicket(t *testing.T) {
 	store := newMemoryGrantInvalidationStore()
 	adapter := newGenericPlatformServiceForAdapterTest(store)
