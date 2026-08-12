@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 	pkgerrors "paigram/pkg/errors"
 )
@@ -41,7 +42,7 @@ func (s *AuthorityService) GetAuthorityUsers(roleID uint) ([]AuthorityUserInfo, 
 func (s *AuthorityService) ReplaceAuthorityUsers(roleID uint, userIDs []uint64, grantedBy uint64) error {
 	normalizedUserIDs := normalizeAuthorityUserIDs(userIDs)
 
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		role, err := s.getAuthority(tx, roleID)
 		if err != nil {
 			return err
@@ -130,6 +131,10 @@ func (s *AuthorityService) ReplaceAuthorityUsers(roleID uint, userIDs []uint64, 
 
 		return nil
 	})
+	if dberror.IsActiveAdministratorGuardViolation(err) {
+		return pkgerrors.ErrSystemRoleProtect
+	}
+	return err
 }
 
 func (s *AuthorityService) ensureAuthorityExists(db *gorm.DB, roleID uint) error {

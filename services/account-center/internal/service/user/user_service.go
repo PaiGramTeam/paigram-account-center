@@ -7,7 +7,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
+	pkgerrors "paigram/pkg/errors"
 )
 
 // UserService handles user business logic.
@@ -199,8 +201,19 @@ func (s *UserService) UpdateUser(userID uint64, params UpdateUserParams) (*model
 
 // DeleteUser soft deletes a user.
 func (s *UserService) DeleteUser(userID uint64) error {
-	result := s.db.Delete(&model.User{}, userID)
+	return s.deleteUser(userID, false)
+}
+
+func (s *UserService) deleteUser(userID uint64, hardDelete bool) error {
+	db := s.db
+	if hardDelete {
+		db = db.Unscoped()
+	}
+	result := db.Delete(&model.User{}, userID)
 	if result.Error != nil {
+		if dberror.IsActiveAdministratorGuardViolation(result.Error) {
+			return pkgerrors.ErrSystemRoleProtect
+		}
 		return fmt.Errorf("failed to delete user: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {

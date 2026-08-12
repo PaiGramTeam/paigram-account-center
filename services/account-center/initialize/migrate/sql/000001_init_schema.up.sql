@@ -288,6 +288,154 @@ CREATE TABLE casbin_rule (
     CONSTRAINT idx_casbin_rule UNIQUE NULLS NOT DISTINCT (ptype, v0, v1, v2, v3, v4, v5)
 );
 
+CREATE TABLE admin_guard (
+    singleton BOOLEAN PRIMARY KEY DEFAULT TRUE,
+    armed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ck_admin_guard_singleton CHECK (singleton)
+);
+INSERT INTO admin_guard (singleton) VALUES (TRUE);
+
+CREATE FUNCTION validate_active_administrator_guard() RETURNS VOID AS $$
+DECLARE
+    guard_armed BOOLEAN;
+    administrator_exists BOOLEAN;
+BEGIN
+    SELECT armed INTO guard_armed
+    FROM admin_guard
+    WHERE singleton = TRUE
+    FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23514',
+            CONSTRAINT = 'ck_admin_guard_singleton',
+            MESSAGE = 'administrator guard singleton is missing';
+    END IF;
+    SELECT EXISTS (
+        SELECT 1
+        FROM users
+        JOIN user_roles ON user_roles.user_id = users.id
+        JOIN roles ON roles.id = user_roles.role_id
+        WHERE users.status = 'active'
+          AND users.deleted_at IS NULL
+          AND roles.name = 'admin'
+          AND roles.is_system = TRUE
+          AND roles.deleted_at IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM role_permissions
+              JOIN permissions ON permissions.id = role_permissions.permission_id
+              WHERE role_permissions.role_id = roles.id
+                AND permissions.name = 'role:manage'
+                AND permissions.deleted_at IS NULL
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM casbin_rule
+              WHERE casbin_rule.ptype = 'p'
+                AND casbin_rule.v0 = roles.id::TEXT
+                AND casbin_rule.v2 = 'PUT'
+                AND casbin_rule.v1 IN ('/api/v1/admin/roles/:id/users', '/api/v1/*')
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM casbin_rule
+              WHERE casbin_rule.ptype = 'p'
+                AND casbin_rule.v0 = roles.id::TEXT
+                AND casbin_rule.v2 = 'PUT'
+                AND casbin_rule.v1 IN ('/api/v1/admin/roles/:id/permissions', '/api/v1/*')
+          )
+    ) INTO administrator_exists;
+    IF NOT guard_armed THEN
+        IF administrator_exists THEN
+            UPDATE admin_guard SET armed = TRUE WHERE singleton = TRUE;
+        END IF;
+        RETURN;
+    END IF;
+    IF NOT administrator_exists THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23514',
+            CONSTRAINT = 'active_administrator_required',
+            MESSAGE = 'at least one active administrator is required';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION enforce_active_administrator_guard() RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM validate_active_administrator_guard();
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION prevent_admin_guard_removal() RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION USING
+        ERRCODE = '23514',
+        CONSTRAINT = 'ck_admin_guard_singleton',
+        MESSAGE = 'administrator guard singleton cannot be removed';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_user_roles
+    AFTER INSERT OR UPDATE OR DELETE ON user_roles
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_users_update
+    AFTER UPDATE ON users
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW
+    WHEN (OLD.status IS DISTINCT FROM NEW.status OR OLD.deleted_at IS DISTINCT FROM NEW.deleted_at)
+    EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_users_delete
+    AFTER DELETE ON users
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_roles_update
+    AFTER UPDATE ON roles
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW
+    WHEN (
+        OLD.name IS DISTINCT FROM NEW.name
+        OR OLD.is_system IS DISTINCT FROM NEW.is_system
+        OR OLD.deleted_at IS DISTINCT FROM NEW.deleted_at
+    )
+    EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_roles_delete
+    AFTER DELETE ON roles
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_role_permissions
+    AFTER INSERT OR UPDATE OR DELETE ON role_permissions
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_permissions_update
+    AFTER UPDATE ON permissions
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW
+    WHEN (OLD.name IS DISTINCT FROM NEW.name OR OLD.deleted_at IS DISTINCT FROM NEW.deleted_at)
+    EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_permissions_delete
+    AFTER DELETE ON permissions
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE CONSTRAINT TRIGGER active_administrator_guard_casbin_rules
+    AFTER INSERT OR UPDATE OR DELETE ON casbin_rule
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION enforce_active_administrator_guard();
+
+CREATE TRIGGER admin_guard_prevent_delete
+    BEFORE DELETE OR TRUNCATE ON admin_guard
+    FOR EACH STATEMENT EXECUTE FUNCTION prevent_admin_guard_removal();
+
 CREATE TABLE bots (
     id VARCHAR(64) PRIMARY KEY,
     display_name VARCHAR(255) NOT NULL,

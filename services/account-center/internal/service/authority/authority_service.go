@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"paigram/internal/dberror"
 	"paigram/internal/model"
 	"paigram/pkg/errors"
 )
@@ -270,6 +271,9 @@ func (s *AuthorityService) AssignPermissions(roleID uint, permissionIDs []uint) 
 
 		return nil
 	}); err != nil {
+		if dberror.IsActiveAdministratorGuardViolation(err) {
+			return errors.ErrSystemRoleProtect
+		}
 		return err
 	}
 

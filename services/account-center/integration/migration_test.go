@@ -38,6 +38,7 @@ func TestMigrationsApplyToFreshPostgreSQL(t *testing.T) {
 	requireTableAbsent(t, stack.SQLDB, stack.Schema, "platform_account_refs")
 	requireTableAbsent(t, stack.SQLDB, stack.Schema, "bot_account_grants")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "platform_services")
+	requireTableExists(t, stack.SQLDB, stack.Schema, "admin_guard")
 
 	// Bots remain thin identity records without credential or activity state.
 	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "bots", "api_key")

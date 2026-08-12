@@ -282,6 +282,10 @@ func (h *AuthorityHandler) AssignPermissions(c *gin.Context) {
 			response.NotFound(c, "角色不存在")
 			return
 		}
+		if errors.Is(err, pkgerrors.ErrSystemRoleProtect) {
+			response.ForbiddenWithCode(c, response.ErrCodePermissionDenied, "系统角色必须保留恢复管理员访问所需的权限", nil)
+			return
+		}
 		logging.Error("assign permissions failed", zap.Error(err), zap.Uint64("role_id", roleID))
 		response.InternalServerError(c, "分配权限失败")
 		return

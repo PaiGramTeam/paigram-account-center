@@ -6,7 +6,9 @@ import (
 
 	"gorm.io/gorm"
 
+	"paigram/internal/dberror"
 	"paigram/internal/model"
+	pkgerrors "paigram/pkg/errors"
 )
 
 func (s *UserService) ReplaceUserRoles(userID uint64, roleIDs []uint64, primaryRoleID *uint64, grantedBy uint64) (*model.User, error) {
@@ -75,6 +77,9 @@ func (s *UserService) ReplaceUserRoles(userID uint64, roleIDs []uint64, primaryR
 		return nil
 	})
 	if err != nil {
+		if dberror.IsActiveAdministratorGuardViolation(err) {
+			return nil, pkgerrors.ErrSystemRoleProtect
+		}
 		return nil, err
 	}
 

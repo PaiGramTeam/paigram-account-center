@@ -802,6 +802,7 @@ func grantAdminRoleToUser(t *testing.T, stack *integrationStack, userID uint64) 
 		IsSystem:    true,
 	}
 	require.NoError(t, stack.DB.Where(model.Role{Name: model.RoleAdmin}).FirstOrCreate(&role).Error)
+	ensureAdminRecoveryAuthority(t, stack, role.ID)
 
 	// Get Casbin enforcer
 	enforcer := casbin.GetEnforcer()

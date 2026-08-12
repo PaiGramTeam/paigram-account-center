@@ -32,6 +32,7 @@ import (
 	"paigram/internal/sessioncache"
 	"paigram/internal/utils/safeerror"
 	"paigram/internal/utils/secsubtle"
+	pkgerrors "paigram/pkg/errors"
 )
 
 // Handler exposes REST handlers for user resources.
@@ -40,7 +41,7 @@ type Handler struct {
 	loginMethods LoginMethodService
 	sessionCache sessioncache.Store
 	securityCfg  config.SecurityConfig // bcrypt cost source for admin-create / admin-reset paths (V8)
-	db           *gorm.DB              // TODO(architectural-refactoring): Remove after migrating remaining 8 methods (UpdateUserStatus, ResetUserPassword, GetAuditLogs, GetUserRoles, GetUserPermissions, GetUserSessions, RevokeUserSession, GetSecuritySummary) to service layer. See docs/superpowers/plans/2026-04-11-architectural-refactoring.md Phase 5
+	db           *gorm.DB              // Temporary dependency for handlers that have not moved to service modules.
 }
 
 // LoginMethodService defines reusable login-method operations shared with /me.
@@ -56,6 +57,8 @@ type UserServiceInterface interface {
 	CreateUser(params user.CreateUserParams) (*model.User, error)
 	UpdateUser(userID uint64, params user.UpdateUserParams) (*model.User, error)
 	DeleteUser(userID uint64) error
+	HardDeleteUser(userID uint64) error
+	UpdateUserStatus(userID uint64, status model.UserStatus) (*model.User, error)
 	ReplaceUserRoles(userID uint64, roleIDs []uint64, primaryRoleID *uint64, grantedBy uint64) (*model.User, error)
 	SetPrimaryRole(userID uint64, primaryRoleID *uint64, clear bool) (*model.User, error)
 }
@@ -956,28 +959,22 @@ func (h *Handler) DeleteUser(c *gin.Context) {
 	hardDelete := c.Query("hard_delete") == "true"
 
 	if hardDelete {
-		// Hard delete: bypass service layer, use direct DB access with Unscoped
-		result := h.db.Unscoped().Delete(&model.User{}, userID)
-		if result.Error != nil {
-			logging.Error("hard delete user failed", zap.Error(result.Error), zap.Uint64("user_id", userID))
-			response.InternalServerError(c, "failed to delete user")
+		err = h.userService.HardDeleteUser(userID)
+	} else {
+		err = h.userService.DeleteUser(userID)
+	}
+	if err != nil {
+		if errors.Is(err, pkgerrors.ErrSystemRoleProtect) {
+			response.ForbiddenWithCode(c, response.ErrCodePermissionDenied, "at least one active administrator is required", nil)
 			return
 		}
-		if result.RowsAffected == 0 {
+		if strings.Contains(err.Error(), "not found") {
 			response.NotFound(c, "user not found")
 			return
 		}
-	} else {
-		// Soft delete: use service layer
-		if err := h.userService.DeleteUser(userID); err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				response.NotFound(c, "user not found")
-				return
-			}
-			logging.Error("soft delete user failed", zap.Error(err), zap.Uint64("user_id", userID))
-			response.InternalServerError(c, safeerror.UserMessage(err))
-			return
-		}
+		logging.Error("delete user failed", zap.Error(err), zap.Uint64("user_id", userID), zap.Bool("hard_delete", hardDelete))
+		response.InternalServerError(c, safeerror.UserMessage(err))
+		return
 	}
 
 	c.Status(204)
@@ -1023,19 +1020,16 @@ func (h *Handler) UpdateUserStatus(c *gin.Context) {
 		return
 	}
 
-	// Check if user exists
-	var user model.User
-	if err := h.db.First(&user, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	updatedUser, err := h.userService.UpdateUserStatus(id, status)
+	if err != nil {
+		if errors.Is(err, user.ErrUserNotFound) {
 			response.NotFoundWithCode(c, response.ErrCodeUserNotFound, "user not found", nil)
 			return
 		}
-		response.InternalServerErrorWithCode(c, response.ErrCodeDatabaseError, "failed to load user", nil)
-		return
-	}
-
-	// Update status
-	if err := h.db.Model(&user).Update("status", status).Error; err != nil {
+		if errors.Is(err, pkgerrors.ErrSystemRoleProtect) {
+			response.ForbiddenWithCode(c, response.ErrCodePermissionDenied, "at least one active administrator is required", nil)
+			return
+		}
 		response.InternalServerErrorWithCode(c, response.ErrCodeDatabaseError, "failed to update user status", nil)
 		return
 	}
@@ -1050,8 +1044,8 @@ func (h *Handler) UpdateUserStatus(c *gin.Context) {
 		ActorUserID: currentActorUserID(c),
 		Action:      "admin_user_disable",
 		TargetType:  "user",
-		TargetID:    strconv.FormatUint(user.ID, 10),
-		OwnerUserID: uint64Ptr(user.ID),
+		TargetID:    strconv.FormatUint(updatedUser.ID, 10),
+		OwnerUserID: uint64Ptr(updatedUser.ID),
 		Result:      "success",
 		Metadata: map[string]any{
 			"status": status,
@@ -1588,6 +1582,8 @@ func writeUserRoleMutationError(c *gin.Context, err error) {
 		response.Error(c, http.StatusUnprocessableEntity, "role not found")
 	case errors.Is(err, user.ErrPrimaryRoleNotAssigned):
 		response.Error(c, http.StatusUnprocessableEntity, "primary role must belong to user")
+	case errors.Is(err, pkgerrors.ErrSystemRoleProtect):
+		response.ForbiddenWithCode(c, response.ErrCodePermissionDenied, "at least one active administrator is required", nil)
 	default:
 		response.InternalServerError(c, "failed to update user roles")
 	}

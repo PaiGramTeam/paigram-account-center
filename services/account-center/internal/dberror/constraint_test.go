@@ -28,3 +28,13 @@ func TestIsUniqueViolation(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCheckConstraint(t *testing.T) {
+	err := fmt.Errorf("commit transaction: %w", &pgconn.PgError{
+		Code:           postgresCheckViolation,
+		ConstraintName: "active_administrator_required",
+	})
+	require.True(t, IsCheckConstraint(err, "active_administrator_required"))
+	require.False(t, IsCheckConstraint(err, "different_constraint"))
+	require.False(t, IsCheckConstraint(errors.New("check failed"), "active_administrator_required"))
+}

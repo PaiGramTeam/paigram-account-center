@@ -1,4 +1,18 @@
 DROP TABLE IF EXISTS audit_events CASCADE;
+DROP TRIGGER IF EXISTS active_administrator_guard_user_roles ON user_roles;
+DROP TRIGGER IF EXISTS active_administrator_guard_users_update ON users;
+DROP TRIGGER IF EXISTS active_administrator_guard_users_delete ON users;
+DROP TRIGGER IF EXISTS active_administrator_guard_roles_update ON roles;
+DROP TRIGGER IF EXISTS active_administrator_guard_roles_delete ON roles;
+DROP TRIGGER IF EXISTS active_administrator_guard_role_permissions ON role_permissions;
+DROP TRIGGER IF EXISTS active_administrator_guard_permissions_update ON permissions;
+DROP TRIGGER IF EXISTS active_administrator_guard_permissions_delete ON permissions;
+DROP TRIGGER IF EXISTS active_administrator_guard_casbin_rules ON casbin_rule;
+DROP TRIGGER IF EXISTS admin_guard_prevent_delete ON admin_guard;
+DROP FUNCTION IF EXISTS prevent_admin_guard_removal();
+DROP FUNCTION IF EXISTS enforce_active_administrator_guard();
+DROP FUNCTION IF EXISTS validate_active_administrator_guard();
+DROP TABLE IF EXISTS admin_guard CASCADE;
 DROP TABLE IF EXISTS legal_documents CASCADE;
 DROP TABLE IF EXISTS system_config_entries CASCADE;
 DROP TABLE IF EXISTS consumer_grant_actions CASCADE;

@@ -10,6 +10,8 @@ import (
 
 const postgresUniqueViolation = "23505"
 
+const postgresCheckViolation = "23514"
+
 // IsUniqueViolation reports whether err represents a database UNIQUE violation.
 func IsUniqueViolation(err error) bool {
 	if err == nil {
@@ -23,4 +25,15 @@ func IsUniqueViolation(err error) bool {
 		return postgresErr.Code == postgresUniqueViolation
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "unique constraint failed")
+}
+
+// IsCheckConstraint reports whether err is the named PostgreSQL CHECK violation.
+func IsCheckConstraint(err error, constraintName string) bool {
+	if err == nil || strings.TrimSpace(constraintName) == "" {
+		return false
+	}
+	var postgresErr *pgconn.PgError
+	return errors.As(err, &postgresErr) &&
+		postgresErr.Code == postgresCheckViolation &&
+		postgresErr.ConstraintName == constraintName
 }
