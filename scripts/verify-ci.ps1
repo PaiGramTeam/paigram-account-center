@@ -11,6 +11,7 @@ param(
         "sdk-minimum",
         "paigram-compatibility",
         "frontend",
+        "real-browser",
         "repository-hygiene"
     )]
     [string]$Task
@@ -355,6 +356,36 @@ switch ($Task) {
             Remove-Item -LiteralPath $bunTestResult -Force -ErrorAction SilentlyContinue
         }
         Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command { bun run build:all } -FailureMessage "Frontend builds failed"
+        Assert-RepositoryClean
+    }
+    "real-browser" {
+        Assert-NoSkippedTestMarkers -Paths @("$repositoryRoot/frontend/tests/e2e-real")
+        $forbiddenDoubles = @(rg -n `
+            'page\.route|route\.fulfill|setupWorker|setupServer|\bmsw\b' `
+            "$repositoryRoot/frontend/tests/e2e-real" `
+            "$repositoryRoot/frontend/playwright.real.config.ts"
+        )
+        if ($LASTEXITCODE -notin @(0, 1)) {
+            throw "Could not inspect real-browser test doubles (exit code $LASTEXITCODE)"
+        }
+        if ($forbiddenDoubles.Count -ne 0) {
+            $forbiddenDoubles | ForEach-Object { Write-Error $_ }
+            throw "Real-browser acceptance must not intercept or mock application requests"
+        }
+        Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command { bun install --frozen-lockfile } -FailureMessage "Frontend install failed"
+        Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command { bunx playwright install --with-deps chromium } -FailureMessage "Chromium install failed"
+        $playwrightResult = Join-Path ([IO.Path]::GetTempPath()) "paigram-real-browser-$([guid]::NewGuid().ToString('N')).xml"
+        try {
+            $env:PAI_E2E_JUNIT_PATH = $playwrightResult
+            Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command {
+                bun run e2e:real
+            } -FailureMessage "Real-browser system acceptance failed"
+            Assert-JUnitHasNoSkippedTests -Path $playwrightResult
+        }
+        finally {
+            Remove-Item Env:PAI_E2E_JUNIT_PATH -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $playwrightResult -Force -ErrorAction SilentlyContinue
+        }
         Assert-RepositoryClean
     }
     "repository-hygiene" {

@@ -24,6 +24,7 @@
     "test:coverage": "bun test --coverage tests/unit",
     "e2e": "playwright test --config playwright.e2e.config.ts",
     "e2e:mock": "playwright test --config playwright.mock.config.ts",
+    "e2e:real": "playwright test --config playwright.real.config.ts",
     "e2e:all": "playwright test",
     "openapi:gen": "openapi-typescript ../contracts/openapi.json -o packages/shared-components/src/api/generated/schema.ts"
   },

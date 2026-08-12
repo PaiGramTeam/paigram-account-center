@@ -99,11 +99,15 @@ func issue(t testing.TB, authority *x509.Certificate, authorityKey ed25519.Priva
 
 func serial(t testing.TB) *big.Int {
 	t.Helper()
-	value, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 120))
+	value, err := randomSerial()
 	if err != nil {
 		t.Fatalf("generate certificate serial: %v", err)
 	}
 	return value
+}
+
+func randomSerial() (*big.Int, error) {
+	return rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 120))
 }
 
 func write(t testing.TB, path string, value []byte) {
