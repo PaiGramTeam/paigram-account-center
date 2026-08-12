@@ -6,19 +6,21 @@ import (
 )
 
 type Device struct {
-	BindingID         uint64
-	PlatformAccountID string
-	DeviceID          string
-	DeviceFP          string
-	DeviceName        *string
-	IsValid           bool
-	LastSeenAt        *time.Time
+	BindingRef string
+	AccountKey string
+	DeviceRef  string
+	DeviceID   string
+	DeviceFP   string
+	DeviceName *string
+	IsValid    bool
+	LastSeenAt *time.Time
 }
 
 type DeviceRepository interface {
 	Save(ctx context.Context, device *Device) error
-	ListByBindingID(ctx context.Context, bindingID uint64) ([]*Device, error)
-	ListByPlatformAccountID(ctx context.Context, platformAccountID string) ([]*Device, error)
-	DeleteByBindingID(ctx context.Context, bindingID uint64) error
-	DeleteByPlatformAccountID(ctx context.Context, platformAccountID string) error
+	ListByBindingRef(ctx context.Context, bindingRef string) ([]*Device, error)
+	ListByAccountKey(ctx context.Context, accountKey string) ([]*Device, error)
+	GetByDeviceRef(ctx context.Context, bindingRef string, deviceRef string) (*Device, error)
+	DeleteByBindingRef(ctx context.Context, bindingRef string) error
+	DeleteByAccountKey(ctx context.Context, accountKey string) error
 }

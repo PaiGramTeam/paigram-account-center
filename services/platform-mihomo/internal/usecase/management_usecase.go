@@ -11,12 +11,16 @@ import (
 var ErrPlatformAccountMismatch = errors.New("platform account does not match requested credential")
 
 type CredentialSummaryOutput struct {
-	PlatformAccountID string
-	Status            CredentialStatus
-	LastValidatedAt   *time.Time
-	LastRefreshedAt   *time.Time
-	Devices           []*biz.Device
-	Profiles          []*ProfileSummary
+	AccountKey      string
+	Generation      uint64
+	Status          CredentialStatus
+	LastValidatedAt *time.Time
+	LastRefreshedAt *time.Time
+	Devices         []*biz.Device
+	Profiles        []*ProfileSummary
+	ProfileSnapshotComplete bool
+	ProfileRevision         uint64
+	ProfileObservedRevision uint64
 }
 
 type ManagementUsecase struct {
@@ -49,8 +53,8 @@ func NewManagementUsecase(
 	}
 }
 
-func (uc *ManagementUsecase) GetCredentialSummary(ctx context.Context, platformAccountID string) (*CredentialSummaryOutput, error) {
-	credential, err := uc.credentials.GetByPlatformAccountID(ctx, platformAccountID)
+func (uc *ManagementUsecase) GetCredentialSummary(ctx context.Context, accountKey string) (*CredentialSummaryOutput, error) {
+	credential, err := uc.credentials.GetByAccountKey(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -58,48 +62,52 @@ func (uc *ManagementUsecase) GetCredentialSummary(ctx context.Context, platformA
 		return nil, ErrCredentialNotFound
 	}
 
-	devices, err := uc.devices.ListByPlatformAccountID(ctx, platformAccountID)
+	devices, err := uc.devices.ListByAccountKey(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
 
-	profiles, err := uc.profileUC.ListProfiles(ctx, platformAccountID)
+	profiles, err := uc.profileUC.ListProfiles(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &CredentialSummaryOutput{
-		PlatformAccountID: credential.PlatformAccountID,
-		Status:            credentialStatusFromStorage(credential.Status),
-		LastValidatedAt:   credential.LastValidatedAt,
-		LastRefreshedAt:   credential.LastRefreshedAt,
-		Devices:           devices,
-		Profiles:          profiles,
+		AccountKey:      credential.AccountKey,
+		Generation:      credential.Generation,
+		Status:          credentialStatusFromStorage(credential.Status),
+		LastValidatedAt: credential.LastValidatedAt,
+		LastRefreshedAt: credential.LastRefreshedAt,
+		Devices:         devices,
+		Profiles:        profiles,
+		ProfileSnapshotComplete: credential.ProfileSnapshotComplete,
+		ProfileRevision:         credential.ProfileRevision,
+		ProfileObservedRevision: credential.ProfileObservedRevision,
 	}, nil
 }
 
-func (uc *ManagementUsecase) GetCredentialSummaryWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string) (*CredentialSummaryOutput, error) {
-	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
+func (uc *ManagementUsecase) GetCredentialSummaryWithScope(ctx context.Context, guard ScopeGuard, accountKey string) (*CredentialSummaryOutput, error) {
+	if err := guard.RequireAccountKey(accountKey); err != nil {
 		return nil, err
 	}
 	if err := guard.RequireBindingWide(); err != nil {
 		return nil, err
 	}
-	credential, err := uc.credentials.GetByBindingID(ctx, guard.BindingID)
+	credential, err := uc.credentials.GetByBindingRef(ctx, guard.BindingRef)
 	if err != nil {
 		return nil, err
 	}
 	if credential == nil {
-		return nil, ErrCredentialNotFound
+		return nil, ErrBindingScopeDenied
 	}
-	if credential.PlatformAccountID != platformAccountID {
+	if credential.AccountKey != accountKey {
 		return nil, ErrPlatformAccountMismatch
 	}
-	devices, err := uc.devices.ListByBindingID(ctx, guard.BindingID)
+	devices, err := uc.devices.ListByBindingRef(ctx, guard.BindingRef)
 	if err != nil {
 		return nil, err
 	}
-	profiles, err := uc.profiles.ListByBindingID(ctx, guard.BindingID)
+	profiles, err := uc.profiles.ListByBindingRef(ctx, guard.BindingRef)
 	if err != nil {
 		return nil, err
 	}
@@ -108,22 +116,26 @@ func (uc *ManagementUsecase) GetCredentialSummaryWithScope(ctx context.Context, 
 		summaries = append(summaries, toProfileSummary(profile))
 	}
 	return &CredentialSummaryOutput{
-		PlatformAccountID: credential.PlatformAccountID,
-		Status:            credentialStatusFromStorage(credential.Status),
-		LastValidatedAt:   credential.LastValidatedAt,
-		LastRefreshedAt:   credential.LastRefreshedAt,
-		Devices:           devices,
-		Profiles:          summaries,
+		AccountKey:      credential.AccountKey,
+		Generation:      credential.Generation,
+		Status:          credentialStatusFromStorage(credential.Status),
+		LastValidatedAt: credential.LastValidatedAt,
+		LastRefreshedAt: credential.LastRefreshedAt,
+		Devices:         devices,
+		Profiles:        summaries,
+		ProfileSnapshotComplete: credential.ProfileSnapshotComplete,
+		ProfileRevision:         credential.ProfileRevision,
+		ProfileObservedRevision: credential.ProfileObservedRevision,
 	}, nil
 }
 
 type UpdateCredentialInput struct {
-	PlatformAccountID string
+	AccountKey string
 	BindCredentialInput
 }
 
 func (uc *ManagementUsecase) UpdateCredential(ctx context.Context, input UpdateCredentialInput) (*CredentialSummaryOutput, error) {
-	credential, err := uc.credentials.GetByPlatformAccountID(ctx, input.PlatformAccountID)
+	credential, err := uc.credentials.GetByAccountKey(ctx, input.AccountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +147,7 @@ func (uc *ManagementUsecase) UpdateCredential(ctx context.Context, input UpdateC
 	if err != nil {
 		return nil, err
 	}
-	if prepared.platformAccountID != input.PlatformAccountID {
+	if prepared.accountKey != input.AccountKey {
 		return nil, ErrPlatformAccountMismatch
 	}
 
@@ -144,7 +156,7 @@ func (uc *ManagementUsecase) UpdateCredential(ctx context.Context, input UpdateC
 		if err != nil {
 			return err
 		}
-		if err := uc.pruneStaleProfiles(txCtx, input.PlatformAccountID, result.Profiles); err != nil {
+		if err := uc.pruneStaleProfiles(txCtx, input.AccountKey, result.Profiles); err != nil {
 			return err
 		}
 		return nil
@@ -153,11 +165,11 @@ func (uc *ManagementUsecase) UpdateCredential(ctx context.Context, input UpdateC
 		return nil, err
 	}
 
-	return uc.GetCredentialSummary(ctx, input.PlatformAccountID)
+	return uc.GetCredentialSummary(ctx, input.AccountKey)
 }
 
 func (uc *ManagementUsecase) UpdateCredentialWithScope(ctx context.Context, guard ScopeGuard, input UpdateCredentialInput) (*CredentialSummaryOutput, error) {
-	if err := guard.RequirePlatformAccountID(input.PlatformAccountID); err != nil {
+	if err := guard.RequireAccountKey(input.AccountKey); err != nil {
 		return nil, err
 	}
 	if err := guard.RequireBindingWide(); err != nil {
@@ -166,39 +178,42 @@ func (uc *ManagementUsecase) UpdateCredentialWithScope(ctx context.Context, guar
 	return uc.UpdateCredential(ctx, input)
 }
 
-func (uc *ManagementUsecase) DeleteCredential(ctx context.Context, platformAccountID string) error {
-	return uc.management.DeleteCredentialGraph(ctx, platformAccountID)
+func (uc *ManagementUsecase) DeleteCredential(ctx context.Context, accountKey string) error {
+	return uc.management.DeleteCredentialGraph(ctx, accountKey)
 }
 
-func (uc *ManagementUsecase) DeleteCredentialWithScope(ctx context.Context, guard ScopeGuard, platformAccountID string) error {
-	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
+func (uc *ManagementUsecase) DeleteCredentialWithScope(ctx context.Context, guard ScopeGuard, accountKey string) error {
+	if err := guard.RequireAccountKey(accountKey); err != nil {
 		return err
 	}
 	if err := guard.RequireBindingWide(); err != nil {
 		return err
 	}
-	credential, err := uc.credentials.GetByBindingID(ctx, guard.BindingID)
+	credential, err := uc.credentials.GetByBindingRef(ctx, guard.BindingRef)
+	if err != nil {
+		return err
+	}
+	if credential == nil {
+		return ErrBindingScopeDenied
+	}
+	if credential.AccountKey != accountKey {
+		return ErrPlatformAccountMismatch
+	}
+	return uc.management.DeleteCredentialGraphByBindingRef(ctx, guard.BindingRef)
+}
+
+func (uc *ManagementUsecase) pruneStaleProfiles(ctx context.Context, accountKey string, profiles []ProfileSummary) error {
+	keep := make([]biz.ProfileIdentity, 0, len(profiles))
+	for i := range profiles {
+		profile := &profiles[i]
+		keep = append(keep, biz.ProfileIdentity{PlayerID: profile.PlayerID, Region: profile.Region})
+	}
+	credential, err := uc.credentials.GetByAccountKey(ctx, accountKey)
 	if err != nil {
 		return err
 	}
 	if credential == nil {
 		return ErrCredentialNotFound
 	}
-	if credential.PlatformAccountID != platformAccountID {
-		return ErrPlatformAccountMismatch
-	}
-	return uc.management.DeleteCredentialGraphByBindingID(ctx, guard.BindingID)
-}
-
-func (uc *ManagementUsecase) pruneStaleProfiles(ctx context.Context, platformAccountID string, profiles []ProfileSummary) error {
-	keep := make([]biz.ProfileIdentity, 0, len(profiles))
-	for i := range profiles {
-		profile := &profiles[i]
-		keep = append(keep, biz.ProfileIdentity{PlayerID: profile.PlayerID, Region: profile.Region})
-	}
-	bindingID, err := BindingIDFromPlatformAccountID(platformAccountID)
-	if err != nil {
-		return err
-	}
-	return uc.profiles.DeleteMissingByBindingID(ctx, bindingID, keep)
+	return uc.profiles.DeleteMissingByBindingRef(ctx, credential.BindingRef, keep)
 }

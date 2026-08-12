@@ -4,167 +4,109 @@ package integration
 
 import (
 	"database/sql"
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/stretchr/testify/require"
 )
 
-func TestMigrationsCreateCoreTables(t *testing.T) {
+func TestMigrationsCreateV2Baseline(t *testing.T) {
 	stack := newEmptyIntegrationStack(t)
-
 	requireMigrationsApplied(t, stack.SQLDB)
-	requireTableExists(t, stack.SQLDB, "public", "credential_records")
-	requireTableExists(t, stack.SQLDB, "public", "device_records")
-	requireTableExists(t, stack.SQLDB, "public", "account_profiles")
-	requireTableExists(t, stack.SQLDB, "public", "runtime_artifacts")
-	requireTableExists(t, stack.SQLDB, "public", "consumer_grant_invalidations")
+
+	for _, table := range []string{
+		"credential_records",
+		"device_records",
+		"account_profiles",
+		"runtime_artifacts",
+		"consumer_grant_invalidations",
+		"authorization_fences",
+		"platform_operations",
+	} {
+		requireTableExists(t, stack.SQLDB, "public", table)
+	}
 }
 
-func TestBindingMigrationRejectsUnknownLegacyPlatformAccountIDs(t *testing.T) {
-	stack := newEmptyIntegrationStack(t)
+func execMigrationFile(db *sql.DB, path string) error {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(string(contents))
+	return err
+}
 
-	applyMigrationFile(t, stack.SQLDB, migrationPath(t, "000001_create_credential_records.up.sql"))
-	applyMigrationFile(t, stack.SQLDB, migrationPath(t, "000003_create_account_profiles.up.sql"))
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve migration test path")
+	}
+	return filepath.Dir(filepath.Dir(currentFile))
+}
+
+func requireTableExists(t *testing.T, db *sql.DB, schema string, table string) {
+	t.Helper()
+	var exists bool
+	err := db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables
+			WHERE table_schema = $1 AND table_name = $2
+		)
+	`, schema, table).Scan(&exists)
+	if err != nil {
+		t.Fatalf("query table %s.%s: %v", schema, table, err)
+	}
+	if !exists {
+		t.Fatalf("expected table %s.%s to exist", schema, table)
+	}
+}
+
+func TestV2BaselineRejectsMismatchedBindingAccountPair(t *testing.T) {
+	stack := newEmptyIntegrationStack(t)
+	requireMigrationsApplied(t, stack.SQLDB)
+	insertCredential(t, stack.SQLDB, "binding-a", "account-a", "10001")
+	insertCredential(t, stack.SQLDB, "binding-b", "account-b", "20002")
 
 	_, err := stack.SQLDB.Exec(`
-		INSERT INTO credential_records (
-			platform_account_id, platform, account_id, region, credential_blob, credential_version, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, "legacy_10001", "mihomo", "10001", "cn_gf01", "{}", "v1", "active")
-	if err != nil {
-		t.Fatalf("insert legacy credential row: %v", err)
-	}
-
-	_, err = stack.SQLDB.Exec(`
 		INSERT INTO account_profiles (
-			platform_account_id, game_biz, region, player_id, nickname, level, is_default
+			binding_ref, account_key, profile_ref, game_biz, region, player_id, nickname
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, "legacy_10001", "hk4e_cn", "cn_gf01", "1008611", "Traveler", 1, true)
-	if err != nil {
-		t.Fatalf("insert legacy profile row: %v", err)
-	}
-
-	err = execMigrationFile(stack.SQLDB, migrationPath(t, "000005_add_binding_id_to_credentials_and_profiles.up.sql"))
+	`, "binding-a", "account-b", "profile-a", "hk4e_cn", "cn_gf01", "1008611", "Traveler")
 	if err == nil {
-		t.Fatal("expected binding migration to fail for unknown legacy platform_account_id")
+		t.Fatal("expected mismatched binding/account pair to violate the foreign key")
 	}
 }
 
-func TestRuntimeArtifactMigrationRejectsDuplicateDefaultProfiles(t *testing.T) {
-	stack := newEmptyIntegrationStack(t)
-	applyMigrations(t, stack.SQLDB,
-		"000001_create_credential_records.up.sql",
-		"000002_create_device_records.up.sql",
-		"000003_create_account_profiles.up.sql",
-		"000004_create_runtime_artifacts.up.sql",
-	)
-
-	insertLegacyCredential(t, stack.SQLDB, "binding_42_10001", "10001")
-	insertLegacyProfile(t, stack.SQLDB, "binding_42_10001", "1008611", true)
-	insertLegacyProfile(t, stack.SQLDB, "binding_42_10001", "1008622", true)
-	applyMigrations(t, stack.SQLDB,
-		"000005_add_binding_id_to_credentials_and_profiles.up.sql",
-		"000006_binding_first_devices_profiles_and_grant_invalidations.up.sql",
-	)
-
-	err := execMigrationFile(stack.SQLDB, migrationPath(t, "000007_binding_first_runtime_artifacts_and_primary_profile.up.sql"))
-	if err == nil {
-		t.Fatal("expected runtime artifact migration to fail for duplicate default profiles")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "multiple default account_profiles rows") {
-		t.Fatalf("expected duplicate default profile precheck error, got: %v", err)
-	}
-}
-
-func TestRuntimeArtifactMigrationRejectsUnmappableArtifacts(t *testing.T) {
-	stack := newEmptyIntegrationStack(t)
-	applyMigrations(t, stack.SQLDB,
-		"000001_create_credential_records.up.sql",
-		"000002_create_device_records.up.sql",
-		"000003_create_account_profiles.up.sql",
-		"000004_create_runtime_artifacts.up.sql",
-	)
-
-	insertLegacyCredential(t, stack.SQLDB, "binding_42_10001", "10001")
-	insertLegacyProfile(t, stack.SQLDB, "binding_42_10001", "1008611", true)
-	insertLegacyRuntimeArtifact(t, stack.SQLDB, "binding_99_missing", "authkey", "orphan-authkey", "1008611")
-	applyMigrations(t, stack.SQLDB,
-		"000005_add_binding_id_to_credentials_and_profiles.up.sql",
-		"000006_binding_first_devices_profiles_and_grant_invalidations.up.sql",
-	)
-
-	err := execMigrationFile(stack.SQLDB, migrationPath(t, "000007_binding_first_runtime_artifacts_and_primary_profile.up.sql"))
-	if err == nil {
-		t.Fatal("expected runtime artifact migration to fail for unmappable runtime artifacts")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "runtime_artifacts rows without credential binding_id mapping") {
-		t.Fatalf("expected unmappable runtime artifact precheck error, got: %v", err)
-	}
-}
-
-func TestRuntimeArtifactMigrationRejectsDuplicateBindingArtifacts(t *testing.T) {
-	stack := newEmptyIntegrationStack(t)
-	applyMigrations(t, stack.SQLDB,
-		"000001_create_credential_records.up.sql",
-		"000002_create_device_records.up.sql",
-		"000003_create_account_profiles.up.sql",
-		"000004_create_runtime_artifacts.up.sql",
-	)
-
-	insertLegacyCredential(t, stack.SQLDB, "binding_42_10001", "10001")
-	insertLegacyProfile(t, stack.SQLDB, "binding_42_10001", "1008611", true)
-	applyMigrations(t, stack.SQLDB,
-		"000005_add_binding_id_to_credentials_and_profiles.up.sql",
-		"000006_binding_first_devices_profiles_and_grant_invalidations.up.sql",
-	)
-	allowDuplicateCredentialBindingIDs(t, stack.SQLDB)
-	insertCredentialWithBindingID(t, stack.SQLDB, 42, "binding_42_20002", "20002")
-	insertLegacyRuntimeArtifact(t, stack.SQLDB, "binding_42_10001", "authkey", "first-authkey", "1008611")
-	insertLegacyRuntimeArtifact(t, stack.SQLDB, "binding_42_20002", "authkey", "second-authkey", "1008611")
-
-	err := execMigrationFile(stack.SQLDB, migrationPath(t, "000007_binding_first_runtime_artifacts_and_primary_profile.up.sql"))
-	if err == nil {
-		t.Fatal("expected runtime artifact migration to fail for duplicate binding artifacts")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "duplicate runtime_artifacts rows for binding_id") {
-		t.Fatalf("expected duplicate binding runtime artifact precheck error, got: %v", err)
-	}
-}
-
-func TestRuntimeArtifactRollbackRejectsDuplicatePlatformArtifacts(t *testing.T) {
+func TestV2BaselineRejectsInvalidOperationGeneration(t *testing.T) {
 	stack := newEmptyIntegrationStack(t)
 	requireMigrationsApplied(t, stack.SQLDB)
 
-	insertRuntimeArtifactWithBindingID(t, stack.SQLDB, 42, "binding_42_10001", "authkey", "first-authkey", "1008611")
-	insertRuntimeArtifactWithBindingID(t, stack.SQLDB, 43, "binding_42_10001", "authkey", "second-authkey", "1008611")
-
-	err := execMigrationFile(stack.SQLDB, migrationPath(t, "000007_binding_first_runtime_artifacts_and_primary_profile.down.sql"))
-	if err == nil {
-		t.Fatal("expected runtime artifact rollback to fail for duplicate platform artifacts")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "runtime_artifacts rows would violate platform_account_id uniqueness") {
-		t.Fatalf("expected duplicate platform runtime artifact rollback precheck error, got: %v", err)
-	}
+	_, err := stack.SQLDB.Exec(`
+		INSERT INTO platform_operations (
+			operation_id, kind, binding_ref, pre_generation, target_generation, request_fingerprint,
+			execution_token, lease_expires_at, state
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, "op-invalid", "OPERATION_KIND_BIND_CREDENTIAL", "binding-a", 1, 3, "fingerprint", "token", time.Now().UTC().Add(time.Minute), "pending")
+	var postgresError *pgconn.PgError
+	require.ErrorAs(t, err, &postgresError)
+	require.Equal(t, "23514", postgresError.Code)
+	require.Equal(t, "valid_operation_generation", postgresError.ConstraintName)
 }
 
 func requireMigrationsApplied(t *testing.T, db *sql.DB) {
 	t.Helper()
-
 	pattern := filepath.Join(repoRoot(t), "initialize", "migrate", "sql", "*.up.sql")
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		t.Fatalf("glob migration files: %v", err)
 	}
-	if len(files) == 0 {
-		t.Fatalf("no migration files found for pattern %q", pattern)
-	}
 	sort.Strings(files)
-
 	for _, path := range files {
 		if err := execMigrationFile(db, path); err != nil {
 			t.Fatalf("apply migration %q: %v", path, err)
@@ -172,136 +114,15 @@ func requireMigrationsApplied(t *testing.T, db *sql.DB) {
 	}
 }
 
-func migrationPath(t *testing.T, name string) string {
-	t.Helper()
-	return filepath.Join(repoRoot(t), "initialize", "migrate", "sql", name)
-}
-
-func applyMigrationFile(t *testing.T, db *sql.DB, path string) {
-	t.Helper()
-	if err := execMigrationFile(db, path); err != nil {
-		t.Fatalf("apply migration %q: %v", path, err)
-	}
-}
-
-func applyMigrations(t *testing.T, db *sql.DB, names ...string) {
-	t.Helper()
-	for _, name := range names {
-		applyMigrationFile(t, db, migrationPath(t, name))
-	}
-}
-
-func insertLegacyCredential(t *testing.T, db *sql.DB, platformAccountID string, accountID string) {
+func insertCredential(t *testing.T, db *sql.DB, bindingRef string, accountKey string, accountID string) {
 	t.Helper()
 	_, err := db.Exec(`
 		INSERT INTO credential_records (
-			platform_account_id, platform, account_id, region, credential_blob, credential_version, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, platformAccountID, "mihomo", accountID, "cn_gf01", "{}", "v1", "active")
+			binding_ref, account_key, generation, platform, account_id, region,
+			credential_blob, credential_version, status
+		) VALUES ($1, $2, 1, 'mihomo', $3, 'cn_gf01', '{}', 'v1', 'active')
+	`, bindingRef, accountKey, accountID)
 	if err != nil {
-		t.Fatalf("insert legacy credential row: %v", err)
+		t.Fatalf("insert credential: %v", err)
 	}
-}
-
-func insertLegacyProfile(t *testing.T, db *sql.DB, platformAccountID string, playerID string, isDefault bool) {
-	t.Helper()
-	_, err := db.Exec(`
-		INSERT INTO account_profiles (
-			platform_account_id, game_biz, region, player_id, nickname, level, is_default
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, platformAccountID, "hk4e_cn", "cn_gf01", playerID, "Traveler", 1, isDefault)
-	if err != nil {
-		t.Fatalf("insert legacy profile row: %v", err)
-	}
-}
-
-func insertLegacyRuntimeArtifact(t *testing.T, db *sql.DB, platformAccountID string, artifactType string, artifactValue string, scopeKey string) {
-	t.Helper()
-	_, err := db.Exec(`
-		INSERT INTO runtime_artifacts (
-			platform_account_id, artifact_type, artifact_value, scope_key, expires_at
-		) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP + INTERVAL '1 hour')
-	`, platformAccountID, artifactType, artifactValue, scopeKey)
-	if err != nil {
-		t.Fatalf("insert legacy runtime artifact row: %v", err)
-	}
-}
-
-func allowDuplicateCredentialBindingIDs(t *testing.T, db *sql.DB) {
-	t.Helper()
-	if _, err := db.Exec(`DROP INDEX uniq_credential_binding_id`); err != nil {
-		t.Fatalf("drop credential binding uniqueness: %v", err)
-	}
-}
-
-func insertCredentialWithBindingID(t *testing.T, db *sql.DB, bindingID uint64, platformAccountID string, accountID string) {
-	t.Helper()
-	_, err := db.Exec(`
-		INSERT INTO credential_records (
-			binding_id, platform_account_id, platform, account_id, region, credential_blob, credential_version, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, bindingID, platformAccountID, "mihomo", accountID, "cn_gf01", "{}", "v1", "active")
-	if err != nil {
-		t.Fatalf("insert credential row with binding_id: %v", err)
-	}
-}
-
-func insertRuntimeArtifactWithBindingID(t *testing.T, db *sql.DB, bindingID uint64, platformAccountID string, artifactType string, artifactValue string, scopeKey string) {
-	t.Helper()
-	_, err := db.Exec(`
-		INSERT INTO runtime_artifacts (
-			binding_id, platform_account_id, artifact_type, artifact_value, scope_key, expires_at
-		) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP + INTERVAL '1 hour')
-	`, bindingID, platformAccountID, artifactType, artifactValue, scopeKey)
-	if err != nil {
-		t.Fatalf("insert runtime artifact row with binding_id: %v", err)
-	}
-}
-
-func execMigrationFile(db *sql.DB, path string) error {
-	statement, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read migration %q: %w", path, err)
-	}
-	if _, err := db.Exec(string(statement)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func requireTableExists(t *testing.T, db *sql.DB, schema string, table string) {
-	t.Helper()
-
-	const query = `
-		SELECT 1
-		FROM information_schema.tables
-		WHERE table_schema = $1 AND table_name = $2
-		LIMIT 1
-	`
-
-	var exists int
-	err := db.QueryRow(query, schema, table).Scan(&exists)
-	if err == nil {
-		return
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("table %q does not exist in schema %q", table, schema)
-	}
-	t.Fatalf("query table %q existence: %v", table, err)
-}
-
-func repoRoot(t *testing.T) string {
-	t.Helper()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve current file path")
-	}
-
-	root := filepath.Clean(filepath.Join(filepath.Dir(currentFile), ".."))
-	if _, err := os.Stat(root); err != nil {
-		t.Fatalf("stat repo root %q: %v", root, err)
-	}
-
-	return root
 }

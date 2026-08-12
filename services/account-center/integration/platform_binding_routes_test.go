@@ -3,14 +3,13 @@
 package integration
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -19,9 +18,7 @@ import (
 
 	"paigram/internal/model"
 	"paigram/internal/response"
-	serviceplatform "paigram/internal/service/platform"
 	serviceplatformbinding "paigram/internal/service/platformbinding"
-	"paigram/internal/tasks"
 )
 
 func TestMePlatformAccountRoutesEnforceOwnership(t *testing.T) {
@@ -152,10 +149,10 @@ func TestPlatformBindingRoutes(t *testing.T) {
 	require.NoError(t, err)
 
 	createStub := &platformBindingRouteStub{
-		summaryResponse: &platformv1.GetCredentialSummaryResponse{
+		summaryResponse: &routeCredentialSummary{
 			PlatformAccountId: "cn:owner-main",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-			Profiles: []*platformv1.ProfileSummary{
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Profiles: []*routeProfileSummary{
 				{
 					Id:                10001,
 					PlatformAccountId: "cn:owner-main",
@@ -174,9 +171,9 @@ func TestPlatformBindingRoutes(t *testing.T) {
 				},
 			},
 		},
-		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &routeCredentialSummary{
 			PlatformAccountId: "cn:new-account",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
 	seedEnabledPlatformService(t, stack, startPlatformBindingRouteServer(t, createStub))
@@ -240,11 +237,6 @@ func TestPlatformBindingRoutes(t *testing.T) {
 		require.Equal(t, http.StatusOK, patchPrimaryResp.Code, patchPrimaryResp.Body.String())
 		patchPrimaryData := decodeResponseData(t, patchPrimaryResp)
 		assert.Equal(t, float64(profiles[1].ID), patchPrimaryData["primary_profile_id"])
-		require.NotNil(t, createStub.lastConfirmPrimaryProfile)
-		assert.Equal(t, "cn:owner-main", createStub.lastConfirmPrimaryProfile.GetPlatformAccountId())
-		assert.Equal(t, profiles[1].PlayerUID, createStub.lastConfirmPrimaryProfile.GetPlayerId())
-		require.Len(t, createStub.lastConfirmAuthorization, 1)
-		assert.Contains(t, createStub.lastConfirmAuthorization[0], "Bearer ")
 
 		invalidPrimaryResp := performJSONRequest(t, stack.Router, http.MethodPatch, fmt.Sprintf("/api/v1/me/platform-accounts/%d/primary-profile", binding.ID), map[string]any{
 			"profile_id": uint64(99999999),
@@ -475,12 +467,12 @@ func TestCreatePlatformBindingRouteBindsImmediately(t *testing.T) {
 	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-create-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
 
 	stub := &platformBindingRouteStub{
-		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &routeCredentialSummary{
 			PlatformAccountId: "cn:route-success",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 			LastValidatedAt:   timestamppb.New(time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)),
 			LastRefreshedAt:   timestamppb.New(time.Date(2026, 4, 20, 12, 5, 0, 0, time.UTC)),
-			Profiles: []*platformv1.ProfileSummary{{
+			Profiles: []*routeProfileSummary{{
 				Id:                42,
 				PlatformAccountId: "cn:route-success",
 				GameBiz:           "hk4e_cn",
@@ -541,9 +533,9 @@ func TestCreatePlatformBindingRouteHandlesDuplicateOwnerConflict(t *testing.T) {
 	}).Error)
 
 	stub := &platformBindingRouteStub{
-		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &routeCredentialSummary{
 			PlatformAccountId: "cn:duplicate-owner",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
@@ -563,7 +555,7 @@ func TestCreatePlatformBindingRouteHandlesDuplicateOwnerConflict(t *testing.T) {
 	assert.Equal(t, "duplicate_owner", binding.StatusReasonCode)
 	assert.False(t, binding.ExternalAccountKey.Valid)
 	require.Len(t, stub.deleteRequests, 1)
-	assert.Equal(t, "cn:duplicate-owner", stub.deleteRequests[0].GetPlatformAccountId())
+	assert.Equal(t, "cn:duplicate-owner", stub.deleteRequests[0].GetAccountKey())
 	_ = ownerID
 }
 
@@ -607,9 +599,9 @@ func TestCreatePlatformBindingRouteMarksDeleteFailedWhenCleanupFails(t *testing.
 	}).Error)
 
 	stub := &platformBindingRouteStub{
-		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &routeCredentialSummary{
 			PlatformAccountId: "cn:cleanup-failed",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 		deleteErr: grpcstatus.Error(codes.Unavailable, "cleanup down"),
 	}
@@ -646,9 +638,9 @@ func TestCreatePlatformBindingRouteReturnsExistingBindingForSameOwnerRetry(t *te
 	require.NoError(t, stack.DB.Create(&existing).Error)
 
 	stub := &platformBindingRouteStub{
-		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &routeCredentialSummary{
 			PlatformAccountId: "cn:same-owner",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
@@ -686,9 +678,9 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 	require.NoError(t, stack.DB.Create(&binding).Error)
 
 	stub := &platformBindingRouteStub{
-		credentialMutationSummary: &platformv1.GetCredentialSummaryResponse{
+		credentialMutationSummary: &routeCredentialSummary{
 			PlatformAccountId: "cn:update-path",
-			Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+			Status:            platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 		},
 	}
 	endpoint := startPlatformBindingRouteServer(t, stub)
@@ -701,7 +693,7 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 	meData := decodeResponseData(t, meResp)
 	assert.Equal(t, "cn:update-path", meData["platform_account_id"])
 	require.NotNil(t, stub.lastReplace)
-	assert.Equal(t, "cn:update-path", stub.lastReplace.GetPlatformAccountId())
+	assert.Equal(t, "cn:update-path", stub.lastReplace.GetAccountKey())
 	assert.JSONEq(t, `{"cookie_bundle":"owner-update"}`, stub.lastReplace.GetCredentialPayloadJson())
 	assert.Nil(t, stub.lastBind)
 
@@ -711,7 +703,7 @@ func TestPlatformBindingCredentialUpdateRoutesRemainSupported(t *testing.T) {
 	require.Equal(t, http.StatusOK, adminResp.Code, adminResp.Body.String())
 	adminData := decodeResponseData(t, adminResp)
 	assert.Equal(t, "cn:update-path", adminData["platform_account_id"])
-	assert.Equal(t, "cn:update-path", stub.lastReplace.GetPlatformAccountId())
+	assert.Equal(t, "cn:update-path", stub.lastReplace.GetAccountKey())
 	assert.JSONEq(t, `{"cookie_bundle":"admin-update"}`, stub.lastReplace.GetCredentialPayloadJson())
 }
 
@@ -749,7 +741,7 @@ func TestMeDeletePlatformBindingRouteDeletesProviderCredentialAndControlPlaneSta
 	resp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/me/platform-accounts/%d", binding.ID), nil, authHeaders(ownerAccessToken))
 	require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
 	require.Len(t, stub.deleteRequests, 1)
-	assert.Equal(t, "cn:delete-owner", stub.deleteRequests[0].GetPlatformAccountId())
+	assert.Equal(t, "cn:delete-owner", stub.deleteRequests[0].GetAccountKey())
 
 	var bindingCount int64
 	require.NoError(t, stack.DB.Model(&model.PlatformAccountBinding{}).Where("id = ?", binding.ID).Count(&bindingCount).Error)
@@ -782,7 +774,7 @@ func TestAdminDeletePlatformBindingRouteDeletesProviderCredential(t *testing.T) 
 	resp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/admin/platform-accounts/%d", binding.ID), nil, authHeaders(adminAccessToken))
 	require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
 	require.Len(t, stub.deleteRequests, 1)
-	assert.Equal(t, "cn:delete-admin", stub.deleteRequests[0].GetPlatformAccountId())
+	assert.Equal(t, "cn:delete-admin", stub.deleteRequests[0].GetAccountKey())
 }
 
 func TestDeletePlatformBindingRouteMarksDeleteFailedWhenProviderDeleteFails(t *testing.T) {
@@ -832,85 +824,6 @@ func TestDeletePlatformBindingRouteReturnsNotFoundOnRepeatDelete(t *testing.T) {
 	secondResp := performJSONRequest(t, stack.Router, http.MethodDelete, fmt.Sprintf("/api/v1/me/platform-accounts/%d", binding.ID), nil, authHeaders(ownerAccessToken))
 	require.Equal(t, http.StatusNotFound, secondResp.Code, secondResp.Body.String())
 	require.Len(t, stub.deleteRequests, 1)
-}
-
-func TestPlatformBindingProjectionRepairTaskRepairsStaleProjection(t *testing.T) {
-	stack := newIntegrationStack(t)
-	ownerID, _, _, _, _ := registerAndLogin(t, stack, fmt.Sprintf("binding-repair-%d@example.com", time.Now().UnixNano()), "OwnerPass123!")
-	staleTime := time.Date(2026, 4, 19, 12, 0, 0, 0, time.UTC)
-	binding := model.PlatformAccountBinding{
-		OwnerUserID:        ownerID,
-		Platform:           "mihomo",
-		ExternalAccountKey: sql.NullString{String: "cn:repair-route", Valid: true},
-		PlatformServiceKey: "platform-mihomo-service",
-		DisplayName:        "Repair Route",
-		Status:             model.PlatformAccountBindingStatusRefreshRequired,
-		LastSyncedAt:       sql.NullTime{Time: staleTime, Valid: true},
-		LastValidatedAt:    sql.NullTime{Time: staleTime, Valid: true},
-	}
-	require.NoError(t, stack.DB.Create(&binding).Error)
-	require.NoError(t, stack.DB.Create(&[]model.PlatformAccountProfile{
-		{
-			BindingID:          binding.ID,
-			PlatformProfileKey: "mihomo:stale",
-			GameBiz:            "hk4e_global",
-			Region:             "os_asia",
-			PlayerUID:          "99999",
-			Nickname:           "Stale",
-		},
-		{
-			BindingID:          binding.ID,
-			PlatformProfileKey: "mihomo:10001",
-			GameBiz:            "hk4e_cn",
-			Region:             "cn_gf01",
-			PlayerUID:          "10001",
-			Nickname:           "Traveler Old",
-			IsPrimary:          true,
-		},
-	}).Error)
-
-	stub := &platformBindingRouteStub{summaryResponse: &platformv1.GetCredentialSummaryResponse{
-		PlatformAccountId: "cn:repair-route",
-		Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		LastValidatedAt:   timestamppb.New(time.Date(2026, 4, 20, 12, 34, 56, 0, time.UTC)),
-		LastRefreshedAt:   timestamppb.New(time.Date(2026, 4, 20, 12, 35, 56, 0, time.UTC)),
-		Profiles: []*platformv1.ProfileSummary{{
-			Id:                42,
-			PlatformAccountId: "cn:repair-route",
-			GameBiz:           "hk4e_cn",
-			Region:            "cn_gf01",
-			PlayerId:          "10001",
-			Nickname:          "Traveler Repaired",
-			Level:             60,
-			IsDefault:         true,
-		}},
-	}}
-	endpoint := startPlatformBindingRouteServer(t, stub)
-	seedEnabledPlatformService(t, stack, endpoint)
-
-	platformGroup := serviceplatform.NewServiceGroup(stack.DB)
-	require.NoError(t, platformGroup.PlatformService.ConfigureAuth(newTestConfig(t, stack.RedisPrefix).Auth))
-	platformGroup.PlatformService.SetGenericSummaryProxy(serviceplatform.NewGRPCGenericSummaryProxy(nil))
-	handler := tasks.NewPlatformBindingProjectionRepairHandler(stack.DB, &platformGroup.PlatformService)
-	repairTask, err := tasks.NewPlatformBindingProjectionRepairTask(binding.ID)
-	require.NoError(t, err)
-
-	err = handler.ProcessTask(context.Background(), repairTask)
-	require.NoError(t, err)
-
-	var repaired model.PlatformAccountBinding
-	require.NoError(t, stack.DB.First(&repaired, binding.ID).Error)
-	assert.Equal(t, model.PlatformAccountBindingStatusActive, repaired.Status)
-	assert.True(t, repaired.LastSyncedAt.Valid)
-	assert.True(t, repaired.LastValidatedAt.Valid)
-	assert.True(t, repaired.LastSyncedAt.Time.After(staleTime))
-
-	var profiles []model.PlatformAccountProfile
-	require.NoError(t, stack.DB.Where("binding_id = ?", binding.ID).Order("id ASC").Find(&profiles).Error)
-	require.Len(t, profiles, 1)
-	assert.Equal(t, "mihomo:42", profiles[0].PlatformProfileKey)
-	assert.Equal(t, "Traveler Repaired", profiles[0].Nickname)
-	assert.True(t, profiles[0].IsPrimary)
 }
 
 func seedEnabledPlatformService(t *testing.T, stack *integrationStack, endpoint string) {

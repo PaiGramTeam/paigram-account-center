@@ -20,15 +20,16 @@ enum PlatformAccountStatus {
 }
 
 message PlatformAccountBinding {
-  uint64 id = 1;
-  uint64 user_id = 2;
+  string binding_ref = 1;
+  reserved 2;
+  reserved "user_id";
   string platform = 3;
   string platform_service_key = 4;
-  string platform_account_id = 5;
+  string account_key = 5;
   string display_name = 6;
   PlatformAccountStatus status = 7;
-  reserved 8;
-  reserved "meta_json";
+  uint64 generation = 8;
+  reserved "meta_json", "platform_account_id";
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
 }
@@ -55,11 +56,11 @@ message ListAccessibleBindingsResponse {
 
 message IssueServiceTicketRequest {
   string external_user_id = 1;
-  uint64 binding_id = 2;
-  repeated string requested_scopes = 3;
+  string binding_ref = 2;
+  string requested_action = 3;
   reserved 4;
   reserved "audience";
-  uint64 profile_id = 5;
+  string profile_ref = 5;
 }
 
 message IssueServiceTicketResponse {

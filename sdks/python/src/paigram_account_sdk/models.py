@@ -29,13 +29,13 @@ class PlatformAccountStatus(Enum):
 
 @dataclass(frozen=True, slots=True)
 class PlatformBinding:
-    id: int
-    user_id: int
+    binding_ref: str
     platform: str
     platform_service_key: str
-    platform_account_id: str
+    account_key: str
     display_name: str
     status: PlatformAccountStatus
+    generation: int
     created_at: datetime | None
     updated_at: datetime | None
 
@@ -55,7 +55,7 @@ class PlatformDescriptor:
     service_audience: str
     supported_actions: tuple[str, ...]
     credential_schema: dict[str, object]
-    version: str
+    contract_version: str
 
 
 class CredentialStatus(Enum):
@@ -68,8 +68,7 @@ class CredentialStatus(Enum):
 
 @dataclass(frozen=True, slots=True)
 class DeviceSummary:
-    device_id: str
-    device_fp: str
+    device_ref: str
     device_name: str
     is_valid: bool
     last_seen_at: datetime | None
@@ -77,24 +76,14 @@ class DeviceSummary:
 
 @dataclass(frozen=True, slots=True)
 class ProfileSummary:
-    id: int
-    platform_account_id: str
+    profile_ref: str
+    account_key: str
     game_biz: str
     region: str
     player_id: str
     nickname: str
     level: int
     is_default: bool
-
-
-@dataclass(frozen=True, slots=True)
-class CredentialSummary:
-    platform_account_id: str
-    status: CredentialStatus
-    last_validated_at: datetime | None
-    last_refreshed_at: datetime | None
-    devices: tuple[DeviceSummary, ...]
-    profiles: tuple[ProfileSummary, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,17 +95,10 @@ class CredentialStatusResult:
 @dataclass(frozen=True, slots=True)
 class ValidationResult:
     status: CredentialStatus
-    error_code: str
+    reason_code: str
 
 
 @dataclass(frozen=True, slots=True)
 class AuthKey:
     value: str
     expires_at: datetime | None
-
-
-@dataclass(frozen=True, slots=True)
-class DeviceInfo:
-    device_id: str
-    device_fp: str
-    device_name: str = ""

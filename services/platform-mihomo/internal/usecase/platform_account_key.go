@@ -1,40 +1,23 @@
 package usecase
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
+	"crypto/sha256"
+	"encoding/base64"
 )
 
-func FormatPlatformAccountID(bindingID uint64, accountID string) string {
-	return fmt.Sprintf("binding_%d_%s", bindingID, accountID)
+func FormatAccountKey(accountID string) string {
+	return opaqueReference("acct", "mihomo\x00"+accountID)
 }
 
-func BindingIDFromPlatformAccountID(platformAccountID string) (uint64, error) {
-	var bindingIDPart string
-	switch {
-	case strings.HasPrefix(platformAccountID, "binding_"):
-		rest := strings.TrimPrefix(platformAccountID, "binding_")
-		separator := strings.IndexByte(rest, '_')
-		if separator <= 0 {
-			return 0, fmt.Errorf("parse binding id from platform account id: invalid format %q", platformAccountID)
-		}
-		bindingIDPart = rest[:separator]
-	case strings.HasPrefix(platformAccountID, "hoyo_ref_"):
-		rest := strings.TrimPrefix(platformAccountID, "hoyo_ref_")
-		separator := strings.IndexByte(rest, '_')
-		if separator <= 0 {
-			return 0, fmt.Errorf("parse binding id from platform account id: invalid format %q", platformAccountID)
-		}
-		bindingIDPart = rest[:separator]
-	default:
-		return 0, fmt.Errorf("parse binding id from platform account id: invalid format %q", platformAccountID)
-	}
+func FormatProfileRef(accountKey, gameBiz, region, playerID string) string {
+	return opaqueReference("prof", accountKey+"\x00"+gameBiz+"\x00"+region+"\x00"+playerID)
+}
 
-	bindingID, err := strconv.ParseUint(bindingIDPart, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse binding id from platform account id: %w", err)
-	}
+func FormatDeviceRef(accountKey, deviceID string) string {
+	return opaqueReference("dev", accountKey+"\x00"+deviceID)
+}
 
-	return bindingID, nil
+func opaqueReference(prefix, canonical string) string {
+	digest := sha256.Sum256([]byte(canonical))
+	return prefix + "_" + base64.RawURLEncoding.EncodeToString(digest[:24])
 }

@@ -14,14 +14,14 @@ import (
 	"platform-mihomo-service/internal/biz"
 )
 
-func TestCredentialRepoGetByBindingIDUsesUniqueBindingRecord(t *testing.T) {
+func TestCredentialRepoGetByBindingRefUsesUniqueBindingRecord(t *testing.T) {
 	db := newRepoTestDB(t)
 	repo := NewCredentialRepo(db)
 	now := time.Now().UTC()
 
 	require.NoError(t, repo.Save(context.Background(), &biz.Credential{
-		BindingID:         42,
-		PlatformAccountID: "binding_42_10001",
+		BindingRef:        "binding-42",
+		AccountKey:        "binding_42_10001",
 		Platform:          "mihomo",
 		AccountID:         "10001",
 		Region:            "cn_gf01",
@@ -31,8 +31,8 @@ func TestCredentialRepoGetByBindingIDUsesUniqueBindingRecord(t *testing.T) {
 		LastValidatedAt:   &now,
 	}))
 	require.NoError(t, repo.Save(context.Background(), &biz.Credential{
-		BindingID:         42,
-		PlatformAccountID: "binding_42_20002",
+		BindingRef:        "binding-42",
+		AccountKey:        "binding_42_20002",
 		Platform:          "mihomo",
 		AccountID:         "20002",
 		Region:            "cn_gf01",
@@ -42,22 +42,22 @@ func TestCredentialRepoGetByBindingIDUsesUniqueBindingRecord(t *testing.T) {
 		LastValidatedAt:   &now,
 	}))
 
-	credential, err := repo.GetByBindingID(context.Background(), 42)
+	credential, err := repo.GetByBindingRef(context.Background(), "binding-42")
 	require.NoError(t, err)
 	require.NotNil(t, credential)
-	require.Equal(t, "binding_42_20002", credential.PlatformAccountID)
+	require.Equal(t, "binding_42_20002", credential.AccountKey)
 	require.Equal(t, "20002", credential.AccountID)
 
 	var count int64
-	require.NoError(t, db.Table("credential_records").Where("binding_id = ?", 42).Count(&count).Error)
+	require.NoError(t, db.Table("credential_records").Where("binding_ref = ?", "binding-42").Count(&count).Error)
 	require.Equal(t, int64(1), count)
 }
 
 func TestCredentialRepoCreateRejectsExistingBinding(t *testing.T) {
 	repo := NewCredentialRepo(newRepoTestDB(t))
 	credential := &biz.Credential{
-		BindingID:         42,
-		PlatformAccountID: "binding_42_10001",
+		BindingRef:        "binding-42",
+		AccountKey:        "binding_42_10001",
 		Platform:          "mihomo",
 		AccountID:         "10001",
 		Region:            "cn_gf01",
@@ -78,8 +78,9 @@ func newRepoTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, db.Exec(`CREATE TABLE credential_records (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		binding_id INTEGER NOT NULL,
-		platform_account_id TEXT NOT NULL,
+		binding_ref TEXT NOT NULL,
+		account_key TEXT NOT NULL,
+		generation INTEGER NOT NULL DEFAULT 1,
 		platform TEXT NOT NULL,
 		account_id TEXT NOT NULL,
 		region TEXT NOT NULL,
@@ -89,16 +90,20 @@ func newRepoTestDB(t *testing.T) *gorm.DB {
 		last_validated_at DATETIME NULL,
 		last_refreshed_at DATETIME NULL,
 		expires_at DATETIME NULL,
+		profile_snapshot_complete BOOLEAN NOT NULL DEFAULT FALSE,
+		profile_revision INTEGER NOT NULL DEFAULT 0,
+		profile_observed_revision INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME NULL,
 		updated_at DATETIME NULL,
-		UNIQUE(binding_id),
-		UNIQUE(platform_account_id),
+		UNIQUE(binding_ref),
+		UNIQUE(account_key),
 		UNIQUE(platform, account_id)
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE account_profiles (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		binding_id INTEGER NOT NULL,
-		platform_account_id TEXT NOT NULL,
+		binding_ref TEXT NOT NULL,
+		account_key TEXT NOT NULL,
+		profile_ref TEXT NOT NULL DEFAULT '',
 		game_biz TEXT NOT NULL,
 		region TEXT NOT NULL,
 		player_id TEXT NOT NULL,
@@ -108,13 +113,14 @@ func newRepoTestDB(t *testing.T) *gorm.DB {
 		default_profile_marker INTEGER GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED,
 		discovered_at DATETIME NOT NULL,
 		updated_at DATETIME NULL,
-		UNIQUE(binding_id, player_id, region),
-		UNIQUE(binding_id, default_profile_marker)
+		UNIQUE(binding_ref, player_id, region),
+		UNIQUE(binding_ref, default_profile_marker)
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE device_records (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		binding_id INTEGER NOT NULL,
-		platform_account_id TEXT NOT NULL,
+		binding_ref TEXT NOT NULL,
+		account_key TEXT NOT NULL,
+		device_ref TEXT NOT NULL DEFAULT '',
 		device_id TEXT NOT NULL,
 		device_fp TEXT NOT NULL,
 		device_name TEXT NULL,
@@ -122,19 +128,19 @@ func newRepoTestDB(t *testing.T) *gorm.DB {
 		last_seen_at DATETIME NULL,
 		created_at DATETIME NULL,
 		updated_at DATETIME NULL,
-		UNIQUE(binding_id, device_id)
+		UNIQUE(binding_ref, device_id)
 	)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE runtime_artifacts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		binding_id INTEGER NOT NULL,
-		platform_account_id TEXT NOT NULL,
+		binding_ref TEXT NOT NULL,
+		account_key TEXT NOT NULL,
 		artifact_type TEXT NOT NULL,
 		artifact_value TEXT NOT NULL,
 		scope_key TEXT NOT NULL,
 		expires_at DATETIME NOT NULL,
 		created_at DATETIME NULL,
 		updated_at DATETIME NULL,
-		UNIQUE(binding_id, artifact_type, scope_key)
+		UNIQUE(binding_ref, artifact_type, scope_key)
 	)`).Error)
 	return db
 }

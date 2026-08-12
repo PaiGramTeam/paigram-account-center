@@ -3,147 +3,59 @@ package data
 import (
 	"os"
 	"path/filepath"
-	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestBindingFirstMigrationDoesNotDeleteRows(t *testing.T) {
-	migration := readMigrationForStaticTest(t, "000006_binding_first_devices_profiles_and_grant_invalidations.up.sql")
-	normalized := normalizeSQLForStaticTest(migration)
+func TestBaselineMigrationUsesStableReferencesAndOperationConstraints(t *testing.T) {
+	migration := readBaselineMigration(t)
 
-	require.Regexp(t, regexp.MustCompile(`(?is)RAISE\s+EXCEPTION[^;]*DEVICE_RECORDS`), migration)
-	require.Regexp(t, regexp.MustCompile(`(?is)RAISE\s+EXCEPTION[^;]*ACCOUNT_PROFILES`), migration)
-	assertNoDestructiveTableMutation(t, normalized, "DEVICE_RECORDS")
-	assertNoDestructiveTableMutation(t, normalized, "ACCOUNT_PROFILES")
-}
-
-func TestMigrationsUsePostgreSQLDialect(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "..", "initialize", "migrate", "sql", "*.sql"))
-	require.NoError(t, err)
-	require.NotEmpty(t, paths)
-
-	forbidden := []string{
-		"AUTO_INCREMENT",
-		"BIGINT UNSIGNED",
-		"CREATE PROCEDURE",
-		"DATETIME(3)",
-		"ENGINE=INNODB",
-		"ON UPDATE CURRENT_TIMESTAMP",
-		"SIGNAL SQLSTATE",
-		"SUBSTRING_INDEX",
+	for _, fragment := range []string{
+		"binding_ref varchar(64) not null",
+		"account_key varchar(64) not null",
+		"profile_ref varchar(64) not null",
+		"device_ref varchar(64) not null",
+		"create table platform_operations",
+		"request_fingerprint varchar(64) not null",
+		"target_generation = pre_generation + 1",
+		"create table authorization_fences",
+		"foreign key (binding_ref, account_key)",
+	} {
+		require.Contains(t, migration, fragment)
 	}
-	for _, path := range paths {
-		contents, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		normalized := strings.ToUpper(string(contents))
-		for _, token := range forbidden {
-			require.NotContains(t, normalized, token, "%s contains MySQL-only token %q", filepath.Base(path), token)
-		}
+	require.NotContains(t, migration, "binding_id")
+	require.NotContains(t, migration, "platform_account_id")
+}
+
+func TestBaselineMigrationHasSymmetricDownMigration(t *testing.T) {
+	down := readMigrationFile(t, "000001_init_schema.down.sql")
+	for _, table := range []string{
+		"platform_operations",
+		"authorization_fences",
+		"consumer_grant_invalidations",
+		"runtime_artifacts",
+		"account_profiles",
+		"device_records",
+		"credential_records",
+	} {
+		require.Contains(t, down, "drop table if exists "+table)
 	}
 }
 
-func TestBindingFirstMigrationPrechecksProfileDuplicatesBeforeDDL(t *testing.T) {
-	migration := readMigrationForStaticTest(t, "000006_binding_first_devices_profiles_and_grant_invalidations.up.sql")
-	normalized := normalizeSQLForStaticTest(migration)
-
-	firstAlter := strings.Index(normalized, "ALTER TABLE")
-	require.NotEqual(t, -1, firstAlter)
-
-	assertBeforeFirstAlter(t, normalized, firstAlter, "DUPLICATE ACCOUNT_PROFILES ROWS FOR BINDING_ID, PLAYER_ID, REGION")
-}
-
-func TestBindingFirstMigrationPrechecksDeviceBackfillBeforeDDL(t *testing.T) {
-	migration := readMigrationForStaticTest(t, "000006_binding_first_devices_profiles_and_grant_invalidations.up.sql")
-	normalized := normalizeSQLForStaticTest(migration)
-
-	firstAlter := strings.Index(normalized, "ALTER TABLE")
-	require.NotEqual(t, -1, firstAlter)
-
-	assertBeforeFirstAlter(t, normalized, firstAlter, "DEVICE_RECORDS ROWS CANNOT BE BACKFILLED FROM CREDENTIAL_RECORDS")
-}
-
-func TestBindingIDBackfillMigrationPrechecksLegacyAccountIDsBeforeDDL(t *testing.T) {
-	migration := readMigrationForStaticTest(t, "000005_add_binding_id_to_credentials_and_profiles.up.sql")
-	normalized := normalizeSQLForStaticTest(migration)
-
-	firstAlter := strings.Index(normalized, "ALTER TABLE")
-	require.NotEqual(t, -1, firstAlter)
-
-	assertBeforeFirstAlter(t, normalized, firstAlter, "MALFORMED CREDENTIAL_RECORDS PLATFORM_ACCOUNT_ID VALUES")
-	assertBeforeFirstAlter(t, normalized, firstAlter, "DUPLICATE PARSED CREDENTIAL_RECORDS BINDING_ID VALUES")
-	assertBeforeFirstAlter(t, normalized, firstAlter, "MALFORMED ACCOUNT_PROFILES PLATFORM_ACCOUNT_ID VALUES")
-	require.Less(t, strings.Index(normalized, "DUPLICATE_PARSED_CREDENTIAL_BINDING_IDS"), firstAlter)
-	require.NotContains(t, normalized, "DUPLICATE_PARSED_PROFILE_BINDING_IDS")
-	require.NotContains(t, normalized, "DUPLICATE PARSED ACCOUNT_PROFILES BINDING_ID VALUES")
-	require.Contains(t, normalized, "UNIQ_CREDENTIAL_BINDING_ID")
-}
-
-func TestRuntimeArtifactMigrationPrechecksHazardsBeforeDDL(t *testing.T) {
-	migration := readMigrationForStaticTest(t, "000007_binding_first_runtime_artifacts_and_primary_profile.up.sql")
-	normalized := normalizeSQLForStaticTest(migration)
-
-	firstAlter := strings.Index(normalized, "ALTER TABLE")
-	require.NotEqual(t, -1, firstAlter)
-
-	assertBeforeFirstAlter(t, normalized, firstAlter, "MULTIPLE DEFAULT ACCOUNT_PROFILES ROWS FOR BINDING_ID")
-	assertBeforeFirstAlter(t, normalized, firstAlter, "RUNTIME_ARTIFACTS ROWS WITHOUT CREDENTIAL BINDING_ID MAPPING")
-	assertBeforeFirstAlter(t, normalized, firstAlter, "DUPLICATE RUNTIME_ARTIFACTS ROWS FOR BINDING_ID, ARTIFACT_TYPE, SCOPE_KEY")
-}
-
-func TestRuntimeArtifactMigrationRollbackPrechecksPlatformUniquenessBeforeDDL(t *testing.T) {
-	migration := readMigrationForStaticTest(t, "000007_binding_first_runtime_artifacts_and_primary_profile.down.sql")
-	normalized := normalizeSQLForStaticTest(migration)
-
-	firstAlter := strings.Index(normalized, "ALTER TABLE")
-	require.NotEqual(t, -1, firstAlter)
-
-	assertBeforeFirstAlter(t, normalized, firstAlter, "RUNTIME_ARTIFACTS ROWS WOULD VIOLATE PLATFORM_ACCOUNT_ID UNIQUENESS")
-}
-
-func TestDestructiveTableMutationPatternDetectsMultiTableDrop(t *testing.T) {
-	profilePattern := destructiveTableMutationPattern("ACCOUNT_PROFILES")
-	devicePattern := destructiveTableMutationPattern("DEVICE_RECORDS")
-
-	require.Regexp(t, profilePattern, "DROP TABLE OTHER_TABLE, ACCOUNT_PROFILES")
-	require.Regexp(t, devicePattern, "DROP TEMPORARY TABLE IF EXISTS DEVICE_RECORDS, OTHER_TABLE")
-	require.NotRegexp(t, profilePattern, "DROP TABLE ACCOUNT_PROFILE_SNAPSHOTS")
-}
-
-func readMigrationForStaticTest(t *testing.T, name string) string {
+func readBaselineMigration(t *testing.T) string {
 	t.Helper()
+	return readMigrationFile(t, "000001_init_schema.up.sql")
+}
 
-	path := filepath.Join("..", "..", "initialize", "migrate", "sql", name)
-	contents, err := os.ReadFile(path)
+func readMigrationFile(t *testing.T, name string) string {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	path := filepath.Join(filepath.Dir(currentFile), "..", "..", "initialize", "migrate", "sql", name)
+	content, err := os.ReadFile(path)
 	require.NoError(t, err)
-	return strings.ToUpper(string(contents))
-}
-
-func normalizeSQLForStaticTest(sql string) string {
-	normalized := strings.NewReplacer("`", "", "\"", "").Replace(sql)
-	return strings.Join(strings.Fields(normalized), " ")
-}
-
-func assertNoDestructiveTableMutation(t *testing.T, sql, table string) {
-	t.Helper()
-
-	identifier := regexp.QuoteMeta(table)
-	require.NotRegexp(t, regexp.MustCompile(`(?i)\bDELETE\b[^;]*\b`+identifier+`\b`), sql)
-	require.NotRegexp(t, regexp.MustCompile(`(?i)\bTRUNCATE\b\s+(?:\bTABLE\b\s+)?\b`+identifier+`\b`), sql)
-	require.NotRegexp(t, destructiveTableMutationPattern(table), sql)
-}
-
-func assertBeforeFirstAlter(t *testing.T, sql string, firstAlter int, required string) {
-	t.Helper()
-
-	index := strings.Index(sql, required)
-	require.NotEqual(t, -1, index, "missing precheck %q", required)
-	require.Less(t, index, firstAlter, "precheck %q must run before first ALTER TABLE", required)
-}
-
-func destructiveTableMutationPattern(table string) *regexp.Regexp {
-	identifier := regexp.QuoteMeta(table)
-	return regexp.MustCompile(`(?i)\bDROP\b\s+(?:\bTEMPORARY\b\s+)?\bTABLE\b\s+(?:\bIF\b\s+\bEXISTS\b\s+)?[^;]*\b` + identifier + `\b`)
+	return strings.ToLower(string(content))
 }

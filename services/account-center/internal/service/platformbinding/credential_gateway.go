@@ -6,16 +6,20 @@ import (
 	"errors"
 	"time"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"paigram/internal/grpc/clientauth"
 	"paigram/internal/model"
 )
 
-var errGenericCredentialSummaryRequired = errors.New("credential summary is required")
+var errGenericCredentialSummaryRequired = errors.New("credential operation result is required")
+var errGenericCredentialOperationFailed = errors.New("credential operation did not succeed")
+var errGenericCredentialOperationMismatch = errors.New("credential operation result does not match request")
 
 type CredentialGatewayDialFunc func(ctx context.Context, endpoint string) (*grpc.ClientConn, error)
 
@@ -30,7 +34,7 @@ func NewGRPCGenericCredentialGateway(dial CredentialGatewayDialFunc) *GRPCGeneri
 	return &GRPCGenericCredentialGateway{dial: dial}
 }
 
-func (g *GRPCGenericCredentialGateway) BindCredential(ctx context.Context, endpoint, ticket string, _ *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error) {
+func (g *GRPCGenericCredentialGateway) BindCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error) {
 	conn, err := g.dial(ctx, endpoint)
 	if err != nil {
 		return nil, err
@@ -39,33 +43,39 @@ func (g *GRPCGenericCredentialGateway) BindCredential(ctx context.Context, endpo
 
 	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
 	defer cancel()
-	resp, err := platformv1.NewPlatformServiceClient(conn).BindCredential(callCtx, &platformv1.BindCredentialRequest{CredentialPayloadJson: string(payload)})
-	if err != nil {
-		return nil, err
-	}
-	return genericCredentialSummaryMap(resp.GetSummary())
-}
-
-func (g *GRPCGenericCredentialGateway) ReplaceCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error) {
-	conn, err := g.dial(ctx, endpoint)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
-	defer cancel()
-	resp, err := platformv1.NewPlatformServiceClient(conn).ReplaceCredential(callCtx, &platformv1.ReplaceCredentialRequest{
-		PlatformAccountId:     bindingExternalAccountKey(binding),
+	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_BIND_CREDENTIAL, operationID)
+	resp, err := platformv2.NewPlatformControlServiceClient(conn).BindCredential(callCtx, &platformv2.BindCredentialRequest{
+		Operation:             operation,
 		CredentialPayloadJson: string(payload),
 	})
 	if err != nil {
 		return nil, err
 	}
-	return genericCredentialSummaryMap(resp.GetSummary())
+	return genericOperationResultMapForOperation(resp.GetResult(), operation)
 }
 
-func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error {
+func (g *GRPCGenericCredentialGateway) ReplaceCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error) {
+	conn, err := g.dial(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	defer cancel()
+	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_REPLACE_CREDENTIAL, operationID)
+	resp, err := platformv2.NewPlatformControlServiceClient(conn).ReplaceCredential(callCtx, &platformv2.ReplaceCredentialRequest{
+		Operation:             operation,
+		AccountKey:            bindingExternalAccountKey(binding),
+		CredentialPayloadJson: string(payload),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return genericOperationResultMapForOperation(resp.GetResult(), operation)
+}
+
+func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error {
 	conn, err := g.dial(ctx, endpoint)
 	if err != nil {
 		return err
@@ -74,13 +84,18 @@ func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, en
 
 	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
 	defer cancel()
-	_, err = platformv1.NewPlatformServiceClient(conn).RefreshCredential(callCtx, &platformv1.RefreshCredentialRequest{
-		PlatformAccountId: bindingExternalAccountKey(binding),
+	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, operationID)
+	resp, err := platformv2.NewPlatformControlServiceClient(conn).RefreshCredential(callCtx, &platformv2.RefreshCredentialRequest{
+		Operation:  operation,
+		AccountKey: bindingExternalAccountKey(binding),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return requireSucceededOperationResult(resp.GetResult(), operation)
 }
 
-func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error {
+func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error {
 	conn, err := g.dial(ctx, endpoint)
 	if err != nil {
 		return err
@@ -89,10 +104,30 @@ func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, end
 
 	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
 	defer cancel()
-	_, err = platformv1.NewPlatformServiceClient(conn).DeleteCredential(callCtx, &platformv1.DeleteCredentialRequest{
-		PlatformAccountId: bindingExternalAccountKey(binding),
+	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL, operationID)
+	resp, err := platformv2.NewPlatformControlServiceClient(conn).DeleteCredential(callCtx, &platformv2.DeleteCredentialRequest{
+		Operation:  operation,
+		AccountKey: bindingExternalAccountKey(binding),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return requireSucceededOperationResult(resp.GetResult(), operation)
+}
+
+func newOperationRef(binding *model.PlatformAccountBinding, kind platformv2.OperationKind, operationID string) *platformv2.OperationRef {
+	if binding == nil {
+		return nil
+	}
+	fingerprint := operationid.Fingerprint(kind.String(), binding.BindingRef, binding.Generation, binding.Generation+1)
+	return &platformv2.OperationRef{
+		OperationId:        operationID,
+		Kind:               kind,
+		BindingRef:         binding.BindingRef,
+		PreGeneration:      binding.Generation,
+		TargetGeneration:   binding.Generation + 1,
+		RequestFingerprint: fingerprint,
+	}
 }
 
 func credentialGatewayCallContext(ctx context.Context, ticket string) (context.Context, context.CancelFunc) {
@@ -113,29 +148,50 @@ func bindingExternalAccountKey(binding *model.PlatformAccountBinding) string {
 	return binding.ExternalAccountKey.String
 }
 
-func genericCredentialSummaryMap(resp *platformv1.GetCredentialSummaryResponse) (map[string]any, error) {
-	if resp == nil {
-		return nil, errGenericCredentialSummaryRequired
+func genericOperationResultMap(result *platformv2.OperationResult) (map[string]any, error) {
+	return genericOperationResultMapForOperation(result, nil)
+}
+
+func genericOperationResultMapForOperation(result *platformv2.OperationResult, expected *platformv2.OperationRef) (map[string]any, error) {
+	if err := requireSucceededOperationResult(result, expected); err != nil {
+		return nil, err
 	}
 	return map[string]any{
-		"platform_account_id": resp.GetPlatformAccountId(),
-		"status":              genericCredentialStatus(resp.GetStatus()),
-		"last_validated_at":   genericProtoTime(resp.GetLastValidatedAt()),
-		"last_refreshed_at":   genericProtoTime(resp.GetLastRefreshedAt()),
-		"devices":             genericDeviceSummaries(resp.GetDevices()),
-		"profiles":            genericProfileSummaries(resp.GetProfiles()),
+		"platform_account_id":       result.GetAccountKey(),
+		"generation":                result.GetOperation().GetTargetGeneration(),
+		"status":                    genericCredentialStatus(result.GetCredentialStatus()),
+		"last_validated_at":         genericProtoTime(result.GetLastValidatedAt()),
+		"last_refreshed_at":         genericProtoTime(result.GetLastRefreshedAt()),
+		"devices":                   []map[string]any{},
+		"profiles":                  genericProfileSummaries(result.GetProfileSnapshot().GetProfiles()),
+		"profile_snapshot_complete": result.GetProfileSnapshot().GetComplete(),
+		"profile_revision":          result.GetProfileSnapshot().GetRevision(),
+		"profile_observed_revision": result.GetProfileSnapshot().GetObservedRevision(),
 	}, nil
 }
 
-func genericCredentialStatus(status platformv1.CredentialStatus) string {
+func requireSucceededOperationResult(result *platformv2.OperationResult, expected *platformv2.OperationRef) error {
+	if result == nil {
+		return errGenericCredentialSummaryRequired
+	}
+	if result.GetState() != platformv2.OperationState_OPERATION_STATE_SUCCEEDED {
+		return errGenericCredentialOperationFailed
+	}
+	if expected != nil && !proto.Equal(result.GetOperation(), expected) {
+		return errGenericCredentialOperationMismatch
+	}
+	return nil
+}
+
+func genericCredentialStatus(status platformv2.CredentialStatus) string {
 	switch status {
-	case platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE:
+	case platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE:
 		return "active"
-	case platformv1.CredentialStatus_CREDENTIAL_STATUS_EXPIRED:
+	case platformv2.CredentialStatus_CREDENTIAL_STATUS_EXPIRED:
 		return "expired"
-	case platformv1.CredentialStatus_CREDENTIAL_STATUS_INVALID:
+	case platformv2.CredentialStatus_CREDENTIAL_STATUS_INVALID:
 		return "invalid"
-	case platformv1.CredentialStatus_CREDENTIAL_STATUS_CHALLENGE_REQUIRED:
+	case platformv2.CredentialStatus_CREDENTIAL_STATUS_CHALLENGE_REQUIRED:
 		return "challenge_required"
 	default:
 		return "unspecified"
@@ -149,22 +205,11 @@ func genericProtoTime(value *timestamppb.Timestamp) any {
 	return value.AsTime().UTC().Format(time.RFC3339)
 }
 
-func genericDeviceSummaries(devices []*platformv1.DeviceSummary) []map[string]any {
-	items := make([]map[string]any, 0, len(devices))
-	for _, device := range devices {
-		items = append(items, map[string]any{
-			"device_id": device.GetDeviceId(), "device_fp": device.GetDeviceFp(), "device_name": device.GetDeviceName(),
-			"is_valid": device.GetIsValid(), "last_seen_at": genericProtoTime(device.GetLastSeenAt()),
-		})
-	}
-	return items
-}
-
-func genericProfileSummaries(profiles []*platformv1.ProfileSummary) []map[string]any {
+func genericProfileSummaries(profiles []*platformv2.ProfileSummary) []map[string]any {
 	items := make([]map[string]any, 0, len(profiles))
 	for _, profile := range profiles {
 		items = append(items, map[string]any{
-			"id": profile.GetId(), "platform_account_id": profile.GetPlatformAccountId(), "game_biz": profile.GetGameBiz(),
+			"profile_ref": profile.GetProfileRef(), "platform_account_id": profile.GetAccountKey(), "game_biz": profile.GetGameBiz(),
 			"region": profile.GetRegion(), "player_id": profile.GetPlayerId(), "nickname": profile.GetNickname(),
 			"level": profile.GetLevel(), "is_default": profile.GetIsDefault(),
 		})

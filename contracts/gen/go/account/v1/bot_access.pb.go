@@ -76,13 +76,13 @@ func (PlatformAccountStatus) EnumDescriptor() ([]byte, []int) {
 
 type PlatformAccountBinding struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
-	Id                 uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	UserId             uint64                 `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	BindingRef         string                 `protobuf:"bytes,1,opt,name=binding_ref,json=bindingRef,proto3" json:"binding_ref,omitempty"`
 	Platform           string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
 	PlatformServiceKey string                 `protobuf:"bytes,4,opt,name=platform_service_key,json=platformServiceKey,proto3" json:"platform_service_key,omitempty"`
-	PlatformAccountId  string                 `protobuf:"bytes,5,opt,name=platform_account_id,json=platformAccountId,proto3" json:"platform_account_id,omitempty"`
+	AccountKey         string                 `protobuf:"bytes,5,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
 	DisplayName        string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	Status             PlatformAccountStatus  `protobuf:"varint,7,opt,name=status,proto3,enum=paigram.v1.PlatformAccountStatus" json:"status,omitempty"`
+	Generation         uint64                 `protobuf:"varint,8,opt,name=generation,proto3" json:"generation,omitempty"`
 	CreatedAt          *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt          *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	unknownFields      protoimpl.UnknownFields
@@ -119,18 +119,11 @@ func (*PlatformAccountBinding) Descriptor() ([]byte, []int) {
 	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *PlatformAccountBinding) GetId() uint64 {
+func (x *PlatformAccountBinding) GetBindingRef() string {
 	if x != nil {
-		return x.Id
+		return x.BindingRef
 	}
-	return 0
-}
-
-func (x *PlatformAccountBinding) GetUserId() uint64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
+	return ""
 }
 
 func (x *PlatformAccountBinding) GetPlatform() string {
@@ -147,9 +140,9 @@ func (x *PlatformAccountBinding) GetPlatformServiceKey() string {
 	return ""
 }
 
-func (x *PlatformAccountBinding) GetPlatformAccountId() string {
+func (x *PlatformAccountBinding) GetAccountKey() string {
 	if x != nil {
-		return x.PlatformAccountId
+		return x.AccountKey
 	}
 	return ""
 }
@@ -166,6 +159,13 @@ func (x *PlatformAccountBinding) GetStatus() PlatformAccountStatus {
 		return x.Status
 	}
 	return PlatformAccountStatus_PLATFORM_ACCOUNT_STATUS_UNSPECIFIED
+}
+
+func (x *PlatformAccountBinding) GetGeneration() uint64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
 }
 
 func (x *PlatformAccountBinding) GetCreatedAt() *timestamppb.Timestamp {
@@ -393,9 +393,9 @@ func (x *ListAccessibleBindingsResponse) GetBindings() []*PlatformAccountBinding
 type IssueServiceTicketRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ExternalUserId  string                 `protobuf:"bytes,1,opt,name=external_user_id,json=externalUserId,proto3" json:"external_user_id,omitempty"`
-	BindingId       uint64                 `protobuf:"varint,2,opt,name=binding_id,json=bindingId,proto3" json:"binding_id,omitempty"`
-	RequestedScopes []string               `protobuf:"bytes,3,rep,name=requested_scopes,json=requestedScopes,proto3" json:"requested_scopes,omitempty"`
-	ProfileId       uint64                 `protobuf:"varint,5,opt,name=profile_id,json=profileId,proto3" json:"profile_id,omitempty"`
+	BindingRef      string                 `protobuf:"bytes,2,opt,name=binding_ref,json=bindingRef,proto3" json:"binding_ref,omitempty"`
+	RequestedAction string                 `protobuf:"bytes,3,opt,name=requested_action,json=requestedAction,proto3" json:"requested_action,omitempty"`
+	ProfileRef      string                 `protobuf:"bytes,5,opt,name=profile_ref,json=profileRef,proto3" json:"profile_ref,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -437,25 +437,25 @@ func (x *IssueServiceTicketRequest) GetExternalUserId() string {
 	return ""
 }
 
-func (x *IssueServiceTicketRequest) GetBindingId() uint64 {
+func (x *IssueServiceTicketRequest) GetBindingRef() string {
 	if x != nil {
-		return x.BindingId
+		return x.BindingRef
 	}
-	return 0
+	return ""
 }
 
-func (x *IssueServiceTicketRequest) GetRequestedScopes() []string {
+func (x *IssueServiceTicketRequest) GetRequestedAction() string {
 	if x != nil {
-		return x.RequestedScopes
+		return x.RequestedAction
 	}
-	return nil
+	return ""
 }
 
-func (x *IssueServiceTicketRequest) GetProfileId() uint64 {
+func (x *IssueServiceTicketRequest) GetProfileRef() string {
 	if x != nil {
-		return x.ProfileId
+		return x.ProfileRef
 	}
-	return 0
+	return ""
 }
 
 type IssueServiceTicketResponse struct {
@@ -531,20 +531,24 @@ var File_account_v1_bot_access_proto protoreflect.FileDescriptor
 const file_account_v1_bot_access_proto_rawDesc = "" +
 	"\n" +
 	"\x1baccount/v1/bot_access.proto\x12\n" +
-	"paigram.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa4\x03\n" +
-	"\x16PlatformAccountBinding\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x04R\x06userId\x12\x1a\n" +
+	"paigram.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcb\x03\n" +
+	"\x16PlatformAccountBinding\x12\x1f\n" +
+	"\vbinding_ref\x18\x01 \x01(\tR\n" +
+	"bindingRef\x12\x1a\n" +
 	"\bplatform\x18\x03 \x01(\tR\bplatform\x120\n" +
-	"\x14platform_service_key\x18\x04 \x01(\tR\x12platformServiceKey\x12.\n" +
-	"\x13platform_account_id\x18\x05 \x01(\tR\x11platformAccountId\x12!\n" +
+	"\x14platform_service_key\x18\x04 \x01(\tR\x12platformServiceKey\x12\x1f\n" +
+	"\vaccount_key\x18\x05 \x01(\tR\n" +
+	"accountKey\x12!\n" +
 	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\x129\n" +
-	"\x06status\x18\a \x01(\x0e2!.paigram.v1.PlatformAccountStatusR\x06status\x129\n" +
+	"\x06status\x18\a \x01(\x0e2!.paigram.v1.PlatformAccountStatusR\x06status\x12\x1e\n" +
+	"\n" +
+	"generation\x18\b \x01(\x04R\n" +
+	"generation\x129\n" +
 	"\n" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtJ\x04\b\b\x10\tR\tmeta_json\"A\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtJ\x04\b\x02\x10\x03R\auser_idR\tmeta_jsonR\x13platform_account_id\"A\n" +
 	"\x15ResolveBotUserRequest\x12(\n" +
 	"\x10external_user_id\x18\x01 \x01(\tR\x0eexternalUserId\"\x9f\x01\n" +
 	"\x16ResolveBotUserResponse\x12\x17\n" +
@@ -556,14 +560,14 @@ const file_account_v1_bot_access_proto_rawDesc = "" +
 	"\x10external_user_id\x18\x01 \x01(\tR\x0eexternalUserId\x12\x1a\n" +
 	"\bplatform\x18\x02 \x01(\tR\bplatform\"`\n" +
 	"\x1eListAccessibleBindingsResponse\x12>\n" +
-	"\bbindings\x18\x01 \x03(\v2\".paigram.v1.PlatformAccountBindingR\bbindings\"\xbe\x01\n" +
+	"\bbindings\x18\x01 \x03(\v2\".paigram.v1.PlatformAccountBindingR\bbindings\"\xc2\x01\n" +
 	"\x19IssueServiceTicketRequest\x12(\n" +
-	"\x10external_user_id\x18\x01 \x01(\tR\x0eexternalUserId\x12\x1d\n" +
-	"\n" +
-	"binding_id\x18\x02 \x01(\x04R\tbindingId\x12)\n" +
-	"\x10requested_scopes\x18\x03 \x03(\tR\x0frequestedScopes\x12\x1d\n" +
-	"\n" +
-	"profile_id\x18\x05 \x01(\x04R\tprofileIdJ\x04\b\x04\x10\x05R\baudience\"\xc9\x01\n" +
+	"\x10external_user_id\x18\x01 \x01(\tR\x0eexternalUserId\x12\x1f\n" +
+	"\vbinding_ref\x18\x02 \x01(\tR\n" +
+	"bindingRef\x12)\n" +
+	"\x10requested_action\x18\x03 \x01(\tR\x0frequestedAction\x12\x1f\n" +
+	"\vprofile_ref\x18\x05 \x01(\tR\n" +
+	"profileRefJ\x04\b\x04\x10\x05R\baudience\"\xc9\x01\n" +
 	"\x1aIssueServiceTicketResponse\x12\x16\n" +
 	"\x06ticket\x18\x01 \x01(\tR\x06ticket\x12\x1a\n" +
 	"\baudience\x18\x02 \x01(\tR\baudience\x129\n" +

@@ -4,35 +4,37 @@ import "slices"
 
 const (
 	MihomoAuthKeyIssue            = "mihomo.authkey.issue"
-	MihomoConsumerGrantInvalidate = "mihomo.consumer_grant.invalidate"
+	MihomoAuthorizationFenceApply = "mihomo.authorization.fence.apply"
+	MihomoBindingRead             = "mihomo.binding.read"
 	MihomoCredentialBind          = "mihomo.credential.bind"
 	MihomoCredentialDelete        = "mihomo.credential.delete"
-	MihomoCredentialRead          = "mihomo.credential.read_meta"
 	MihomoCredentialRefresh       = "mihomo.credential.refresh"
 	MihomoCredentialUpdate        = "mihomo.credential.update"
 	MihomoCredentialValidate      = "mihomo.credential.validate"
-	MihomoDeviceUpdate            = "mihomo.device.update"
+	MihomoDeviceRead              = "mihomo.device.read"
+	MihomoOperationRead           = "mihomo.operation.read"
+	MihomoOperationResolve        = "mihomo.operation.resolve"
 	MihomoProfileRead             = "mihomo.profile.read"
-	MihomoProfileWrite            = "mihomo.profile.write"
 	MihomoStatusRead              = "mihomo.status.read"
 )
 
 var mihomoDelegationActions = []string{
 	MihomoAuthKeyIssue,
-	MihomoCredentialRead,
 	MihomoCredentialValidate,
-	MihomoDeviceUpdate,
+	MihomoDeviceRead,
 	MihomoProfileRead,
 	MihomoStatusRead,
 }
 
 var mihomoControlActions = []string{
-	MihomoConsumerGrantInvalidate,
+	MihomoAuthorizationFenceApply,
+	MihomoBindingRead,
 	MihomoCredentialBind,
 	MihomoCredentialDelete,
 	MihomoCredentialRefresh,
 	MihomoCredentialUpdate,
-	MihomoProfileWrite,
+	MihomoOperationRead,
+	MihomoOperationResolve,
 }
 
 func MihomoDelegationActions() []string {

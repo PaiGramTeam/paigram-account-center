@@ -9,19 +9,20 @@ import (
 func TestMihomoActionCatalogSeparatesDelegationAndControlActions(t *testing.T) {
 	require.Equal(t, []string{
 		MihomoAuthKeyIssue,
-		MihomoCredentialRead,
 		MihomoCredentialValidate,
-		MihomoDeviceUpdate,
+		MihomoDeviceRead,
 		MihomoProfileRead,
 		MihomoStatusRead,
 	}, MihomoDelegationActions())
 	require.Equal(t, []string{
-		MihomoConsumerGrantInvalidate,
+		MihomoAuthorizationFenceApply,
+		MihomoBindingRead,
 		MihomoCredentialBind,
 		MihomoCredentialDelete,
 		MihomoCredentialRefresh,
 		MihomoCredentialUpdate,
-		MihomoProfileWrite,
+		MihomoOperationRead,
+		MihomoOperationResolve,
 	}, MihomoControlActions())
 
 	for _, action := range MihomoDelegationActions() {

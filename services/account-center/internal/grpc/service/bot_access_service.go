@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strconv"
+	"slices"
 	"strings"
 
 	pb "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
@@ -98,11 +98,11 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 	if err != nil {
 		return nil, err
 	}
-	if req.GetExternalUserId() == "" || req.GetBindingId() == 0 {
-		return nil, status.Error(codes.InvalidArgument, "external_user_id and binding_id are required")
+	if req.GetExternalUserId() == "" || req.GetBindingRef() == "" || req.GetRequestedAction() == "" {
+		return nil, status.Error(codes.InvalidArgument, "external_user_id, binding_ref, and requested_action are required")
 	}
 
-	_, binding, grant, err := s.bindingAccessService.GetGrantedBindingForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetBindingId(), req.GetProfileId())
+	identity, binding, grant, err := s.bindingAccessService.GetGrantedBindingByRefForConsumer(caller.bot.Id, caller.consumer, req.GetExternalUserId(), req.GetBindingRef(), req.GetProfileRef())
 	if err != nil {
 		s.recordTicketAudit(ctx, caller.bot, nil, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
 		return nil, mapBotAccessError("get granted binding", err)
@@ -112,25 +112,51 @@ func (s *BotAccessService) IssueServiceTicket(ctx context.Context, req *pb.Issue
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", "platform_service_unavailable", nil)
 		return nil, mapBotAccessError("resolve platform service audience", err)
 	}
-	grantedScopes := botaccess.GrantActions(*grant)
-	scopes, err := selectTicketScopes(grantedScopes, req.GetRequestedScopes())
-	if err != nil {
+	grantedActions := botaccess.GrantActions(*grant)
+	if !slices.Contains(grantedActions, req.GetRequestedAction()) {
+		err = botaccess.ErrScopeNotGranted
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), nil)
 		return nil, mapBotAccessError("validate requested scopes", err)
 	}
 
-	ticket, expiresAt, err := s.ticketService.Issue(caller.bot.Id, grant.Consumer, binding, scopes, audience, req.GetProfileId(), grant.TicketVersion)
+	authorization, err := s.delegationAuthorization(identity, caller.consumer)
+	if err != nil {
+		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", "authorization_state_unavailable", nil)
+		return nil, mapBotAccessError("resolve delegation authorization", err)
+	}
+	ticket, expiresAt, err := s.ticketService.Issue(caller.bot.Id, grant.Consumer, binding, req.GetRequestedAction(), audience, req.GetProfileRef(), grant.TicketVersion, authorization)
 	if err != nil {
 		s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_reject", "failure", reasonCodeFromBotAccessErr(err), map[string]any{"consumer": grant.Consumer})
 		return nil, mapBotAccessError("issue service ticket", err)
 	}
-	s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_issue", "success", "", map[string]any{"consumer": grant.Consumer, "scopes": scopes})
+	s.recordTicketAudit(ctx, caller.bot, binding, req, "ticket_issue", "success", "", map[string]any{"consumer": grant.Consumer, "action": req.GetRequestedAction()})
 
 	return &pb.IssueServiceTicketResponse{
 		Ticket:    ticket,
 		Audience:  audience,
 		ExpiresAt: timestamppb.New(expiresAt),
 		Binding:   platformBindingToProto(*binding),
+	}, nil
+}
+
+func (s *BotAccessService) delegationAuthorization(identity *model.BotIdentity, consumer string) (botaccess.DelegationAuthorization, error) {
+	if s == nil || s.db == nil || identity == nil {
+		return botaccess.DelegationAuthorization{}, botaccess.ErrInvalidTicketConfig
+	}
+	var owner model.User
+	if err := s.db.Select("user_ref", "owner_epoch").First(&owner, identity.UserID).Error; err != nil {
+		return botaccess.DelegationAuthorization{}, err
+	}
+	var credential model.ServiceCredential
+	if err := s.db.Select("consumer_epoch").Where("client_id = ?", consumer).First(&credential).Error; err != nil {
+		return botaccess.DelegationAuthorization{}, err
+	}
+	return botaccess.DelegationAuthorization{
+		OwnerUserRef:     owner.UserRef,
+		EntryIdentityRef: identity.EntryIdentityRef,
+		OwnerEpoch:       owner.OwnerEpoch,
+		ConsumerEpoch:    credential.ConsumerEpoch,
+		EntryEpoch:       identity.EntryEpoch,
 	}, nil
 }
 
@@ -210,13 +236,13 @@ func platformBindingToProto(binding model.PlatformAccountBinding) *pb.PlatformAc
 	}
 
 	return &pb.PlatformAccountBinding{
-		Id:                 binding.ID,
-		UserId:             binding.OwnerUserID,
+		BindingRef:         binding.BindingRef,
 		Platform:           binding.Platform,
 		PlatformServiceKey: binding.PlatformServiceKey,
-		PlatformAccountId:  nullStringValue(binding.ExternalAccountKey),
+		AccountKey:         nullStringValue(binding.ExternalAccountKey),
 		DisplayName:        binding.DisplayName,
 		Status:             status,
+		Generation:         binding.Generation,
 		CreatedAt:          timestamppb.New(binding.CreatedAt),
 		UpdatedAt:          timestamppb.New(binding.UpdatedAt),
 	}
@@ -228,25 +254,6 @@ func nullStringValue(value sql.NullString) string {
 	}
 
 	return value.String
-}
-
-func selectTicketScopes(grantedScopes, requestedScopes []string) ([]string, error) {
-	if len(requestedScopes) == 0 {
-		return grantedScopes, nil
-	}
-
-	granted := make(map[string]struct{}, len(grantedScopes))
-	for _, scope := range grantedScopes {
-		granted[scope] = struct{}{}
-	}
-
-	for _, scope := range requestedScopes {
-		if _, ok := granted[scope]; !ok {
-			return nil, botaccess.ErrScopeNotGranted
-		}
-	}
-
-	return requestedScopes, nil
 }
 
 func mapBotAccessError(operation string, err error) error {
@@ -282,10 +289,10 @@ func (s *BotAccessService) recordTicketAudit(ctx context.Context, bot *Bot, bind
 	}
 	var bindingID *uint64
 	var ownerUserID *uint64
-	targetID := strconv.FormatUint(req.GetBindingId(), 10)
+	targetID := req.GetBindingRef()
 	if binding != nil {
 		bindingID = &binding.ID
-		targetID = strconv.FormatUint(binding.ID, 10)
+		targetID = binding.BindingRef
 		ownerUserID = &binding.OwnerUserID
 	}
 	writeMetadata := map[string]any{"bot_id": bot.Id, "external_user_id": req.GetExternalUserId()}

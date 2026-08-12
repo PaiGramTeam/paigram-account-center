@@ -13,7 +13,7 @@ func (s *GrantService) completeGrantInvalidation(grant *model.ConsumerGrant, min
 		return nil
 	}
 	update := s.db.Model(&model.ConsumerGrant{}).
-		Where("id = ? AND status = ? AND ticket_version = ?", grant.ID, model.ConsumerGrantStatusRevoked, minimumVersion).
+		Where("id = ? AND ticket_version = ?", grant.ID, minimumVersion).
 		Update("last_invalidated_at", invalidatedAt)
 	if update.Error != nil {
 		return update.Error

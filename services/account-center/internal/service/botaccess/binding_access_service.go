@@ -58,9 +58,12 @@ func (s *BindingAccessService) ListAccessibleBindingsForConsumer(botID, consumer
 	return bindings, nil
 }
 
-func (s *BindingAccessService) GetGrantedBindingForConsumer(botID, consumer, externalUserID string, bindingID, profileID uint64) (*model.BotIdentity, *model.PlatformAccountBinding, *model.ConsumerGrant, error) {
+func (s *BindingAccessService) GetGrantedBindingByRefForConsumer(botID, consumer, externalUserID, bindingRef, profileRef string) (*model.BotIdentity, *model.PlatformAccountBinding, *model.ConsumerGrant, error) {
 	if consumer == "" {
 		return nil, nil, nil, ErrConsumerNotSupported
+	}
+	if bindingRef == "" {
+		return nil, nil, nil, ErrPlatformAccountMissing
 	}
 
 	var identity *model.BotIdentity
@@ -72,7 +75,7 @@ func (s *BindingAccessService) GetGrantedBindingForConsumer(botID, consumer, ext
 		if err != nil {
 			return err
 		}
-		if err := tx.Where("id = ? AND owner_user_id = ?", bindingID, identity.UserID).First(&binding).Error; err != nil {
+		if err := tx.Where("binding_ref = ? AND owner_user_id = ?", bindingRef, identity.UserID).First(&binding).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				return ErrPlatformAccountMissing
 			}
@@ -90,13 +93,13 @@ func (s *BindingAccessService) GetGrantedBindingForConsumer(botID, consumer, ext
 		if grant.Status != model.ConsumerGrantStatusActive || grant.RevokedAt.Valid {
 			return ErrConsumerGrantRevoked
 		}
-		if profileID != 0 {
-			var profile model.PlatformAccountProfile
-			if err := tx.Where("binding_id = ?", binding.ID).First(&profile, profileID).Error; err != nil {
-				if err == gorm.ErrRecordNotFound {
-					return ErrPlatformAccountMissing
-				}
+		if profileRef != "" {
+			var count int64
+			if err := tx.Model(&model.PlatformAccountProfile{}).Where("binding_id = ? AND profile_ref = ?", binding.ID, profileRef).Count(&count).Error; err != nil {
 				return fmt.Errorf("get platform account profile: %w", err)
+			}
+			if count != 1 {
+				return ErrPlatformAccountMissing
 			}
 		}
 		return nil

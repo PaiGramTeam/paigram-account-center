@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package paigram.mihomo.v2;
+
+option go_package = "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/mihomo/v2;mihomov2";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "platform/v2/types.proto";
+
+service MihomoRuntimeService {
+  rpc DescribePlatform(DescribePlatformRequest) returns (DescribePlatformResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc ValidateCredential(ValidateCredentialRequest) returns (ValidateCredentialResponse);
+  rpc ListProfiles(ListProfilesRequest) returns (ListProfilesResponse);
+  rpc GetPrimaryProfile(GetPrimaryProfileRequest) returns (GetPrimaryProfileResponse);
+  rpc GetAuthKey(GetAuthKeyRequest) returns (GetAuthKeyResponse);
+  rpc GetDevice(GetDeviceRequest) returns (GetDeviceResponse);
+}
+
+message DescribePlatformRequest {}
+
+message DescribePlatformResponse {
+  string platform_key = 1;
+  string display_name = 2;
+  string service_audience = 3;
+  repeated string supported_actions = 4;
+  google.protobuf.Struct credential_schema = 5;
+  string contract_version = 6;
+}
+
+message GetStatusRequest {
+  paigram.platform.v2.BindingResource resource = 1;
+}
+
+message GetStatusResponse {
+  paigram.platform.v2.CredentialStatus status = 1;
+  google.protobuf.Timestamp last_validated_at = 2;
+}
+
+message ValidateCredentialRequest {
+  paigram.platform.v2.BindingResource resource = 1;
+}
+
+message ValidateCredentialResponse {
+  paigram.platform.v2.CredentialStatus status = 1;
+  string reason_code = 2;
+}
+
+message ListProfilesRequest {
+  paigram.platform.v2.BindingResource resource = 1;
+}
+
+message ListProfilesResponse {
+  paigram.platform.v2.ProfileSnapshot snapshot = 1;
+}
+
+message GetPrimaryProfileRequest {
+  paigram.platform.v2.BindingResource resource = 1;
+}
+
+message GetPrimaryProfileResponse {
+  paigram.platform.v2.ProfileSummary profile = 1;
+}
+
+message GetAuthKeyRequest {
+  paigram.platform.v2.BindingResource resource = 1;
+  string profile_ref = 2;
+}
+
+message GetAuthKeyResponse {
+  string authkey = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message GetDeviceRequest {
+  paigram.platform.v2.BindingResource resource = 1;
+  string device_ref = 2;
+}
+
+message GetDeviceResponse {
+  paigram.platform.v2.DeviceSummary device = 1;
+}

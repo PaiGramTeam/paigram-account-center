@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"gorm.io/gorm"
 	"paigram/internal/model"
@@ -29,8 +30,6 @@ type orchestrationBindingReader interface {
 type orchestrationProfileSyncer interface {
 	SyncProfiles(input SyncProfilesInput) ([]model.PlatformAccountProfile, error)
 	DeleteProfiles(bindingID uint64) error
-	GetProfile(bindingID, profileID uint64) (*model.PlatformAccountProfile, error)
-	SetPrimaryProfileForOwner(ownerUserID, bindingID uint64, profileID *uint64) (*model.PlatformAccountBinding, error)
 }
 
 type orchestrationGrantCleaner interface {
@@ -40,14 +39,14 @@ type orchestrationGrantCleaner interface {
 type orchestrationPlatformService interface {
 	GetEnabledPlatform(platformKey string) (*model.PlatformService, error)
 	IssueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (string, time.Time, error)
-	ConfirmBindingPrimaryProfile(ctx context.Context, actorType, actorID string, binding *model.PlatformAccountBinding, playerID string) error
+	IssueBindingScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, operationID string, scopes []string) (string, time.Time, error)
 }
 
 type credentialGateway interface {
-	BindCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
-	ReplaceCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
-	RefreshCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error
-	DeleteCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error
+	BindCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
+	ReplaceCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding, payload json.RawMessage) (map[string]any, error)
+	RefreshCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error
+	DeleteCredential(ctx context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error
 }
 
 type OrchestrationService struct {
@@ -250,35 +249,8 @@ func (s *OrchestrationService) SetPrimaryProfileForOwner(ctx context.Context, ow
 	if binding == nil || !binding.ExternalAccountKey.Valid || binding.ExternalAccountKey.String == "" {
 		return nil, ErrBindingRuntimeSummaryNotReady
 	}
-	if s.profileSyncer == nil {
-		return nil, ErrPrimaryProfileNotOwned
-	}
-
-	profile, err := s.profileSyncer.GetProfile(binding.ID, profileID)
-	if err != nil {
-		return nil, err
-	}
-	if profile == nil || profile.PlayerUID == "" {
-		return nil, ErrPrimaryProfileNotOwned
-	}
-
-	if err := s.platformService.ConfirmBindingPrimaryProfile(ctx, "user", actorID, binding, profile.PlayerUID); err != nil {
-		if IsCredentialValidationError(err) {
-			s.recordBindingAudit(ctx, binding, "platform_validation_failure", "failure", "credential_validation_failed", uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profile.ID})
-			s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", "credential_validation_failed", uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profile.ID})
-			return nil, fmt.Errorf("%w: %v", ErrCredentialValidationFailed, err)
-		}
-		s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profile.ID})
-		return nil, err
-	}
-
-	updatedBinding, err := s.profileSyncer.SetPrimaryProfileForOwner(ownerUserID, binding.ID, &profile.ID)
-	if err != nil {
-		s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", reasonCode(err), uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profile.ID})
-		return nil, err
-	}
-	s.recordBindingAudit(ctx, updatedBinding, "primary_profile_change", "success", "", uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profile.ID})
-	return updatedBinding, nil
+	s.recordBindingAudit(ctx, binding, "primary_profile_change", "failure", reasonCode(ErrCredentialGatewayUnavailable), uint64Ptr(binding.OwnerUserID), "user", actorID, map[string]any{"profile_id": profileID})
+	return nil, ErrCredentialGatewayUnavailable
 }
 
 func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *model.PlatformAccountBinding, actorType, actorID string) (*model.PlatformAccountBinding, error) {
@@ -294,13 +266,24 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 		return nil, err
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, binding, []string{platformaction.MihomoCredentialRefresh})
+	operationID, err := operationid.NewID()
+	if err != nil {
+		return nil, err
+	}
+	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(actorType, actorID, binding, operationID, []string{platformaction.MihomoCredentialRefresh})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.gateway.RefreshCredential(ctx, platformRow.Endpoint, ticket, binding); err != nil {
+	if err := s.gateway.RefreshCredential(ctx, platformRow.Endpoint, ticket, operationID, binding); err != nil {
 		return nil, err
+	}
+	if advancer, ok := s.bindingReader.(interface {
+		AdvanceBindingGeneration(bindingID, expectedGeneration uint64) error
+	}); ok {
+		if err := advancer.AdvanceBindingGeneration(binding.ID, binding.Generation); err != nil {
+			return nil, err
+		}
 	}
 
 	return s.bindingReader.UpdateBindingStatus(binding.ID, model.PlatformAccountBindingStatusRefreshRequired)
@@ -341,12 +324,16 @@ func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, binding, []string{platformaction.MihomoCredentialDelete})
+	operationID, err := operationid.NewID()
+	if err != nil {
+		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
+	}
+	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(actorType, actorID, binding, operationID, []string{platformaction.MihomoCredentialDelete})
 	if err != nil {
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
 
-	if err := s.gateway.DeleteCredential(ctx, platformRow.Endpoint, ticket, binding); err != nil {
+	if err := s.gateway.DeleteCredential(ctx, platformRow.Endpoint, ticket, operationID, binding); err != nil {
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
 
@@ -384,16 +371,20 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 		scopes = []string{platformaction.MihomoCredentialUpdate}
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(input.ActorType, input.ActorID, binding, scopes)
+	operationID, err := operationid.NewID()
+	if err != nil {
+		return nil, nil, err
+	}
+	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(input.ActorType, input.ActorID, binding, operationID, scopes)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var summary map[string]any
 	if hasResolvedAccount {
-		summary, err = s.gateway.ReplaceCredential(ctx, platformRow.Endpoint, ticket, binding, input.CredentialPayload)
+		summary, err = s.gateway.ReplaceCredential(ctx, platformRow.Endpoint, ticket, operationID, binding, input.CredentialPayload)
 	} else {
-		summary, err = s.gateway.BindCredential(ctx, platformRow.Endpoint, ticket, binding, input.CredentialPayload)
+		summary, err = s.gateway.BindCredential(ctx, platformRow.Endpoint, ticket, operationID, binding, input.CredentialPayload)
 	}
 	if err != nil {
 		return nil, nil, s.handlePutCredentialError(binding, err)
@@ -406,7 +397,7 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 	updatedBinding, err := s.bindingReader.PersistRuntimeSummary(binding.ID, *runtimeSummary)
 	if err != nil {
 		if errors.Is(err, ErrBindingAlreadyOwned) {
-			cleanupErr := s.compensateDeleteCredential(ctx, binding, runtimeSummary.PlatformAccountID, input.ActorType, input.ActorID, platformRow.Endpoint)
+			cleanupErr := s.compensateDeleteCredential(ctx, binding, runtimeSummary.PlatformAccountID, runtimeSummary.Generation, input.ActorType, input.ActorID, platformRow.Endpoint)
 			if cleanupErr != nil {
 				_, _ = s.bindingReader.UpdateBindingFailure(binding.ID, model.PlatformAccountBindingStatusDeleteFailed, "compensation_delete_failed", cleanupErr.Error())
 				return nil, nil, fmt.Errorf("%w: cleanup failed: %v", ErrBindingAlreadyOwned, cleanupErr)
@@ -432,7 +423,7 @@ func (s *OrchestrationService) handlePutCredentialError(binding *model.PlatformA
 	return fmt.Errorf("%w: %v", ErrCredentialValidationFailed, err)
 }
 
-func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, binding *model.PlatformAccountBinding, resolvedAccountKey, actorType, actorID, endpoint string) error {
+func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, binding *model.PlatformAccountBinding, resolvedAccountKey string, resolvedGeneration uint64, actorType, actorID, endpoint string) error {
 	if s.gateway == nil {
 		return ErrCredentialGatewayUnavailable
 	}
@@ -440,19 +431,24 @@ func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, b
 	if binding != nil && resolvedAccountKey != "" {
 		clone := *binding
 		clone.ExternalAccountKey = sql.NullString{String: resolvedAccountKey, Valid: true}
+		clone.Generation = resolvedGeneration
 		resolvedBinding = &clone
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, resolvedBinding, []string{platformaction.MihomoCredentialDelete})
+	operationID, err := operationid.NewID()
+	if err != nil {
+		return err
+	}
+	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(actorType, actorID, resolvedBinding, operationID, []string{platformaction.MihomoCredentialDelete})
 	if err != nil {
 		return err
 	}
 
-	return s.gateway.DeleteCredential(ctx, endpoint, ticket, resolvedBinding)
+	return s.gateway.DeleteCredential(ctx, endpoint, ticket, operationID, resolvedBinding)
 }
 
 func (s *OrchestrationService) syncProfiles(binding, updatedBinding *model.PlatformAccountBinding, summary *RuntimeSummary) error {
-	if s.profileSyncer == nil || binding == nil || summary == nil || len(summary.Profiles) == 0 {
+	if s.profileSyncer == nil || binding == nil || summary == nil || !summary.ProfileSnapshotComplete || summary.ProfileObservedRevision < summary.ProfileRevision {
 		return nil
 	}
 	syncedAt := time.Now().UTC()
@@ -461,18 +457,17 @@ func (s *OrchestrationService) syncProfiles(binding, updatedBinding *model.Platf
 		bindingID = updatedBinding.ID
 	}
 	profiles := buildProfileProjectionInputs(binding.Platform, summary.Profiles)
-	if len(profiles) == 0 {
-		return nil
-	}
 	for i := range profiles {
 		if !profiles[i].SourceUpdatedAt.Valid {
 			profiles[i].SourceUpdatedAt = sql.NullTime{Time: syncedAt, Valid: true}
 		}
 	}
 	_, err := s.profileSyncer.SyncProfiles(SyncProfilesInput{
-		BindingID: bindingID,
-		Profiles:  profiles,
-		SyncedAt:  syncedAt,
+		BindingID:        bindingID,
+		Profiles:         profiles,
+		SyncedAt:         syncedAt,
+		Revision:         summary.ProfileRevision,
+		ObservedRevision: summary.ProfileObservedRevision,
 	})
 	return err
 }
@@ -490,6 +485,7 @@ func buildProfileProjectionInputs(platform string, rawProfiles []map[string]any)
 		}
 		profiles = append(profiles, ProfileProjectionInput{
 			PlatformProfileKey: platformProfileKey,
+			ProfileRef:         mapString(raw["profile_ref"]),
 			GameBiz:            gameBiz,
 			Region:             region,
 			PlayerUID:          playerUID,
@@ -515,6 +511,9 @@ func nullableSourceUpdatedAt(value any) sql.NullTime {
 }
 
 func derivePlatformProfileKey(platform string, raw map[string]any, playerUID string) string {
+	if profileRef := mapString(raw["profile_ref"]); profileRef != "" {
+		return profileRef
+	}
 	if id := mapUint64(raw["id"]); id != 0 {
 		return platform + ":" + strconv.FormatUint(id, 10)
 	}
@@ -578,19 +577,19 @@ func nullableLevel(value any) sql.NullInt64 {
 
 type unavailableCredentialGateway struct{}
 
-func (unavailableCredentialGateway) BindCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (unavailableCredentialGateway) BindCredential(context.Context, string, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	return nil, ErrCredentialGatewayUnavailable
 }
 
-func (unavailableCredentialGateway) ReplaceCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (unavailableCredentialGateway) ReplaceCredential(context.Context, string, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	return nil, ErrCredentialGatewayUnavailable
 }
 
-func (unavailableCredentialGateway) RefreshCredential(context.Context, string, string, *model.PlatformAccountBinding) error {
+func (unavailableCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
 	return ErrCredentialGatewayUnavailable
 }
 
-func (unavailableCredentialGateway) DeleteCredential(context.Context, string, string, *model.PlatformAccountBinding) error {
+func (unavailableCredentialGateway) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
 	return ErrCredentialGatewayUnavailable
 }
 

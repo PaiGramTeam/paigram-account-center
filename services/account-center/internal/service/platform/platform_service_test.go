@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,15 +111,43 @@ func TestPlatformServiceListEnabledPlatforms(t *testing.T) {
 }
 
 func TestPlatformServiceBuildsBindingActorTicketClaims(t *testing.T) {
-	claims := buildBindingScopedTicketClaims("user", "session-123", 7, 11, "mihomo", "platform-mihomo-service", "hoyo_ref_11_10001", []string{"mihomo.credential.read_meta"})
+	claims := buildBindingScopedTicketClaims("user", "session-123", "binding-11", "mihomo", "platform-mihomo-service", "account-11", []string{"mihomo.binding.read"})
 	require.Equal(t, "user", claims.ActorType)
 	require.Equal(t, "session-123", claims.ActorID)
-	require.Equal(t, uint64(7), claims.OwnerUserID)
-	require.Equal(t, uint64(11), claims.BindingID)
+	require.Equal(t, "binding-11", claims.BindingRef)
 	require.Equal(t, "mihomo", claims.Platform)
 	require.Equal(t, "platform-mihomo-service", claims.PlatformServiceKey)
-	require.Equal(t, "hoyo_ref_11_10001", claims.PlatformAccountID)
-	require.Equal(t, []string{"mihomo.credential.read_meta"}, claims.Scopes)
+	require.Equal(t, "account-11", claims.AccountKey)
+	require.Equal(t, []string{"mihomo.binding.read"}, claims.Scopes)
+}
+
+func TestPlatformServiceBindsControlTicketToOperation(t *testing.T) {
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_operation_ticket", &model.User{}, &model.PlatformService{})
+	owner := &model.User{Status: model.UserStatusActive}
+	require.NoError(t, db.Create(owner).Error)
+	require.NoError(t, db.Create(&model.PlatformService{
+		PlatformKey: "mihomo", DisplayName: "Mihomo", ServiceKey: "platform-mihomo-service",
+		ServiceAudience: "platform-mihomo-service", DiscoveryType: "static", Endpoint: "bufnet",
+		Enabled: true, SupportedActionsJSON: `[]`, CredentialSchemaJSON: `{}`,
+	}).Error)
+	svc := NewServiceGroup(db).PlatformService
+	authConfig, publicKey := testPlatformAuth(t)
+	require.NoError(t, svc.ConfigureAuth(authConfig))
+	binding := &model.PlatformAccountBinding{
+		BindingRef: "binding-11", Generation: 4, OwnerUserID: owner.ID, Platform: "mihomo",
+		PlatformServiceKey: "platform-mihomo-service", Status: model.PlatformAccountBindingStatusActive,
+	}
+
+	raw, _, err := svc.IssueBindingScopedOperationTicket("user", "session-1", binding, "op-11", []string{"mihomo.credential.update"})
+	require.NoError(t, err)
+	claims := &ServiceTicketClaims{}
+	parsed, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) { return publicKey, nil })
+	require.NoError(t, err)
+	require.True(t, parsed.Valid)
+	require.Equal(t, "op-11", claims.OperationID)
+	require.Equal(t, owner.UserRef, claims.OwnerUserRef)
+	require.Equal(t, "user:"+owner.UserRef, claims.Subject)
+	require.Equal(t, uint64(4), claims.CredentialGeneration)
 }
 
 func TestPlatformServiceConfigureAuthRejectsMissingPrivateKey(t *testing.T) {
@@ -133,7 +161,8 @@ func TestPlatformServiceConfigureAuthRejectsMissingPrivateKey(t *testing.T) {
 }
 
 func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation", &model.User{}, &model.PlatformService{})
+	require.NoError(t, db.Create(&model.User{ID: 7, Status: model.UserStatusActive}).Error)
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -146,10 +175,10 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 		CredentialSchemaJSON: `{}`,
 	}).Error)
 
-	stub := &grantInvalidationPlatformServiceStub{response: &platformv1.InvalidateConsumerGrantResponse{Success: true}}
+	stub := &grantInvalidationPlatformServiceStub{state: platformv2.OperationState_OPERATION_STATE_SUCCEEDED}
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	platformv1.RegisterPlatformServiceServer(server, stub)
+	platformv2.RegisterPlatformControlServiceServer(server, stub)
 	go server.Serve(listener)
 	t.Cleanup(func() {
 		server.Stop()
@@ -169,8 +198,10 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 		)
 	}
 
-	err := svc.InvalidateConsumerGrant(context.Background(), platformbinding.GrantInvalidationInput{
+	input := platformbinding.GrantInvalidationInput{
 		BindingID:           42,
+		BindingRef:          "binding-42",
+		Generation:          3,
 		OwnerUserID:         7,
 		Platform:            "mihomo",
 		PlatformServiceKey:  "platform-mihomo-service",
@@ -178,11 +209,16 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 		MinimumGrantVersion: 8,
 		ActorType:           "admin",
 		ActorID:             "admin:7",
-	})
+	}
+	err := svc.InvalidateConsumerGrant(context.Background(), input)
 	require.NoError(t, err)
+	require.NoError(t, svc.InvalidateConsumerGrant(context.Background(), input))
+	require.Len(t, stub.requests, 2)
+	require.Equal(t, stub.requests[0].GetOperation().GetOperationId(), stub.requests[1].GetOperation().GetOperationId())
 	require.NotNil(t, stub.lastRequest)
-	require.Equal(t, uint64(42), stub.lastRequest.GetBindingId())
-	require.Equal(t, platformbinding.ConsumerPaiGramBot, stub.lastRequest.GetConsumer())
+	require.Equal(t, "binding-42", stub.lastRequest.GetOperation().GetBindingRef())
+	require.Equal(t, uint64(3), stub.lastRequest.GetOperation().GetPreGeneration())
+	require.Equal(t, platformbinding.ConsumerPaiGramBot, stub.lastRequest.GetConsumerPrincipal())
 	require.Equal(t, uint64(8), stub.lastRequest.GetMinimumGrantVersion())
 
 	parsed := &ServiceTicketClaims{}
@@ -193,16 +229,17 @@ func TestPlatformServiceInvalidateConsumerGrantCallsPlatformService(t *testing.T
 	require.True(t, token.Valid)
 	require.Equal(t, "admin", parsed.ActorType)
 	require.Equal(t, "admin:7", parsed.ActorID)
-	require.Equal(t, uint64(7), parsed.OwnerUserID)
-	require.Equal(t, uint64(42), parsed.BindingID)
+	require.NotEmpty(t, parsed.OwnerUserRef)
+	require.Equal(t, "binding-42", parsed.BindingRef)
 	require.Equal(t, "mihomo", parsed.Platform)
 	require.Equal(t, "platform-mihomo-service", parsed.PlatformServiceKey)
-	require.Equal(t, []string{"mihomo.consumer_grant.invalidate"}, parsed.Scopes)
+	require.Equal(t, []string{"mihomo.authorization.fence.apply"}, parsed.Scopes)
 	require.Equal(t, []string{"platform-mihomo-service"}, []string(parsed.Audience))
 }
 
 func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation_rejected", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation_rejected", &model.User{}, &model.PlatformService{})
+	require.NoError(t, db.Create(&model.User{ID: 7, Status: model.UserStatusActive}).Error)
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -215,10 +252,10 @@ func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t
 		CredentialSchemaJSON: `{}`,
 	}).Error)
 
-	stub := &grantInvalidationPlatformServiceStub{response: &platformv1.InvalidateConsumerGrantResponse{Success: false}}
+	stub := &grantInvalidationPlatformServiceStub{state: platformv2.OperationState_OPERATION_STATE_FAILED}
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	platformv1.RegisterPlatformServiceServer(server, stub)
+	platformv2.RegisterPlatformControlServiceServer(server, stub)
 	go server.Serve(listener)
 	t.Cleanup(func() {
 		server.Stop()
@@ -240,6 +277,7 @@ func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t
 
 	err := svc.InvalidateConsumerGrant(context.Background(), platformbinding.GrantInvalidationInput{
 		BindingID:           42,
+		BindingRef:          "binding-42",
 		OwnerUserID:         7,
 		Platform:            "mihomo",
 		PlatformServiceKey:  "platform-mihomo-service",
@@ -252,7 +290,8 @@ func TestPlatformServiceInvalidateConsumerGrantReturnsErrorWhenPlatformRejects(t
 }
 
 func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *testing.T) {
-	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation_actor", &model.PlatformService{})
+	db := testutil.OpenPostgreSQLTestDB(t, "platform_registry_grant_invalidation_actor", &model.User{}, &model.PlatformService{})
+	require.NoError(t, db.Create(&model.User{ID: 7, Status: model.UserStatusActive}).Error)
 	require.NoError(t, db.Create(&model.PlatformService{
 		PlatformKey:          "mihomo",
 		DisplayName:          "Mihomo",
@@ -265,10 +304,10 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 		CredentialSchemaJSON: `{}`,
 	}).Error)
 
-	stub := &grantInvalidationPlatformServiceStub{response: &platformv1.InvalidateConsumerGrantResponse{Success: true}}
+	stub := &grantInvalidationPlatformServiceStub{state: platformv2.OperationState_OPERATION_STATE_SUCCEEDED}
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	platformv1.RegisterPlatformServiceServer(server, stub)
+	platformv2.RegisterPlatformControlServiceServer(server, stub)
 	go server.Serve(listener)
 	t.Cleanup(func() {
 		server.Stop()
@@ -290,6 +329,7 @@ func TestPlatformServiceInvalidateConsumerGrantNormalizesConsumerActorToUser(t *
 
 	err := svc.InvalidateConsumerGrant(context.Background(), platformbinding.GrantInvalidationInput{
 		BindingID:           42,
+		BindingRef:          "binding-42",
 		OwnerUserID:         7,
 		Platform:            "mihomo",
 		PlatformServiceKey:  "platform-mihomo-service",
@@ -336,20 +376,22 @@ func TestPlatformServiceListPlatformViews(t *testing.T) {
 }
 
 type grantInvalidationPlatformServiceStub struct {
-	platformv1.UnimplementedPlatformServiceServer
-	response          *platformv1.InvalidateConsumerGrantResponse
-	lastRequest       *platformv1.InvalidateConsumerGrantRequest
+	platformv2.UnimplementedPlatformControlServiceServer
+	state             platformv2.OperationState
+	lastRequest       *platformv2.ApplyAuthorizationFenceRequest
+	requests          []*platformv2.ApplyAuthorizationFenceRequest
 	lastServiceTicket string
 }
 
-func (s *grantInvalidationPlatformServiceStub) InvalidateConsumerGrant(ctx context.Context, req *platformv1.InvalidateConsumerGrantRequest) (*platformv1.InvalidateConsumerGrantResponse, error) {
+func (s *grantInvalidationPlatformServiceStub) ApplyAuthorizationFence(ctx context.Context, req *platformv2.ApplyAuthorizationFenceRequest) (*platformv2.ApplyAuthorizationFenceResponse, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	values := md.Get("authorization")
 	if len(values) == 1 {
 		s.lastServiceTicket = strings.TrimPrefix(values[0], "Bearer ")
 	}
 	s.lastRequest = req
-	return s.response, nil
+	s.requests = append(s.requests, req)
+	return &platformv2.ApplyAuthorizationFenceResponse{Result: &platformv2.OperationResult{Operation: req.GetOperation(), State: s.state}}, nil
 }
 
 func TestPlatformServiceGetPlatformSchemaView(t *testing.T) {

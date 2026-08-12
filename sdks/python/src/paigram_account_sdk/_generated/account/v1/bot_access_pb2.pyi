@@ -22,26 +22,26 @@ PLATFORM_ACCOUNT_STATUS_INACTIVE: PlatformAccountStatus
 PLATFORM_ACCOUNT_STATUS_REVOKED: PlatformAccountStatus
 
 class PlatformAccountBinding(_message.Message):
-    __slots__ = ("id", "user_id", "platform", "platform_service_key", "platform_account_id", "display_name", "status", "created_at", "updated_at")
-    ID_FIELD_NUMBER: _ClassVar[int]
-    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    __slots__ = ("binding_ref", "platform", "platform_service_key", "account_key", "display_name", "status", "generation", "created_at", "updated_at")
+    BINDING_REF_FIELD_NUMBER: _ClassVar[int]
     PLATFORM_FIELD_NUMBER: _ClassVar[int]
     PLATFORM_SERVICE_KEY_FIELD_NUMBER: _ClassVar[int]
-    PLATFORM_ACCOUNT_ID_FIELD_NUMBER: _ClassVar[int]
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
     DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
     STATUS_FIELD_NUMBER: _ClassVar[int]
+    GENERATION_FIELD_NUMBER: _ClassVar[int]
     CREATED_AT_FIELD_NUMBER: _ClassVar[int]
     UPDATED_AT_FIELD_NUMBER: _ClassVar[int]
-    id: int
-    user_id: int
+    binding_ref: str
     platform: str
     platform_service_key: str
-    platform_account_id: str
+    account_key: str
     display_name: str
     status: PlatformAccountStatus
+    generation: int
     created_at: _timestamp_pb2.Timestamp
     updated_at: _timestamp_pb2.Timestamp
-    def __init__(self, id: _Optional[int] = ..., user_id: _Optional[int] = ..., platform: _Optional[str] = ..., platform_service_key: _Optional[str] = ..., platform_account_id: _Optional[str] = ..., display_name: _Optional[str] = ..., status: _Optional[_Union[PlatformAccountStatus, str]] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., updated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+    def __init__(self, binding_ref: _Optional[str] = ..., platform: _Optional[str] = ..., platform_service_key: _Optional[str] = ..., account_key: _Optional[str] = ..., display_name: _Optional[str] = ..., status: _Optional[_Union[PlatformAccountStatus, str]] = ..., generation: _Optional[int] = ..., created_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., updated_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class ResolveBotUserRequest(_message.Message):
     __slots__ = ("external_user_id",)
@@ -76,16 +76,16 @@ class ListAccessibleBindingsResponse(_message.Message):
     def __init__(self, bindings: _Optional[_Iterable[_Union[PlatformAccountBinding, _Mapping]]] = ...) -> None: ...
 
 class IssueServiceTicketRequest(_message.Message):
-    __slots__ = ("external_user_id", "binding_id", "requested_scopes", "profile_id")
+    __slots__ = ("external_user_id", "binding_ref", "requested_action", "profile_ref")
     EXTERNAL_USER_ID_FIELD_NUMBER: _ClassVar[int]
-    BINDING_ID_FIELD_NUMBER: _ClassVar[int]
-    REQUESTED_SCOPES_FIELD_NUMBER: _ClassVar[int]
-    PROFILE_ID_FIELD_NUMBER: _ClassVar[int]
+    BINDING_REF_FIELD_NUMBER: _ClassVar[int]
+    REQUESTED_ACTION_FIELD_NUMBER: _ClassVar[int]
+    PROFILE_REF_FIELD_NUMBER: _ClassVar[int]
     external_user_id: str
-    binding_id: int
-    requested_scopes: _containers.RepeatedScalarFieldContainer[str]
-    profile_id: int
-    def __init__(self, external_user_id: _Optional[str] = ..., binding_id: _Optional[int] = ..., requested_scopes: _Optional[_Iterable[str]] = ..., profile_id: _Optional[int] = ...) -> None: ...
+    binding_ref: str
+    requested_action: str
+    profile_ref: str
+    def __init__(self, external_user_id: _Optional[str] = ..., binding_ref: _Optional[str] = ..., requested_action: _Optional[str] = ..., profile_ref: _Optional[str] = ...) -> None: ...
 
 class IssueServiceTicketResponse(_message.Message):
     __slots__ = ("ticket", "audience", "expires_at", "binding")

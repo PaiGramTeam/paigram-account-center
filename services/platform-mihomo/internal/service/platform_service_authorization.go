@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
@@ -22,6 +23,13 @@ func requireControlTicket(claims *biz.ServiceTicketClaims) error {
 	return nil
 }
 
+func requireDelegationTicket(claims *biz.ServiceTicketClaims) error {
+	if claims == nil || claims.TicketType != contractticket.TypeDelegation {
+		return status.Error(codes.PermissionDenied, "delegation service ticket is required")
+	}
+	return nil
+}
+
 func mapTicketVerificationError(err error) error {
 	if errors.Is(err, data.ErrGrantVersionRevoked) {
 		return status.Error(codes.PermissionDenied, "service ticket grant has been revoked")
@@ -32,6 +40,9 @@ func mapTicketVerificationError(err error) error {
 func mapUsecaseError(err error) error {
 	if errors.Is(err, biz.ErrCredentialAlreadyBound) {
 		return status.Error(codes.AlreadyExists, "credential already exists for binding")
+	}
+	if errors.Is(err, biz.ErrCredentialGenerationConflict) {
+		return status.Error(codes.Aborted, "credential generation changed concurrently")
 	}
 	if errors.Is(err, usecase.ErrCredentialNotFound) {
 		return status.Error(codes.NotFound, "credential not found")
@@ -60,12 +71,12 @@ func mapUsecaseError(err error) error {
 	return status.Error(codes.Internal, "platform operation failed")
 }
 
-func scopedGuardForPlatformAccount(claims *biz.ServiceTicketClaims, platformAccountID string, requiredActions ...string) (usecase.ScopeGuard, error) {
+func scopedGuardForPlatformAccount(claims *biz.ServiceTicketClaims, accountKey string, requiredActions ...string) (usecase.ScopeGuard, error) {
 	guard, err := scopedGuard(claims, requiredActions...)
 	if err != nil {
 		return usecase.ScopeGuard{}, err
 	}
-	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
+	if err := guard.RequireAccountKey(accountKey); err != nil {
 		return usecase.ScopeGuard{}, err
 	}
 	return guard, nil
@@ -96,7 +107,35 @@ func toScopeGuard(claims *biz.ServiceTicketClaims) (usecase.ScopeGuard, error) {
 
 	return usecase.ScopeGuard{
 		AllowedActions: allowedActions,
-		BindingID:      claims.BindingID,
-		ProfileID:      claims.ProfileID,
+		BindingRef:     claims.BindingRef,
+		AccountKey:     claims.AccountKey,
+		ProfileRef:     claims.ProfileRef,
 	}, nil
+}
+
+func toScopeGuardMust(claims *biz.ServiceTicketClaims) usecase.ScopeGuard {
+	guard, _ := toScopeGuard(claims)
+	return guard
+}
+
+func authorizeTicketAction(ctx context.Context, verifier *data.TicketVerifier, action string, control bool) (*biz.ServiceTicketClaims, error) {
+	claims, err := serviceTicketClaims(ctx, verifier)
+	if err != nil {
+		return nil, err
+	}
+	if control {
+		if err := requireControlTicket(claims); err != nil {
+			return nil, err
+		}
+	} else if err := requireDelegationTicket(claims); err != nil {
+		return nil, err
+	}
+	guard, err := scopedGuard(claims, action)
+	if err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	if err := guard.RequireBindingWide(); control && err != nil {
+		return nil, mapUsecaseError(err)
+	}
+	return claims, nil
 }

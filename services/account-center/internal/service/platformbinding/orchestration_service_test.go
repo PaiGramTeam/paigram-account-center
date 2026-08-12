@@ -9,12 +9,11 @@ import (
 	"testing"
 	"time"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 
 	"paigram/internal/model"
@@ -126,17 +125,11 @@ func (f *fakeRuntimeSummaryBindingReader) PersistRuntimeSummary(bindingID uint64
 }
 
 type fakeOrchestrationPlatformService struct {
-	platform              *model.PlatformService
-	err                   error
-	ticket                string
-	ticketErr             error
-	lastScope             []string
-	confirmCalled         bool
-	confirmActorType      string
-	confirmActorID        string
-	confirmBinding        *model.PlatformAccountBinding
-	confirmPlayerID       string
-	confirmPrimaryProfile error
+	platform  *model.PlatformService
+	err       error
+	ticket    string
+	ticketErr error
+	lastScope []string
 }
 
 func (f *fakeOrchestrationPlatformService) GetEnabledPlatform(string) (*model.PlatformService, error) {
@@ -154,13 +147,8 @@ func (f *fakeOrchestrationPlatformService) IssueBindingScopedTicket(actorType, a
 	return f.ticket, time.Time{}, nil
 }
 
-func (f *fakeOrchestrationPlatformService) ConfirmBindingPrimaryProfile(ctx context.Context, actorType, actorID string, binding *model.PlatformAccountBinding, playerID string) error {
-	f.confirmCalled = true
-	f.confirmActorType = actorType
-	f.confirmActorID = actorID
-	f.confirmBinding = binding
-	f.confirmPlayerID = playerID
-	return f.confirmPrimaryProfile
+func (f *fakeOrchestrationPlatformService) IssueBindingScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, _ string, scopes []string) (string, time.Time, error) {
+	return f.IssueBindingScopedTicket(actorType, actorID, binding, scopes)
 }
 
 type fakeRefreshGateway struct {
@@ -171,15 +159,15 @@ type fakeRefreshGateway struct {
 	binding  *model.PlatformAccountBinding
 }
 
-func (f *fakeRefreshGateway) BindCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (f *fakeRefreshGateway) BindCredential(context.Context, string, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	panic("unexpected call")
 }
 
-func (f *fakeRefreshGateway) ReplaceCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (f *fakeRefreshGateway) ReplaceCredential(context.Context, string, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	panic("unexpected call")
 }
 
-func (f *fakeRefreshGateway) RefreshCredential(ctx context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error {
+func (f *fakeRefreshGateway) RefreshCredential(ctx context.Context, endpoint, ticket, _ string, binding *model.PlatformAccountBinding) error {
 	f.called = true
 	f.endpoint = endpoint
 	f.ticket = ticket
@@ -187,7 +175,7 @@ func (f *fakeRefreshGateway) RefreshCredential(ctx context.Context, endpoint, ti
 	return f.err
 }
 
-func (f *fakeRefreshGateway) DeleteCredential(context.Context, string, string, *model.PlatformAccountBinding) error {
+func (f *fakeRefreshGateway) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
 	panic("unexpected call")
 }
 
@@ -213,6 +201,7 @@ type fakeCredentialGateway struct {
 	deleteTicket     string
 	deleteBindingID  uint64
 	deleteAccountKey sql.NullString
+	deleteGeneration uint64
 }
 
 type fakeProfileSyncer struct {
@@ -286,7 +275,7 @@ func (f *fakeGrantCleaner) DeleteGrants(bindingID uint64) error {
 	return f.err
 }
 
-func (f *fakeCredentialGateway) BindCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (f *fakeCredentialGateway) BindCredential(context.Context, string, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	f.called = true
 	f.lastMutation = "bind"
 	if f.err != nil {
@@ -295,7 +284,7 @@ func (f *fakeCredentialGateway) BindCredential(context.Context, string, string, 
 	return f.summary, nil
 }
 
-func (f *fakeCredentialGateway) ReplaceCredential(context.Context, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
+func (f *fakeCredentialGateway) ReplaceCredential(context.Context, string, string, string, *model.PlatformAccountBinding, json.RawMessage) (map[string]any, error) {
 	f.called = true
 	f.lastMutation = "replace"
 	if f.err != nil {
@@ -304,11 +293,11 @@ func (f *fakeCredentialGateway) ReplaceCredential(context.Context, string, strin
 	return f.summary, nil
 }
 
-func (f *fakeCredentialGateway) RefreshCredential(context.Context, string, string, *model.PlatformAccountBinding) error {
+func (f *fakeCredentialGateway) RefreshCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
 	panic("unexpected call")
 }
 
-func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ticket string, binding *model.PlatformAccountBinding) error {
+func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ticket, _ string, binding *model.PlatformAccountBinding) error {
 	f.deleteCalled = true
 	f.deleteCallCount++
 	f.deleteEndpoint = endpoint
@@ -316,6 +305,7 @@ func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ti
 	if binding != nil {
 		f.deleteBindingID = binding.ID
 		f.deleteAccountKey = binding.ExternalAccountKey
+		f.deleteGeneration = binding.Generation
 	}
 	return f.deleteErr
 }
@@ -356,7 +346,7 @@ func TestRuntimeSummaryDelegatesToPlatformService(t *testing.T) {
 	assert.Equal(t, binding, fake.lastBinding)
 	assert.Equal(t, "user", fake.lastActorType)
 	assert.Equal(t, "binding-runtime-summary", fake.lastActorID)
-	assert.Equal(t, []string{"mihomo.credential.read_meta"}, fake.lastScopes)
+	assert.Equal(t, []string{"mihomo.binding.read"}, fake.lastScopes)
 }
 
 func TestRuntimeSummaryNormalizesGRPCProxyOutage(t *testing.T) {
@@ -679,9 +669,12 @@ func TestPutCredentialForOwnerPersistsResolvedRuntimeState(t *testing.T) {
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
-		"platform_account_id": "cn:resolved-account",
-		"status":              "active",
-		"last_validated_at":   "2026-04-19T12:34:56Z",
+		"platform_account_id":       "cn:resolved-account",
+		"status":                    "active",
+		"profile_snapshot_complete": true,
+		"profile_revision":          uint64(1),
+		"profile_observed_revision": uint64(1),
+		"last_validated_at":         "2026-04-19T12:34:56Z",
 	}}
 	svc := NewOrchestrationService(reader, platformSvc, gateway)
 
@@ -717,6 +710,7 @@ func TestPutCredentialForOwnerCompensatesOnResolvedBindingConflict(t *testing.T)
 	reader.err = nil
 	gateway := &fakeCredentialGateway{summary: map[string]any{
 		"platform_account_id": "cn:resolved-account",
+		"generation":          uint64(1),
 		"status":              "active",
 	}}
 	svc := NewOrchestrationService(failingPersistBindingReader{fakeRuntimeSummaryBindingReader: reader, err: ErrBindingAlreadyOwned}, platformSvc, gateway)
@@ -734,6 +728,7 @@ func TestPutCredentialForOwnerCompensatesOnResolvedBindingConflict(t *testing.T)
 	assert.True(t, gateway.deleteCalled)
 	assert.Equal(t, uint64(101), gateway.deleteBindingID)
 	assert.Equal(t, sql.NullString{String: "cn:resolved-account", Valid: true}, gateway.deleteAccountKey)
+	assert.Equal(t, uint64(1), gateway.deleteGeneration)
 	assert.Equal(t, "127.0.0.1:9000", gateway.deleteEndpoint)
 	assert.Equal(t, []string{"mihomo.credential.delete"}, platformSvc.lastScope)
 	assert.Equal(t, model.PlatformAccountBindingStatusCredentialInvalid, reader.binding.Status)
@@ -755,6 +750,7 @@ func TestPutCredentialForOwnerMarksDeleteFailedWhenCompensationFails(t *testing.
 	gateway := &fakeCredentialGateway{
 		summary: map[string]any{
 			"platform_account_id": "cn:resolved-account",
+			"generation":          uint64(1),
 			"status":              "active",
 		},
 		deleteErr: errors.New("cleanup unavailable"),
@@ -803,7 +799,7 @@ func TestPutCredentialForOwnerMarksDraftCredentialInvalidOnValidationFailure(t *
 	assert.Equal(t, "credential_validation_failed", reader.updatedReason)
 }
 
-func TestSetPrimaryProfileForOwnerRejectsForeignProfileBeforeExecutionPlaneCall(t *testing.T) {
+func TestSetPrimaryProfileForOwnerRejectsMutationWithoutV2ExecutionPlaneOperation(t *testing.T) {
 	binding := &model.PlatformAccountBinding{
 		ID:                 101,
 		OwnerUserID:        7,
@@ -813,96 +809,36 @@ func TestSetPrimaryProfileForOwnerRejectsForeignProfileBeforeExecutionPlaneCall(
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{}
-	profileSyncer := &fakeProfileSyncer{getProfileErr: ErrPrimaryProfileNotOwned}
+	profileSyncer := &fakeProfileSyncer{}
 	svc := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{}, profileSyncer)
 
 	updated, err := svc.SetPrimaryProfileForOwner(context.Background(), 7, 101, 404, "session:99")
-	require.ErrorIs(t, err, ErrPrimaryProfileNotOwned)
+	require.ErrorIs(t, err, ErrCredentialGatewayUnavailable)
 	assert.Nil(t, updated)
-	assert.False(t, platformSvc.confirmCalled)
 	assert.False(t, profileSyncer.setPrimaryCalled)
-	assert.Equal(t, uint64(101), profileSyncer.lastLookupBinding)
-	assert.Equal(t, uint64(404), profileSyncer.lastLookupProfile)
+	assert.Zero(t, profileSyncer.lastLookupBinding)
+	assert.Zero(t, profileSyncer.lastLookupProfile)
 }
 
-func TestSetPrimaryProfileForOwnerRejectsExpiredExecutionPlaneTicketWithoutProjectionWrite(t *testing.T) {
+func TestSetPrimaryProfileForOwnerDoesNotUpdateAccountCenterProjection(t *testing.T) {
 	binding := &model.PlatformAccountBinding{
 		ID:                 101,
 		OwnerUserID:        7,
 		Platform:           "mihomo",
 		ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true},
 		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformSvc := &fakeOrchestrationPlatformService{confirmPrimaryProfile: grpcstatus.Error(codes.Unauthenticated, "service ticket expired")}
-	profileSyncer := &fakeProfileSyncer{profile: &model.PlatformAccountProfile{ID: 404, BindingID: 101, PlayerUID: "1008611"}}
-	svc := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{}, profileSyncer)
-
-	updated, err := svc.SetPrimaryProfileForOwner(context.Background(), 7, 101, 404, "session:99")
-	require.ErrorIs(t, err, ErrCredentialValidationFailed)
-	assert.Nil(t, updated)
-	assert.True(t, platformSvc.confirmCalled)
-	assert.False(t, profileSyncer.setPrimaryCalled)
-	assert.Contains(t, err.Error(), "service ticket expired")
-}
-
-func TestSetPrimaryProfileForOwnerRejectsExecutionPlanePrimaryProfileUpdateWithoutProjectionWrite(t *testing.T) {
-	binding := &model.PlatformAccountBinding{
-		ID:                 101,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true},
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
-	platformSvc := &fakeOrchestrationPlatformService{confirmPrimaryProfile: grpcstatus.Error(codes.InvalidArgument, "profile confirmation rejected")}
-	profileSyncer := &fakeProfileSyncer{profile: &model.PlatformAccountProfile{ID: 404, BindingID: 101, PlayerUID: "1008611"}}
-	svc := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{}, profileSyncer)
-
-	updated, err := svc.SetPrimaryProfileForOwner(context.Background(), 7, 101, 404, "session:99")
-	require.ErrorIs(t, err, ErrCredentialValidationFailed)
-	assert.Nil(t, updated)
-	assert.True(t, platformSvc.confirmCalled)
-	assert.False(t, profileSyncer.setPrimaryCalled)
-	assert.Contains(t, err.Error(), "profile confirmation rejected")
-}
-
-func TestSetPrimaryProfileForOwnerConfirmsExecutionPlaneBeforeProjectionWrite(t *testing.T) {
-	binding := &model.PlatformAccountBinding{
-		ID:                 101,
-		OwnerUserID:        7,
-		Platform:           "mihomo",
-		ExternalAccountKey: sql.NullString{String: "binding_101_10001", Valid: true},
-		Status:             model.PlatformAccountBindingStatusActive,
-	}
-	updatedBinding := &model.PlatformAccountBinding{
-		ID:               101,
-		OwnerUserID:      7,
-		PrimaryProfileID: sql.NullInt64{Int64: 404, Valid: true},
 	}
 	reader := &fakeRuntimeSummaryBindingReader{binding: binding}
 	platformSvc := &fakeOrchestrationPlatformService{}
 	profileSyncer := &fakeProfileSyncer{
-		profile:          &model.PlatformAccountProfile{ID: 404, BindingID: 101, PlayerUID: "1008611"},
-		setPrimaryResult: updatedBinding,
+		profile: &model.PlatformAccountProfile{ID: 404, BindingID: 101, PlayerUID: "1008611"},
 	}
 	svc := NewOrchestrationService(reader, platformSvc, &fakeCredentialGateway{}, profileSyncer)
 
 	updated, err := svc.SetPrimaryProfileForOwner(context.Background(), 7, 101, 404, "session:99")
-	require.NoError(t, err)
-	require.NotNil(t, updated)
-	assert.True(t, platformSvc.confirmCalled)
-	assert.Equal(t, "user", platformSvc.confirmActorType)
-	assert.Equal(t, "session:99", platformSvc.confirmActorID)
-	assert.Equal(t, binding, platformSvc.confirmBinding)
-	assert.Equal(t, "1008611", platformSvc.confirmPlayerID)
-	assert.True(t, profileSyncer.setPrimaryCalled)
-	assert.Equal(t, uint64(7), profileSyncer.setPrimaryOwnerID)
-	assert.Equal(t, uint64(101), profileSyncer.setPrimaryBinding)
-	if assert.NotNil(t, profileSyncer.setPrimaryProfile) {
-		assert.Equal(t, uint64(404), *profileSyncer.setPrimaryProfile)
-	}
-	assert.Equal(t, updatedBinding, updated)
+	require.ErrorIs(t, err, ErrCredentialGatewayUnavailable)
+	assert.Nil(t, updated)
+	assert.False(t, profileSyncer.setPrimaryCalled)
 }
 
 func TestCreateBindingForOwnerCreatesDraftBindsAndSyncsProfiles(t *testing.T) {
@@ -912,8 +848,11 @@ func TestCreateBindingForOwnerCreatesDraftBindsAndSyncsProfiles(t *testing.T) {
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
-		"platform_account_id": "cn:resolved-account",
-		"status":              "active",
+		"platform_account_id":       "cn:resolved-account",
+		"status":                    "active",
+		"profile_snapshot_complete": true,
+		"profile_revision":          uint64(1),
+		"profile_observed_revision": uint64(1),
 		"profiles": []map[string]any{{
 			"id":         uint64(42),
 			"game_biz":   "hk4e_cn",
@@ -948,50 +887,34 @@ func TestCreateBindingForOwnerCreatesDraftBindsAndSyncsProfiles(t *testing.T) {
 	assert.True(t, profileSyncer.input.Profiles[0].SourceUpdatedAt.Valid)
 }
 
-func TestGenericCredentialSummaryMapPreservesRuntimeSummaryFields(t *testing.T) {
-	validatedAt := time.Date(2026, 4, 28, 6, 7, 8, 0, time.UTC)
-	refreshedAt := time.Date(2026, 4, 28, 7, 8, 9, 0, time.UTC)
-	lastSeenAt := time.Date(2026, 4, 28, 5, 0, 0, 0, time.UTC)
-
-	summary, err := genericCredentialSummaryMap(&platformv1.GetCredentialSummaryResponse{
-		PlatformAccountId: "cn:resolved-account",
-		Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
-		LastValidatedAt:   timestamppb.New(validatedAt),
-		LastRefreshedAt:   timestamppb.New(refreshedAt),
-		Devices: []*platformv1.DeviceSummary{{
-			DeviceId:   "device-1",
-			DeviceFp:   "fp-1",
-			DeviceName: "Chrome on Windows",
-			IsValid:    true,
-			LastSeenAt: timestamppb.New(lastSeenAt),
-		}},
-		Profiles: []*platformv1.ProfileSummary{{
-			Id:                42,
-			PlatformAccountId: "cn:resolved-account",
-			GameBiz:           "hk4e_cn",
-			Region:            "cn_gf01",
-			PlayerId:          "10001",
-			Nickname:          "Traveler",
-			Level:             60,
-			IsDefault:         true,
-		}},
+func TestGenericOperationResultMapPreservesRuntimeSummaryFields(t *testing.T) {
+	summary, err := genericOperationResultMap(&platformv2.OperationResult{
+		Operation:        &platformv2.OperationRef{TargetGeneration: 5},
+		State:            platformv2.OperationState_OPERATION_STATE_SUCCEEDED,
+		AccountKey:       "cn:resolved-account",
+		CredentialStatus: platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+		ProfileSnapshot: &platformv2.ProfileSnapshot{Complete: true, Revision: 5, ObservedRevision: 5, Profiles: []*platformv2.ProfileSummary{{
+			ProfileRef: "profile-42",
+			AccountKey: "cn:resolved-account",
+			GameBiz:    "hk4e_cn",
+			Region:     "cn_gf01",
+			PlayerId:   "10001",
+			Nickname:   "Traveler",
+			Level:      60,
+			IsDefault:  true,
+		}}},
 	})
 
 	require.NoError(t, err)
 	require.Equal(t, map[string]any{
 		"platform_account_id": "cn:resolved-account",
+		"generation":          uint64(5),
 		"status":              "active",
-		"last_validated_at":   "2026-04-28T06:07:08Z",
-		"last_refreshed_at":   "2026-04-28T07:08:09Z",
-		"devices": []map[string]any{{
-			"device_id":    "device-1",
-			"device_fp":    "fp-1",
-			"device_name":  "Chrome on Windows",
-			"is_valid":     true,
-			"last_seen_at": "2026-04-28T05:00:00Z",
-		}},
+		"last_validated_at":   nil,
+		"last_refreshed_at":   nil,
+		"devices":             []map[string]any{},
 		"profiles": []map[string]any{{
-			"id":                  uint64(42),
+			"profile_ref":         "profile-42",
 			"platform_account_id": "cn:resolved-account",
 			"game_biz":            "hk4e_cn",
 			"region":              "cn_gf01",
@@ -1000,13 +923,18 @@ func TestGenericCredentialSummaryMapPreservesRuntimeSummaryFields(t *testing.T) 
 			"level":               int32(60),
 			"is_default":          true,
 		}},
+		"profile_snapshot_complete": true,
+		"profile_revision":          uint64(5),
+		"profile_observed_revision": uint64(5),
 	}, summary)
 }
 
-func TestGenericCredentialSummaryMapPreservesMissingTimestampsAsNil(t *testing.T) {
-	summary, err := genericCredentialSummaryMap(&platformv1.GetCredentialSummaryResponse{
-		PlatformAccountId: "cn:resolved-account",
-		Status:            platformv1.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
+func TestGenericOperationResultMapPreservesMissingTimestampsAsNil(t *testing.T) {
+	summary, err := genericOperationResultMap(&platformv2.OperationResult{
+		Operation:        &platformv2.OperationRef{TargetGeneration: 1},
+		State:            platformv2.OperationState_OPERATION_STATE_SUCCEEDED,
+		AccountKey:       "cn:resolved-account",
+		CredentialStatus: platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE,
 	})
 
 	require.NoError(t, err)
@@ -1016,8 +944,8 @@ func TestGenericCredentialSummaryMapPreservesMissingTimestampsAsNil(t *testing.T
 	require.NotEqual(t, "1970-01-01T00:00:00Z", summary["last_refreshed_at"])
 }
 
-func TestGenericCredentialSummaryMapRejectsMissingSummary(t *testing.T) {
-	summary, err := genericCredentialSummaryMap(nil)
+func TestGenericOperationResultMapRejectsMissingResult(t *testing.T) {
+	summary, err := genericOperationResultMap(nil)
 
 	require.Error(t, err)
 	require.Nil(t, summary)
@@ -1030,8 +958,11 @@ func TestCreateBindingForOwnerReturnsCommittedBindingWhenProfileSyncFails(t *tes
 		ticket:   "service-ticket",
 	}
 	gateway := &fakeCredentialGateway{summary: map[string]any{
-		"platform_account_id": "cn:resolved-account",
-		"status":              "active",
+		"platform_account_id":       "cn:resolved-account",
+		"status":                    "active",
+		"profile_snapshot_complete": true,
+		"profile_revision":          uint64(1),
+		"profile_observed_revision": uint64(1),
 		"profiles": []map[string]any{{
 			"id":         uint64(42),
 			"game_biz":   "hk4e_cn",

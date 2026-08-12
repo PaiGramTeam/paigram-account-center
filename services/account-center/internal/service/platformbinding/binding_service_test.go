@@ -326,6 +326,32 @@ func TestPersistRuntimeSummaryUpdatesResolvedIdentityAndStatus(t *testing.T) {
 	assert.True(t, updated.LastSyncedAt.Valid)
 }
 
+func TestPersistRuntimeSummaryDoesNotRegressGenerationOrProfileObservation(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	service := NewBindingService(db)
+	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
+	require.NoError(t, db.Create(&owner).Error)
+	binding, err := service.CreateBinding(CreateBindingInput{
+		OwnerUserID: owner.ID, Platform: "mihomo", PlatformServiceKey: "mihomo", DisplayName: "Monotonic",
+	})
+	require.NoError(t, err)
+
+	newer, err := service.PersistRuntimeSummary(binding.ID, RuntimeSummary{
+		Generation: 5, Status: "active", ProfileRevision: 5, ProfileObservedRevision: 5,
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), newer.Generation)
+
+	stored, err := service.PersistRuntimeSummary(binding.ID, RuntimeSummary{
+		Generation: 4, Status: "invalid", ProfileRevision: 4, ProfileObservedRevision: 4,
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint64(5), stored.Generation)
+	require.Equal(t, uint64(5), stored.ProfileRevision)
+	require.Equal(t, uint64(5), stored.ProfileObservedRevision)
+	require.Equal(t, model.PlatformAccountBindingStatusActive, stored.Status)
+}
+
 func TestUpsertGrantIsIdempotentAndRevokeMarksGrantRevoked(t *testing.T) {
 	db := setupPlatformBindingTestDB(t)
 	grantService := NewGrantService(db)

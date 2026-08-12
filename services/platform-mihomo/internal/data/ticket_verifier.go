@@ -5,7 +5,6 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
@@ -16,33 +15,53 @@ import (
 
 var ErrGrantVersionRevoked = errors.New("service ticket grant version revoked")
 
+const maximumServiceTicketTTL = 5 * time.Minute
+
 type TicketVerifier struct {
-	issuer   string
-	resolver PublicKeyResolver
-	lookup   GrantVersionLookup
+	issuer             string
+	resolver           PublicKeyResolver
+	lookup             GrantVersionLookup
+	authorizationState AuthorizationStateLookup
+}
+
+type AuthorizationState struct {
+	MinimumGrantVersion  uint64
+	MinimumOwnerEpoch    uint64
+	MinimumConsumerEpoch uint64
+	MinimumEntryEpoch    uint64
+	CredentialGeneration uint64
+}
+
+type AuthorizationStateLookup interface {
+	LookupAuthorizationState(ctx context.Context, bindingRef, consumer string) (AuthorizationState, error)
 }
 
 type GrantVersionLookup interface {
-	MinimumVersion(ctx context.Context, bindingID uint64, consumer string) (uint64, error)
+	MinimumVersion(ctx context.Context, bindingRef string, consumer string) (uint64, error)
 }
 
 type serviceTicketJWTClaims struct {
-	ActorType          string   `json:"actor_type"`
-	ActorID            string   `json:"actor_id"`
-	OwnerUserID        uint64   `json:"owner_user_id"`
-	BindingID          uint64   `json:"binding_id"`
-	Platform           string   `json:"platform"`
-	PlatformAccountID  string   `json:"platform_account_id"`
-	Consumer           string   `json:"consumer"`
-	GrantVersion       uint64   `json:"grant_version"`
-	ProfileID          uint64   `json:"profile_id"`
-	Scopes             []string `json:"scopes"`
-	AllowedActions     []string `json:"allowed_actions"`
-	Audience           string   `json:"audience"`
-	BotID              string   `json:"bot_id"`
-	UserID             uint64   `json:"user_id"`
-	PlatformServiceKey string   `json:"platform_service_key"`
-	TicketType         string   `json:"typ"`
+	ActorType            string   `json:"actor_type"`
+	ActorID              string   `json:"actor_id"`
+	OwnerUserRef         string   `json:"owner_user_ref"`
+	EntryIdentityRef     string   `json:"entry_identity_ref"`
+	BindingRef           string   `json:"binding_ref"`
+	Platform             string   `json:"platform"`
+	AccountKey           string   `json:"account_key"`
+	Consumer             string   `json:"consumer"`
+	ConsumerPrincipal    string   `json:"consumer_principal"`
+	GrantVersion         uint64   `json:"grant_version"`
+	OwnerEpoch           uint64   `json:"owner_epoch"`
+	ConsumerEpoch        uint64   `json:"consumer_epoch"`
+	EntryEpoch           uint64   `json:"entry_epoch"`
+	CredentialGeneration uint64   `json:"credential_generation"`
+	OperationID          string   `json:"operation_id"`
+	ProfileRef           string   `json:"profile_ref"`
+	Scopes               []string `json:"scopes"`
+	AllowedActions       []string `json:"allowed_actions"`
+	BotID                string   `json:"bot_id"`
+	PlatformServiceKey   string   `json:"platform_service_key"`
+	TicketType           string   `json:"typ"`
 	jwt.RegisteredClaims
 }
 
@@ -60,6 +79,11 @@ func NewStaticKeyTicketVerifier(issuer, kid string, publicKey ed25519.PublicKey)
 
 func (v *TicketVerifier) WithGrantVersionLookup(lookup GrantVersionLookup) *TicketVerifier {
 	v.lookup = lookup
+	return v
+}
+
+func (v *TicketVerifier) WithAuthorizationStateLookup(lookup AuthorizationStateLookup) *TicketVerifier {
+	v.authorizationState = lookup
 	return v
 }
 
@@ -104,34 +128,53 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 	if claims.ActorID == "" {
 		return nil, fmt.Errorf("service ticket missing actor_id")
 	}
-	if claims.OwnerUserID == 0 {
-		return nil, fmt.Errorf("service ticket missing owner_user_id")
-	}
-	if claims.BindingID == 0 {
-		return nil, fmt.Errorf("service ticket missing binding_id")
+	if claims.BindingRef == "" {
+		return nil, fmt.Errorf("service ticket missing binding_ref")
 	}
 	if claims.Platform == "" {
 		return nil, fmt.Errorf("service ticket missing platform")
+	}
+	if len(claims.Audience) != 1 || claims.Audience[0] != expectedAudience {
+		return nil, fmt.Errorf("service ticket audience must be a single exact value")
+	}
+	if claims.ExpiresAt == nil || claims.IssuedAt == nil || claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) <= 0 || claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time) > maximumServiceTicketTTL {
+		return nil, fmt.Errorf("service ticket lifetime exceeds the allowed profile")
 	}
 	if claims.ActorType == "consumer" {
 		if ticketType != contractticket.TypeDelegation {
 			return nil, fmt.Errorf("consumer ticket must use delegation typ")
 		}
-		if claims.Consumer == "" {
-			return nil, fmt.Errorf("service ticket missing consumer")
+		if claims.Consumer == "" || claims.ConsumerPrincipal == "" || claims.Consumer != claims.ConsumerPrincipal {
+			return nil, fmt.Errorf("service ticket missing consumer principal")
 		}
-		if claims.GrantVersion == 0 {
-			return nil, fmt.Errorf("service ticket missing grant_version")
+		if claims.OwnerUserRef == "" || claims.EntryIdentityRef == "" {
+			return nil, fmt.Errorf("service ticket missing stable identity reference")
+		}
+		if claims.GrantVersion == 0 || claims.OwnerEpoch == 0 || claims.ConsumerEpoch == 0 || claims.EntryEpoch == 0 || claims.CredentialGeneration == 0 {
+			return nil, fmt.Errorf("service ticket missing authorization version")
 		}
 		if claims.Subject != "consumer:"+claims.Consumer {
 			return nil, fmt.Errorf("service ticket subject does not match consumer")
 		}
 		if v.lookup != nil {
-			minimum, err := v.lookup.MinimumVersion(ctx, claims.BindingID, claims.Consumer)
+			minimum, err := v.lookup.MinimumVersion(ctx, claims.BindingRef, claims.Consumer)
 			if err != nil {
 				return nil, err
 			}
 			if minimum > 0 && claims.GrantVersion < minimum {
+				return nil, ErrGrantVersionRevoked
+			}
+		}
+		if v.authorizationState != nil {
+			state, err := v.authorizationState.LookupAuthorizationState(ctx, claims.BindingRef, claims.Consumer)
+			if err != nil {
+				return nil, err
+			}
+			if claims.GrantVersion < state.MinimumGrantVersion ||
+				claims.OwnerEpoch < state.MinimumOwnerEpoch ||
+				claims.ConsumerEpoch < state.MinimumConsumerEpoch ||
+				claims.EntryEpoch < state.MinimumEntryEpoch ||
+				claims.CredentialGeneration != state.CredentialGeneration {
 				return nil, ErrGrantVersionRevoked
 			}
 		}
@@ -141,7 +184,10 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 		}
 		switch claims.ActorType {
 		case "user", "admin":
-			if claims.Subject != "user:"+strconv.FormatUint(claims.OwnerUserID, 10) {
+			if claims.OwnerUserRef == "" {
+				return nil, fmt.Errorf("service ticket missing owner_user_ref")
+			}
+			if claims.Subject != "user:"+claims.OwnerUserRef {
 				return nil, fmt.Errorf("service ticket subject does not match owner")
 			}
 		case "system":
@@ -152,30 +198,31 @@ func (v *TicketVerifier) VerifyContext(ctx context.Context, raw string, expected
 			return nil, fmt.Errorf("unsupported service ticket actor_type")
 		}
 	}
-	userID := claims.OwnerUserID
-	if claims.UserID != 0 {
-		userID = claims.UserID
-	}
 	actions := claims.Scopes
 	if len(claims.AllowedActions) > 0 {
 		actions = claims.AllowedActions
 	}
 
 	return &biz.ServiceTicketClaims{
-		TicketType:         ticketType,
-		ActorType:          claims.ActorType,
-		ActorID:            claims.ActorID,
-		OwnerUserID:        claims.OwnerUserID,
-		BindingID:          claims.BindingID,
-		Platform:           claims.Platform,
-		PlatformAccountID:  claims.PlatformAccountID,
-		Consumer:           claims.Consumer,
-		GrantVersion:       claims.GrantVersion,
-		ProfileID:          claims.ProfileID,
-		Scopes:             actions,
-		Audience:           expectedAudience,
-		BotID:              claims.BotID,
-		UserID:             userID,
-		PlatformServiceKey: claims.PlatformServiceKey,
+		TicketType:           ticketType,
+		ActorType:            claims.ActorType,
+		ActorID:              claims.ActorID,
+		OwnerUserRef:         claims.OwnerUserRef,
+		EntryIdentityRef:     claims.EntryIdentityRef,
+		BindingRef:           claims.BindingRef,
+		Platform:             claims.Platform,
+		AccountKey:           claims.AccountKey,
+		Consumer:             claims.Consumer,
+		GrantVersion:         claims.GrantVersion,
+		OwnerEpoch:           claims.OwnerEpoch,
+		ConsumerEpoch:        claims.ConsumerEpoch,
+		EntryEpoch:           claims.EntryEpoch,
+		CredentialGeneration: claims.CredentialGeneration,
+		OperationID:          claims.OperationID,
+		ProfileRef:           claims.ProfileRef,
+		Scopes:               actions,
+		Audience:             expectedAudience,
+		BotID:                claims.BotID,
+		PlatformServiceKey:   claims.PlatformServiceKey,
 	}, nil
 }

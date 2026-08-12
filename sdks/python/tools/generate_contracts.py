@@ -13,7 +13,9 @@ PROTO_ROOT = REPOSITORY_ROOT / "contracts" / "proto"
 OUTPUT_ROOT = SDK_ROOT / "src" / "paigram_account_sdk" / "_generated"
 PROTO_FILES = (
     "account/v1/bot_access.proto",
-    "platform/v1/platform.proto",
+    "platform/v2/types.proto",
+    "platform/v2/control.proto",
+    "mihomo/v2/runtime.proto",
 )
 logger = logging.getLogger(__name__)
 
@@ -50,14 +52,19 @@ def main() -> int:
         (OUTPUT_ROOT / package / "__init__.py").touch()
 
     top_level_packages = {Path(proto_file).parts[0] for proto_file in PROTO_FILES}
-    for generated_stub in OUTPUT_ROOT.rglob("*_pb2_grpc.py"):
-        source = generated_stub.read_text(encoding="utf-8")
+    generated_modules = (
+        *OUTPUT_ROOT.rglob("*_pb2*.py"),
+        *OUTPUT_ROOT.rglob("*_pb2*.pyi"),
+    )
+    for generated_module in generated_modules:
+        source = generated_module.read_text(encoding="utf-8")
         for package in top_level_packages:
-            source = source.replace(
-                f"from {package}.v1 import ",
-                f"from paigram_account_sdk._generated.{package}.v1 import ",
-            )
-        generated_stub.write_text(source, encoding="utf-8", newline="\n")
+            for version in ("v1", "v2"):
+                source = source.replace(
+                    f"from {package}.{version} import ",
+                    f"from paigram_account_sdk._generated.{package}.{version} import ",
+                )
+        generated_module.write_text(source, encoding="utf-8", newline="\n")
     logger.info("Python contract generation completed")
     return 0
 

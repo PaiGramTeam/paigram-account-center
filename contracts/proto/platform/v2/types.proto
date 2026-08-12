@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package paigram.platform.v2;
+
+option go_package = "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2;platformv2";
+
+import "google/protobuf/timestamp.proto";
+
+enum CredentialStatus {
+  CREDENTIAL_STATUS_UNSPECIFIED = 0;
+  CREDENTIAL_STATUS_ACTIVE = 1;
+  CREDENTIAL_STATUS_EXPIRED = 2;
+  CREDENTIAL_STATUS_INVALID = 3;
+  CREDENTIAL_STATUS_CHALLENGE_REQUIRED = 4;
+}
+
+message BindingResource {
+  string binding_ref = 1;
+  string account_key = 2;
+}
+
+message DeviceSummary {
+  string device_ref = 1;
+  string device_name = 2;
+  bool is_valid = 3;
+  google.protobuf.Timestamp last_seen_at = 4;
+}
+
+message ProfileSummary {
+  string profile_ref = 1;
+  string account_key = 2;
+  string game_biz = 3;
+  string region = 4;
+  string player_id = 5;
+  string nickname = 6;
+  int32 level = 7;
+  bool is_default = 8;
+}
+
+message ProfileSnapshot {
+  repeated ProfileSummary profiles = 1;
+  bool complete = 2;
+  uint64 revision = 3;
+  uint64 observed_revision = 4;
+}
+
+enum OperationKind {
+  OPERATION_KIND_UNSPECIFIED = 0;
+  OPERATION_KIND_BIND_CREDENTIAL = 1;
+  OPERATION_KIND_REPLACE_CREDENTIAL = 2;
+  OPERATION_KIND_REFRESH_CREDENTIAL = 3;
+  OPERATION_KIND_DELETE_CREDENTIAL = 4;
+  OPERATION_KIND_APPLY_AUTHORIZATION_FENCE = 5;
+}
+
+enum OperationState {
+  OPERATION_STATE_UNSPECIFIED = 0;
+  OPERATION_STATE_PENDING = 1;
+  OPERATION_STATE_SUCCEEDED = 2;
+  OPERATION_STATE_FAILED = 3;
+  OPERATION_STATE_NOT_RECEIVED = 4;
+  OPERATION_STATE_FAILED_INPUT_REQUIRED = 5;
+}
+
+message OperationRef {
+  string operation_id = 1;
+  OperationKind kind = 2;
+  string binding_ref = 3;
+  uint64 pre_generation = 4;
+  uint64 target_generation = 5;
+  string request_fingerprint = 6;
+}
+
+message OperationResult {
+  OperationRef operation = 1;
+  OperationState state = 2;
+  string reason_code = 3;
+  string account_key = 4;
+  CredentialStatus credential_status = 5;
+  ProfileSnapshot profile_snapshot = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  google.protobuf.Timestamp last_validated_at = 8;
+  google.protobuf.Timestamp last_refreshed_at = 9;
+}
+
+message BindingState {
+  bool exists = 1;
+  string binding_ref = 2;
+  string account_key = 3;
+  uint64 credential_generation = 4;
+  CredentialStatus credential_status = 5;
+  ProfileSnapshot profile_snapshot = 6;
+  google.protobuf.Timestamp last_validated_at = 7;
+  google.protobuf.Timestamp last_refreshed_at = 8;
+}

@@ -5,13 +5,15 @@ package integration
 import (
 	"context"
 	"crypto/ed25519"
-	"database/sql"
 	"net"
-	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	mihomov2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/mihomo/v2"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
@@ -32,308 +34,385 @@ const (
 	integrationTicketIssuer   = "paigram-account-center"
 	integrationTicketAudience = "platform-mihomo-service"
 	integrationTicketKeyID    = "integration-service-ticket-key"
+	integrationBindingRef     = "bind_integration_101"
 	bufConnAddress            = "bufnet"
-	testBindingID             = uint64(101)
 )
 
-var (
-	integrationEncryptionKey    = []byte("0123456789abcdef0123456789abcdef")
-	integrationTicketPrivateKey = ed25519.NewKeyFromSeed([]byte("abcdef0123456789abcdef0123456789"))
-)
+var integrationEncryptionKey = []byte("0123456789abcdef0123456789abcdef")
+var integrationTicketPrivateKey = ed25519.NewKeyFromSeed([]byte("abcdef0123456789abcdef0123456789"))
 
-func TestBindThenGetAuthKeyFlow(t *testing.T) {
+func TestV2BindRuntimeAndDeleteFlow(t *testing.T) {
 	stack := newIntegrationStack(t)
-	client := newMihomoClientForTest(t, stack)
-
-	bindResp, err := client.BindCredential(testTicket(t), validBindRequest())
+	control, runtime := newV2ClientsForTest(t, stack)
+	descriptor, err := runtime.DescribePlatform(context.Background(), &mihomov2.DescribePlatformRequest{})
 	require.NoError(t, err)
-	require.NotNil(t, bindResp.Summary)
-	require.NotEmpty(t, bindResp.Summary.PlatformAccountId)
-	require.NotEmpty(t, bindResp.Summary.Profiles)
-	platformAccountID := bindResp.Summary.PlatformAccountId
-	playerID := bindResp.Summary.Profiles[0].PlayerId
+	require.Equal(t, "v2", descriptor.GetContractVersion())
 
-	authResp, err := client.GetAuthKey(testTicketForAccount(t, platformAccountID, "mihomo.authkey.issue"), platformAccountID, playerID)
-	require.NoError(t, err)
-	require.NotEmpty(t, authResp.Authkey)
-
-	artifact := requireRuntimeArtifact(t, stack.SQLDB, platformAccountID, playerID)
-	require.Equal(t, authResp.Authkey, artifact.ArtifactValue)
-	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 1)
-	if stack.Redis != nil {
-		requireRedisArtifactCached(t, stack, testBindingID, platformAccountID, playerID, authResp.Authkey)
+	credentialPayload := `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"device-integration","device_fp":"fingerprint-integration","device_name":"integration-device"}`
+	bindOperation := operationRef("bind-op", platformv2.OperationKind_OPERATION_KIND_BIND_CREDENTIAL, 0, 1)
+	bindRequest := &platformv2.BindCredentialRequest{
+		Operation:             bindOperation,
+		CredentialPayloadJson: credentialPayload,
 	}
-
-	secondAuthResp, err := client.GetAuthKey(testTicketForAccount(t, platformAccountID, "mihomo.authkey.issue"), platformAccountID, playerID)
+	bindResponse, err := control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), bindRequest)
 	require.NoError(t, err)
-	require.Equal(t, authResp.Authkey, secondAuthResp.Authkey)
-	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 1)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, bindResponse.GetResult().GetState())
+	accountKey := bindResponse.GetResult().GetAccountKey()
+	require.NotEmpty(t, accountKey)
+	require.NotContains(t, accountKey, integrationBindingRef)
+
+	profiles, err := runtime.ListProfiles(
+		ticketContext(t, accountKey, "mihomo.profile.read"),
+		&mihomov2.ListProfilesRequest{Resource: bindingResource(accountKey)},
+	)
+	require.NoError(t, err)
+	require.True(t, profiles.GetSnapshot().GetComplete())
+	require.Equal(t, uint64(1), profiles.GetSnapshot().GetRevision())
+	require.Len(t, profiles.GetSnapshot().GetProfiles(), 1)
+	profileRef := profiles.GetSnapshot().GetProfiles()[0].GetProfileRef()
+	require.NotEmpty(t, profileRef)
+	primary, err := runtime.GetPrimaryProfile(
+		ticketContext(t, accountKey, "mihomo.profile.read"),
+		&mihomov2.GetPrimaryProfileRequest{Resource: bindingResource(accountKey)},
+	)
+	require.NoError(t, err)
+	require.Equal(t, profileRef, primary.GetProfile().GetProfileRef())
+	validated, err := runtime.ValidateCredential(
+		ticketContext(t, accountKey, "mihomo.credential.validate"),
+		&mihomov2.ValidateCredentialRequest{Resource: bindingResource(accountKey)},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.CredentialStatus_CREDENTIAL_STATUS_ACTIVE, validated.GetStatus())
+	device, err := runtime.GetDevice(
+		ticketContext(t, accountKey, "mihomo.device.read"),
+		&mihomov2.GetDeviceRequest{Resource: bindingResource(accountKey), DeviceRef: usecase.FormatDeviceRef(accountKey, "device-integration")},
+	)
+	require.NoError(t, err)
+	require.True(t, device.GetDevice().GetIsValid())
+
+	_, err = runtime.ListProfiles(
+		ticketContextForType(t, accountKey, "mihomo.profile.read", contractticket.TypeControl),
+		&mihomov2.ListProfilesRequest{Resource: bindingResource(accountKey)},
+	)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	_, err = control.GetBindingState(
+		ticketContextForType(t, accountKey, "mihomo.binding.read", contractticket.TypeDelegation),
+		&platformv2.GetBindingStateRequest{BindingRef: integrationBindingRef},
+	)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+
+	authkey, err := runtime.GetAuthKey(
+		ticketContext(t, accountKey, "mihomo.authkey.issue"),
+		&mihomov2.GetAuthKeyRequest{Resource: bindingResource(accountKey), ProfileRef: profileRef},
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, authkey.GetAuthkey())
+	var storedAuthKey string
+	require.NoError(t, stack.DB.Raw(
+		"SELECT artifact_value FROM runtime_artifacts WHERE binding_ref = ? AND artifact_type = 'authkey'",
+		integrationBindingRef,
+	).Scan(&storedAuthKey).Error)
+	require.NotEmpty(t, storedAuthKey)
+	require.NotEqual(t, authkey.GetAuthkey(), storedAuthKey)
+	keys, err := stack.Redis.Keys(context.Background(), stack.RedisPrefix+"artifact:binding:*").Result()
+	require.NoError(t, err)
+	require.NotEmpty(t, keys)
+	cached, err := stack.Redis.Get(context.Background(), keys[0]).Result()
+	require.NoError(t, err)
+	require.False(t, strings.Contains(cached, authkey.GetAuthkey()))
+
+	replayed, err := control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), bindRequest)
+	require.NoError(t, err)
+	require.Equal(t, accountKey, replayed.GetResult().GetAccountKey())
+
+	changedPayload := credentialPayload + " "
+	changedRequest := &platformv2.BindCredentialRequest{
+		Operation:             operationRef("bind-op", platformv2.OperationKind_OPERATION_KIND_BIND_CREDENTIAL, 0, 1),
+		CredentialPayloadJson: changedPayload,
+	}
+	_, err = control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), changedRequest)
+	require.NoError(t, err)
+
+	forgedRequest := *changedRequest
+	forgedOperation := *bindOperation
+	forgedOperation.RequestFingerprint = "forged"
+	forgedRequest.Operation = &forgedOperation
+	_, err = control.BindCredential(ticketContext(t, "", "mihomo.credential.bind"), &forgedRequest)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	conflict := *bindRequest
+	conflict.Operation = operationRef("bind-op", platformv2.OperationKind_OPERATION_KIND_BIND_CREDENTIAL, 1, 2)
+	_, err = control.BindCredential(
+		ticketContextForOperation(t, "", "mihomo.credential.bind", contractticket.TypeControl, conflict.Operation.GetOperationId(), conflict.Operation.GetPreGeneration()),
+		&conflict,
+	)
+	require.Equal(t, codes.AlreadyExists, status.Code(err))
+	storedBind, err := control.GetOperation(
+		ticketContextForOperation(t, accountKey, "mihomo.operation.read", contractticket.TypeControl, bindOperation.GetOperationId(), bindOperation.GetPreGeneration()),
+		&platformv2.GetOperationRequest{OperationId: bindOperation.GetOperationId()},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, storedBind.GetResult().GetState())
+	_, err = control.GetOperation(
+		ticketContextForOperation(t, accountKey, "mihomo.operation.read", contractticket.TypeControl, "different-operation", bindOperation.GetPreGeneration()),
+		&platformv2.GetOperationRequest{OperationId: bindOperation.GetOperationId()},
+	)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	bindingState, err := control.GetBindingState(
+		ticketContext(t, accountKey, "mihomo.binding.read"),
+		&platformv2.GetBindingStateRequest{BindingRef: integrationBindingRef},
+	)
+	require.NoError(t, err)
+	require.True(t, bindingState.GetState().GetExists())
+
+	replacePayload := credentialPayload
+	replaceOperation := operationRef("replace-op", platformv2.OperationKind_OPERATION_KIND_REPLACE_CREDENTIAL, 1, 2)
+	replaced, err := control.ReplaceCredential(
+		ticketContextForOperation(t, accountKey, "mihomo.credential.update", contractticket.TypeControl, replaceOperation.GetOperationId(), replaceOperation.GetPreGeneration()),
+		&platformv2.ReplaceCredentialRequest{Operation: replaceOperation, AccountKey: accountKey, CredentialPayloadJson: replacePayload},
+	)
+	require.NoError(t, err)
+	require.True(t, replaced.GetResult().GetProfileSnapshot().GetComplete())
+
+	refreshOperation := operationRef("refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
+	refreshed, err := control.RefreshCredential(
+		ticketContextForOperation(t, accountKey, "mihomo.credential.refresh", contractticket.TypeControl, refreshOperation.GetOperationId(), refreshOperation.GetPreGeneration()),
+		&platformv2.RefreshCredentialRequest{Operation: refreshOperation, AccountKey: accountKey},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, refreshed.GetResult().GetState())
+	require.False(t, refreshed.GetResult().GetProfileSnapshot().GetComplete())
+	partialState, err := control.GetBindingState(
+		ticketContext(t, accountKey, "mihomo.binding.read"),
+		&platformv2.GetBindingStateRequest{BindingRef: integrationBindingRef},
+	)
+	require.NoError(t, err)
+	require.False(t, partialState.GetState().GetProfileSnapshot().GetComplete())
+	require.Equal(t, refreshOperation.GetTargetGeneration(), partialState.GetState().GetProfileSnapshot().GetRevision())
+	require.Equal(t, refreshOperation.GetPreGeneration(), partialState.GetState().GetProfileSnapshot().GetObservedRevision())
+
+	staleRefresh := operationRef("stale-refresh-op", platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, 2, 3)
+	_, err = control.RefreshCredential(
+		ticketContextForOperation(t, accountKey, "mihomo.credential.refresh", contractticket.TypeControl, staleRefresh.GetOperationId(), staleRefresh.GetPreGeneration()),
+		&platformv2.RefreshCredentialRequest{Operation: staleRefresh, AccountKey: accountKey},
+	)
+	require.Equal(t, codes.Aborted, status.Code(err))
+
+	currentDelegation := ticketContextForDelegationGeneration(t, accountKey, "mihomo.status.read", 3)
+	_, err = runtime.GetStatus(currentDelegation, &mihomov2.GetStatusRequest{Resource: bindingResource(accountKey)})
+	require.NoError(t, err)
+	fenceOperation := authorizationFenceOperationRef("fence-op", 3, "paigram-bot", 2, 1, 1, 1)
+	fenced, err := control.ApplyAuthorizationFence(
+		ticketContextForOperation(t, accountKey, "mihomo.authorization.fence.apply", contractticket.TypeControl, fenceOperation.GetOperationId(), fenceOperation.GetPreGeneration()),
+		&platformv2.ApplyAuthorizationFenceRequest{Operation: fenceOperation, ConsumerPrincipal: "paigram-bot", MinimumGrantVersion: 2, MinimumOwnerEpoch: 1, MinimumConsumerEpoch: 1, MinimumEntryEpoch: 1},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, fenced.GetResult().GetState())
+	_, err = runtime.GetStatus(currentDelegation, &mihomov2.GetStatusRequest{Resource: bindingResource(accountKey)})
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	conflictingFenceOperation := authorizationFenceOperationRef("fence-op", 3, "paigram-bot", 3, 1, 1, 1)
+	_, err = control.ApplyAuthorizationFence(
+		ticketContextForOperation(t, accountKey, "mihomo.authorization.fence.apply", contractticket.TypeControl, conflictingFenceOperation.GetOperationId(), conflictingFenceOperation.GetPreGeneration()),
+		&platformv2.ApplyAuthorizationFenceRequest{Operation: conflictingFenceOperation, ConsumerPrincipal: "paigram-bot", MinimumGrantVersion: 3, MinimumOwnerEpoch: 1, MinimumConsumerEpoch: 1, MinimumEntryEpoch: 1},
+	)
+	require.Equal(t, codes.AlreadyExists, status.Code(err))
+
+	deleted, err := control.DeleteCredential(
+		ticketContext(t, accountKey, "mihomo.credential.delete"),
+		&platformv2.DeleteCredentialRequest{
+			Operation:  operationRef("delete-op", platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL, 3, 4),
+			AccountKey: accountKey,
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_SUCCEEDED, deleted.GetResult().GetState())
+	absent, err := control.GetBindingState(
+		ticketContext(t, accountKey, "mihomo.binding.read"),
+		&platformv2.GetBindingStateRequest{BindingRef: integrationBindingRef},
+	)
+	require.NoError(t, err)
+	require.False(t, absent.GetState().GetExists())
+
+	_, err = runtime.GetStatus(
+		ticketContext(t, accountKey, "mihomo.status.read"),
+		&mihomov2.GetStatusRequest{Resource: bindingResource(accountKey)},
+	)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+
+	lateOperation := operationRef("late-delete-op", platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL, 4, 5)
+	resolved, err := control.ResolveOperation(
+		ticketContextForOperation(t, accountKey, "mihomo.operation.resolve", contractticket.TypeControl, lateOperation.GetOperationId(), lateOperation.GetPreGeneration()),
+		&platformv2.ResolveOperationRequest{Operation: lateOperation},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_NOT_RECEIVED, resolved.GetResult().GetState())
+	late, err := control.DeleteCredential(
+		ticketContextForOperation(t, accountKey, "mihomo.credential.delete", contractticket.TypeControl, lateOperation.GetOperationId(), lateOperation.GetPreGeneration()),
+		&platformv2.DeleteCredentialRequest{Operation: lateOperation, AccountKey: accountKey},
+	)
+	require.NoError(t, err)
+	require.Equal(t, platformv2.OperationState_OPERATION_STATE_NOT_RECEIVED, late.GetResult().GetState())
 }
 
-func TestUpdateThenDeleteCredentialFlow(t *testing.T) {
-	stack := newIntegrationStack(t)
-	client := newMihomoClientForTest(t, stack)
-
-	bindResp, err := client.BindCredential(testTicket(t), validBindRequest())
-	require.NoError(t, err)
-	require.NotNil(t, bindResp.Summary)
-	platformAccountID := bindResp.Summary.PlatformAccountId
-	playerID := bindResp.Summary.Profiles[0].PlayerId
-
-	authResp, err := client.GetAuthKey(testTicketForAccount(t, platformAccountID, "mihomo.authkey.issue"), platformAccountID, playerID)
-	require.NoError(t, err)
-	require.NotEmpty(t, authResp.Authkey)
-	requireRuntimeArtifact(t, stack.SQLDB, platformAccountID, playerID)
-	if stack.Redis != nil {
-		requireRedisArtifactCached(t, stack, testBindingID, platformAccountID, playerID, authResp.Authkey)
-	}
-
-	summaryResp, err := client.GetCredentialSummary(testTicketForAccount(t, platformAccountID, "mihomo.credential.read_meta"), platformAccountID)
-	require.NoError(t, err)
-	require.Equal(t, platformAccountID, summaryResp.PlatformAccountId)
-	require.Len(t, summaryResp.Devices, 1)
-	require.Len(t, summaryResp.Profiles, 1)
-
-	updateResp, err := client.ReplaceCredential(testTicketForAccount(t, platformAccountID, "mihomo.credential.update"), &platformv1.ReplaceCredentialRequest{
-		PlatformAccountId:     platformAccountID,
-		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"updated\"}","device_id":"87654321-4321-4321-4321-cba987654321","device_fp":"zyxwvutsrqponm","device_name":"updated-device","region_hint":"cn_gf01"}`,
-	})
-	require.NoError(t, err)
-	require.NotNil(t, updateResp.Summary)
-	require.Len(t, updateResp.Summary.Devices, 2)
-	require.Equal(t, "87654321-4321-4321-4321-cba987654321", updateResp.Summary.Devices[1].DeviceId)
-	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 0)
-
-	deleteResp, err := client.DeleteCredential(testTicketForAccount(t, platformAccountID, "mihomo.credential.delete"), platformAccountID)
-	require.NoError(t, err)
-	require.True(t, deleteResp.Success)
-
-	_, err = client.GetCredentialSummary(testTicketForAccount(t, platformAccountID, "mihomo.credential.read_meta"), platformAccountID)
-	require.Error(t, err)
-	require.Equal(t, codes.NotFound, status.Code(err))
-	requireRuntimeArtifactCount(t, stack.SQLDB, platformAccountID, 0)
-	if stack.Redis != nil {
-		requireRedisArtifactMissing(t, stack, testBindingID, platformAccountID, playerID)
-	}
-}
-
-type testMihomoClient struct {
-	client platformv1.PlatformServiceClient
-	t      *testing.T
-}
-
-func newMihomoClientForTest(t *testing.T, stack *integrationStack) *testMihomoClient {
+func newV2ClientsForTest(t *testing.T, stack *integrationStack) (platformv2.PlatformControlServiceClient, mihomov2.MihomoRuntimeServiceClient) {
 	t.Helper()
-
 	credentialRepo := data.NewCredentialRepo(stack.DB)
 	deviceRepo := data.NewDeviceRepo(stack.DB)
 	profileRepo := data.NewProfileRepo(stack.DB)
 	artifactRepo := data.NewArtifactRepo(stack.DB, stack.Redis, stack.RedisPrefix)
 	managementRepo := data.NewManagementRepo(stack.DB, stack.Redis, stack.RedisPrefix)
-	hoyoClient := mihomostub.Client{}
-	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, hoyoClient, integrationEncryptionKey, artifactRepo)
+	grantRepo := data.NewGrantInvalidationRepo(stack.DB)
+	client := mihomostub.Client{}
+	verifier := data.NewStaticKeyTicketVerifier(integrationTicketIssuer, integrationTicketKeyID, integrationTicketPrivateKey.Public().(ed25519.PublicKey)).
+		WithGrantVersionLookup(grantRepo).
+		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(stack.DB))
+	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, integrationEncryptionKey, artifactRepo)
+	statusUC := usecase.NewStatusUsecase(credentialRepo, client, integrationEncryptionKey)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
-
-	svc := service.NewGenericPlatformService(
-		data.NewStaticKeyTicketVerifier(integrationTicketIssuer, integrationTicketKeyID, integrationTicketPrivateKey.Public().(ed25519.PublicKey)),
+	managementUC := usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC)
+	controlService := service.NewPlatformControlService(
+		verifier,
+		usecase.NewOperationUsecase(data.NewOperationRepo(stack.DB)),
 		bindUC,
-		usecase.NewStatusUsecase(credentialRepo, hoyoClient, integrationEncryptionKey),
-		usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC),
-		nil,
-	).WithConsumerUsecases(profileUC, usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, hoyoClient, integrationEncryptionKey))
+		statusUC,
+		managementUC,
+		credentialRepo,
+		data.NewAuthorizationFenceRepo(stack.DB),
+		grantRepo,
+	)
+	runtimeService := service.NewMihomoRuntimeService(
+		verifier,
+		statusUC,
+		profileUC,
+		usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, client, integrationEncryptionKey),
+		managementUC,
+		deviceRepo,
+	)
 
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	platformv1.RegisterPlatformServiceServer(server, svc)
-
-	go func() {
-		_ = server.Serve(listener)
-	}()
-
+	platformv2.RegisterPlatformControlServiceServer(server, controlService)
+	mihomov2.RegisterMihomoRuntimeServiceServer(server, runtimeService)
+	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(func() {
 		server.Stop()
 		_ = listener.Close()
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(cancel)
-
-	conn, err := grpc.DialContext(ctx, bufConnAddress,
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
+		bufConnAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return listener.Dial()
-		}),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-
-	return &testMihomoClient{client: platformv1.NewPlatformServiceClient(conn), t: t}
+	return platformv2.NewPlatformControlServiceClient(conn), mihomov2.NewMihomoRuntimeServiceClient(conn)
 }
 
-func (c *testMihomoClient) BindCredential(serviceTicket string, request *platformv1.BindCredentialRequest) (*platformv1.BindCredentialResponse, error) {
-	c.t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return c.client.BindCredential(withServiceTicket(ctx, serviceTicket), request)
+func ticketContext(t *testing.T, accountKey string, action string) context.Context {
+	ticketType := contractticket.TypeControl
+	if platformaction.IsMihomoDelegationAction(action) {
+		ticketType = contractticket.TypeDelegation
+	}
+	return ticketContextForType(t, accountKey, action, ticketType)
 }
 
-func (c *testMihomoClient) GetAuthKey(serviceTicket string, platformAccountID string, playerID string) (*platformv1.GetAuthKeyResponse, error) {
-	c.t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return c.client.GetAuthKey(withServiceTicket(ctx, serviceTicket), &platformv1.GetAuthKeyRequest{
-		PlatformAccountId: platformAccountID,
-		PlayerId:          playerID,
-	})
+func ticketContextForDelegationGeneration(t *testing.T, accountKey, action string, generation uint64) context.Context {
+	return ticketContextForOperation(t, accountKey, action, contractticket.TypeDelegation, "", generation)
 }
 
-func (c *testMihomoClient) GetCredentialSummary(serviceTicket string, platformAccountID string) (*platformv1.GetCredentialSummaryResponse, error) {
-	c.t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return c.client.GetCredentialSummary(withServiceTicket(ctx, serviceTicket), &platformv1.GetCredentialSummaryRequest{
-		PlatformAccountId: platformAccountID,
-	})
+func ticketContextForType(t *testing.T, accountKey string, action string, ticketType string) context.Context {
+	operationID := ""
+	credentialGeneration := uint64(0)
+	switch action {
+	case "mihomo.credential.bind":
+		operationID = "bind-op"
+	case "mihomo.credential.delete":
+		operationID = "delete-op"
+		credentialGeneration = 3
+	}
+	return ticketContextForOperation(t, accountKey, action, ticketType, operationID, credentialGeneration)
 }
 
-func (c *testMihomoClient) ReplaceCredential(serviceTicket string, request *platformv1.ReplaceCredentialRequest) (*platformv1.ReplaceCredentialResponse, error) {
-	c.t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return c.client.ReplaceCredential(withServiceTicket(ctx, serviceTicket), request)
-}
-
-func (c *testMihomoClient) DeleteCredential(serviceTicket string, platformAccountID string) (*platformv1.DeleteCredentialResponse, error) {
-	c.t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return c.client.DeleteCredential(withServiceTicket(ctx, serviceTicket), &platformv1.DeleteCredentialRequest{
-		PlatformAccountId: platformAccountID,
-	})
-}
-
-func withServiceTicket(ctx context.Context, serviceTicket string) context.Context {
-	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+serviceTicket)
-}
-
-type runtimeArtifactRecord struct {
-	BindingID     uint64
-	ArtifactValue string
-	ScopeKey      string
-}
-
-func requireRuntimeArtifact(t *testing.T, db *sql.DB, platformAccountID string, playerID string) runtimeArtifactRecord {
-	t.Helper()
-
-	const query = `
-		SELECT binding_id, artifact_value, scope_key
-		FROM runtime_artifacts
-		WHERE platform_account_id = $1 AND artifact_type = $2 AND scope_key = $3
-		LIMIT 1
-	`
-
-	var record runtimeArtifactRecord
-	err := db.QueryRow(query, platformAccountID, "authkey", playerID).Scan(&record.BindingID, &record.ArtifactValue, &record.ScopeKey)
-	require.NoError(t, err)
-	return record
-}
-
-func requireRuntimeArtifactCount(t *testing.T, db *sql.DB, platformAccountID string, want int) {
-	t.Helper()
-
-	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM runtime_artifacts WHERE platform_account_id = $1`, platformAccountID).Scan(&count)
-	require.NoError(t, err)
-	require.Equal(t, want, count)
-}
-
-func requireRedisArtifactCached(t *testing.T, stack *integrationStack, bindingID uint64, platformAccountID string, playerID string, expectedAuthKey string) {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	payload, err := stack.Redis.Get(ctx, redisArtifactBindingKey(stack, bindingID, playerID)).Result()
-	require.NoError(t, err)
-	require.Contains(t, payload, expectedAuthKey)
-	count, err := stack.Redis.Exists(ctx, redisArtifactKey(stack, platformAccountID, playerID)).Result()
-	require.NoError(t, err)
-	require.Zero(t, count)
-}
-
-func requireRedisArtifactMissing(t *testing.T, stack *integrationStack, bindingID uint64, platformAccountID string, playerID string) {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	count, err := stack.Redis.Exists(ctx,
-		redisArtifactBindingKey(stack, bindingID, playerID),
-		redisArtifactKey(stack, platformAccountID, playerID),
-	).Result()
-	require.NoError(t, err)
-	require.Zero(t, count)
-}
-
-func redisArtifactKey(stack *integrationStack, platformAccountID string, playerID string) string {
-	return stack.RedisPrefix + "artifact:" + platformAccountID + ":authkey:" + playerID
-}
-
-func redisArtifactBindingKey(stack *integrationStack, bindingID uint64, playerID string) string {
-	return stack.RedisPrefix + "artifact:binding:" + strconv.FormatUint(bindingID, 10) + ":authkey:" + playerID
-}
-
-func testTicket(t *testing.T) string { return testTicketForAccount(t, "", "mihomo.credential.bind") }
-
-func testTicketForAccount(t *testing.T, platformAccountID string, scopes ...string) string {
+func ticketContextForOperation(t *testing.T, accountKey string, action string, ticketType string, operationID string, credentialGeneration uint64) context.Context {
 	t.Helper()
 	now := time.Now().UTC()
-
 	claims := jwt.MapClaims{
-		"iss":                  integrationTicketIssuer,
-		"sub":                  "user:1",
-		"aud":                  []string{integrationTicketAudience},
-		"jti":                  "integration-ticket-1",
-		"actor_type":           "user",
-		"actor_id":             "integration-user-1",
-		"owner_user_id":        float64(1),
-		"binding_id":           float64(testBindingID),
-		"bot_id":               "bot-paigram",
-		"platform":             "mihomo",
-		"user_id":              float64(1),
-		"platform_service_key": integrationTicketAudience,
-		"iat":                  now.Unix(),
-		"nbf":                  now.Add(-time.Second).Unix(),
-		"exp":                  now.Add(time.Minute).Unix(),
+		"iss":            integrationTicketIssuer,
+		"aud":            []string{integrationTicketAudience},
+		"jti":            "ticket-" + action + "-" + now.Format(time.RFC3339Nano),
+		"owner_user_ref": "usr-integration-1",
+		"binding_ref":    integrationBindingRef,
+		"platform":       "mihomo",
+		"scopes":         []string{action},
+		"iat":            now.Unix(),
+		"nbf":            now.Add(-time.Second).Unix(),
+		"exp":            now.Add(time.Minute).Unix(),
 	}
-	if platformAccountID != "" {
-		claims["platform_account_id"] = platformAccountID
+	if ticketType == contractticket.TypeDelegation {
+		claims["sub"] = "consumer:paigram-bot"
+		claims["actor_type"] = "consumer"
+		claims["actor_id"] = "paigram-bot"
+		claims["consumer"] = "paigram-bot"
+		claims["consumer_principal"] = "paigram-bot"
+		claims["entry_identity_ref"] = "entry-integration-1"
+		claims["grant_version"] = float64(1)
+		claims["owner_epoch"] = float64(1)
+		claims["consumer_epoch"] = float64(1)
+		claims["entry_epoch"] = float64(1)
+		if credentialGeneration == 0 {
+			credentialGeneration = 1
+		}
+		claims["credential_generation"] = credentialGeneration
+	} else {
+		claims["sub"] = "user:usr-integration-1"
+		claims["actor_type"] = "user"
+		claims["actor_id"] = "integration-user-1"
+		claims["credential_generation"] = credentialGeneration
+		if operationID != "" {
+			claims["operation_id"] = operationID
+		}
 	}
-	if len(scopes) > 0 {
-		claims["scopes"] = scopes
+	if accountKey != "" {
+		claims["account_key"] = accountKey
 	}
 	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, claims)
 	token.Header["kid"] = integrationTicketKeyID
-	token.Header["typ"] = contractticket.TypeControl
-
-	signed, err := token.SignedString(integrationTicketPrivateKey)
+	token.Header["typ"] = ticketType
+	raw, err := token.SignedString(integrationTicketPrivateKey)
 	require.NoError(t, err)
-
-	return signed
+	return metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+raw))
 }
 
-func validBindRequest() *platformv1.BindCredentialRequest {
-	return &platformv1.BindCredentialRequest{
-		CredentialPayloadJson: `{"cookie_bundle":"{\"account_id\":\"10001\",\"cookie_token\":\"abc\"}","device_id":"12345678-1234-1234-1234-123456789abc","device_fp":"abcdefghijklmn","device_name":"integration-device"}`,
+func operationRef(id string, kind platformv2.OperationKind, pre uint64, target uint64) *platformv2.OperationRef {
+	fingerprint := operationid.Fingerprint(kind.String(), integrationBindingRef, pre, target)
+	return &platformv2.OperationRef{
+		OperationId:        id,
+		Kind:               kind,
+		BindingRef:         integrationBindingRef,
+		PreGeneration:      pre,
+		TargetGeneration:   target,
+		RequestFingerprint: fingerprint,
 	}
+}
+
+func authorizationFenceOperationRef(id string, generation uint64, consumer string, minimumGrantVersion, minimumOwnerEpoch, minimumConsumerEpoch, minimumEntryEpoch uint64) *platformv2.OperationRef {
+	return &platformv2.OperationRef{
+		OperationId:      id,
+		Kind:             platformv2.OperationKind_OPERATION_KIND_APPLY_AUTHORIZATION_FENCE,
+		BindingRef:       integrationBindingRef,
+		PreGeneration:    generation,
+		TargetGeneration: generation,
+		RequestFingerprint: operationid.AuthorizationFenceFingerprint(
+			platformv2.OperationKind_OPERATION_KIND_APPLY_AUTHORIZATION_FENCE.String(), integrationBindingRef, consumer, generation,
+			minimumGrantVersion, minimumOwnerEpoch, minimumConsumerEpoch, minimumEntryEpoch,
+		),
+	}
+}
+
+func bindingResource(accountKey string) *platformv2.BindingResource {
+	return &platformv2.BindingResource{BindingRef: integrationBindingRef, AccountKey: accountKey}
 }

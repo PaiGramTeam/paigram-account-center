@@ -14,11 +14,13 @@ const (
 	ActionStatusRead         = platformaction.MihomoStatusRead
 	ActionCredentialValidate = platformaction.MihomoCredentialValidate
 	ActionProfileRead        = platformaction.MihomoProfileRead
-	ActionProfileWrite       = platformaction.MihomoProfileWrite
 	ActionAuthKeyIssue       = platformaction.MihomoAuthKeyIssue
 	ActionCredentialBind     = platformaction.MihomoCredentialBind
-	ActionDeviceUpdate       = platformaction.MihomoDeviceUpdate
-	ActionCredentialRead     = platformaction.MihomoCredentialRead
+	ActionDeviceRead         = platformaction.MihomoDeviceRead
+	ActionBindingRead        = platformaction.MihomoBindingRead
+	ActionOperationRead      = platformaction.MihomoOperationRead
+	ActionOperationResolve   = platformaction.MihomoOperationResolve
+	ActionAuthorizationFence = platformaction.MihomoAuthorizationFenceApply
 	ActionCredentialUpdate   = platformaction.MihomoCredentialUpdate
 	ActionCredentialRefresh  = platformaction.MihomoCredentialRefresh
 	ActionCredentialDelete   = platformaction.MihomoCredentialDelete
@@ -26,8 +28,9 @@ const (
 
 type ScopeGuard struct {
 	AllowedActions map[string]struct{}
-	BindingID      uint64
-	ProfileID      uint64
+	BindingRef     string
+	AccountKey     string
+	ProfileRef     string
 }
 
 func (g ScopeGuard) RequireAction(action string) error {
@@ -37,26 +40,25 @@ func (g ScopeGuard) RequireAction(action string) error {
 	return nil
 }
 
-func (g ScopeGuard) RequirePlatformAccountID(platformAccountID string) error {
-	bindingID, err := BindingIDFromPlatformAccountID(platformAccountID)
-	if err != nil || bindingID == 0 || g.BindingID != bindingID {
+func (g ScopeGuard) RequireAccountKey(accountKey string) error {
+	if g.BindingRef == "" || g.AccountKey == "" || accountKey == "" || g.AccountKey != accountKey {
 		return ErrBindingScopeDenied
 	}
 	return nil
 }
 
 func (g ScopeGuard) RequireBindingWide() error {
-	if g.ProfileID != 0 {
+	if g.ProfileRef != "" {
 		return ErrProfileScopeDenied
 	}
 	return nil
 }
 
-func (g ScopeGuard) RequireProfile(bindingID, profileID uint64) error {
-	if g.BindingID == 0 || g.BindingID != bindingID {
+func (g ScopeGuard) RequireProfile(bindingRef, profileRef string) error {
+	if g.BindingRef == "" || g.BindingRef != bindingRef {
 		return ErrBindingScopeDenied
 	}
-	if g.ProfileID != 0 && g.ProfileID != profileID {
+	if g.ProfileRef != "" && g.ProfileRef != profileRef {
 		return ErrProfileScopeDenied
 	}
 	return nil

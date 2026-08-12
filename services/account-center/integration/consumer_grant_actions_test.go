@@ -95,7 +95,7 @@ func TestGrantServiceSerializesConcurrentActionChanges(t *testing.T) {
 	stack := newIntegrationStack(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	_, bindingID := insertGrantWithActions(t, ctx, stack, "cn:grant-service-race", "mihomo.credential.read_meta")
+	_, bindingID := insertGrantWithActions(t, ctx, stack, "cn:grant-service-race", "mihomo.status.read")
 
 	callbackName := fmt.Sprintf("test:grant-read-barrier:%d", time.Now().UnixNano())
 	readArrivals := make(chan struct{}, 8)

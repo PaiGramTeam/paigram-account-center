@@ -139,18 +139,18 @@ func TestNewTicketVerifierFromSecurityUsesConfiguredEd25519PublicKeyAndKID(t *te
 
 	now := time.Now()
 	token := jwt.NewWithClaims(contractticket.SigningMethodEd25519, jwt.MapClaims{
-		"iss":           "paigram-account-center",
-		"sub":           "user:1",
-		"aud":           []string{"platform-mihomo-service"},
-		"actor_type":    "user",
-		"actor_id":      "user-paigram",
-		"owner_user_id": float64(1),
-		"binding_id":    float64(101),
-		"platform":      "mihomo",
-		"iat":           now.Unix(),
-		"nbf":           now.Add(-time.Second).Unix(),
-		"exp":           now.Add(time.Minute).Unix(),
-		"jti":           "main-test-ticket",
+		"iss":            "paigram-account-center",
+		"sub":            "user:usr-1",
+		"owner_user_ref": "usr-1",
+		"aud":            []string{"platform-mihomo-service"},
+		"actor_type":     "user",
+		"actor_id":       "user-paigram",
+		"binding_ref":    "binding-101",
+		"platform":       "mihomo",
+		"iat":            now.Unix(),
+		"nbf":            now.Add(-time.Second).Unix(),
+		"exp":            now.Add(time.Minute).Unix(),
+		"jti":            "main-test-ticket",
 	})
 	token.Header["kid"] = mainTestServiceTicketKeyID
 	token.Header["typ"] = contractticket.TypeControl

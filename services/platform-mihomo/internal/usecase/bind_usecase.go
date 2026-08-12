@@ -11,7 +11,8 @@ import (
 )
 
 type BindCredentialInput struct {
-	BindingID        uint64
+	BindingRef       string
+	Generation       uint64
 	CookieBundleJSON string
 	DeviceID         string
 	DeviceFP         string
@@ -20,14 +21,14 @@ type BindCredentialInput struct {
 }
 
 type BindCredentialOutput struct {
-	BindingID         uint64
-	PlatformAccountID string
-	Profiles          []ProfileSummary
-	Status            CredentialStatus
+	BindingRef string
+	AccountKey string
+	Profiles   []ProfileSummary
+	Status     CredentialStatus
 }
 
 type bindCredentialPreparation struct {
-	platformAccountID  string
+	accountKey         string
 	accountID          string
 	region             string
 	discoveredProfiles []platformmihomo.DiscoveredProfile
@@ -102,8 +103,8 @@ func (uc *BindUsecase) runInTransaction(ctx context.Context, fn func(context.Con
 }
 
 func (uc *BindUsecase) prepareBindCredential(ctx context.Context, input BindCredentialInput) (*bindCredentialPreparation, error) {
-	if input.BindingID == 0 {
-		return nil, errors.New("binding id is required")
+	if input.BindingRef == "" {
+		return nil, errors.New("binding_ref is required")
 	}
 
 	accountID, region, discoveredProfiles, err := uc.client.ValidateAndDiscover(ctx, input.CookieBundleJSON, input.RegionHint)
@@ -111,14 +112,14 @@ func (uc *BindUsecase) prepareBindCredential(ctx context.Context, input BindCred
 		return nil, err
 	}
 
-	platformAccountID := FormatPlatformAccountID(input.BindingID, accountID)
+	accountKey := FormatAccountKey(accountID)
 	encryptedBlob, err := internalcrypto.EncryptString(uc.encryptionKey, input.CookieBundleJSON)
 	if err != nil {
 		return nil, err
 	}
 
 	return &bindCredentialPreparation{
-		platformAccountID:  platformAccountID,
+		accountKey:         accountKey,
 		accountID:          accountID,
 		region:             region,
 		discoveredProfiles: discoveredProfiles,
@@ -131,7 +132,7 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		return nil, errors.New("bind preparation is required")
 	}
 
-	existingCredential, err := uc.credentialRepo.GetByBindingID(ctx, input.BindingID)
+	existingCredential, err := uc.credentialRepo.GetByBindingRef(ctx, input.BindingRef)
 	if err != nil {
 		return nil, err
 	}
@@ -139,15 +140,16 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		return nil, biz.ErrCredentialAlreadyBound
 	}
 	if uc.artifactRepo != nil {
-		if err := uc.artifactRepo.DeleteByBindingID(ctx, input.BindingID); err != nil {
+		if err := uc.artifactRepo.DeleteByBindingRef(ctx, input.BindingRef); err != nil {
 			return nil, err
 		}
 	}
 
 	now := time.Now().UTC()
 	credential := &biz.Credential{
-		BindingID:         input.BindingID,
-		PlatformAccountID: prepared.platformAccountID,
+		BindingRef:        input.BindingRef,
+		AccountKey:        prepared.accountKey,
+		Generation:        input.Generation,
 		Platform:          "mihomo",
 		AccountID:         prepared.accountID,
 		Region:            prepared.region,
@@ -155,34 +157,38 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		CredentialVersion: "v1",
 		Status:            "active",
 		LastValidatedAt:   &now,
+		ProfileSnapshotComplete: true,
+		ProfileRevision:         input.Generation,
+		ProfileObservedRevision: input.Generation,
 	}
 	if err := uc.persistCredential(ctx, credential, createOnly); err != nil {
 		return nil, err
 	}
-	previousPlatformAccountID := ""
-	if existingCredential != nil && existingCredential.PlatformAccountID != "" && existingCredential.PlatformAccountID != prepared.platformAccountID {
-		previousPlatformAccountID = existingCredential.PlatformAccountID
+	previousAccountKey := ""
+	if existingCredential != nil && existingCredential.AccountKey != "" && existingCredential.AccountKey != prepared.accountKey {
+		previousAccountKey = existingCredential.AccountKey
 	}
 	rollback := true
 	defer func() {
 		if rollback {
-			_ = uc.profileRepo.DeleteByPlatformAccountID(ctx, prepared.platformAccountID)
-			_ = uc.deviceRepo.DeleteByPlatformAccountID(ctx, prepared.platformAccountID)
-			if previousPlatformAccountID != "" {
+			_ = uc.profileRepo.DeleteByAccountKey(ctx, prepared.accountKey)
+			_ = uc.deviceRepo.DeleteByAccountKey(ctx, prepared.accountKey)
+			if previousAccountKey != "" {
 				_ = uc.credentialRepo.Save(ctx, existingCredential)
 				return
 			}
-			_ = uc.credentialRepo.DeleteByPlatformAccountID(ctx, prepared.platformAccountID)
+			_ = uc.credentialRepo.DeleteByAccountKey(ctx, prepared.accountKey)
 		}
 	}()
 
 	device := &biz.Device{
-		BindingID:         input.BindingID,
-		PlatformAccountID: prepared.platformAccountID,
-		DeviceID:          input.DeviceID,
-		DeviceFP:          input.DeviceFP,
-		IsValid:           true,
-		LastSeenAt:        &now,
+		BindingRef: input.BindingRef,
+		AccountKey: prepared.accountKey,
+		DeviceRef:  FormatDeviceRef(prepared.accountKey, input.DeviceID),
+		DeviceID:   input.DeviceID,
+		DeviceFP:   input.DeviceFP,
+		IsValid:    true,
+		LastSeenAt: &now,
 	}
 	if input.DeviceName != "" {
 		deviceName := input.DeviceName
@@ -192,27 +198,28 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		return nil, err
 	}
 
-	if previousPlatformAccountID != "" {
-		if err := uc.profileRepo.DeleteByPlatformAccountID(ctx, previousPlatformAccountID); err != nil {
+	if previousAccountKey != "" {
+		if err := uc.profileRepo.DeleteByAccountKey(ctx, previousAccountKey); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := uc.profileRepo.DeleteByPlatformAccountID(ctx, prepared.platformAccountID); err != nil {
+		if err := uc.profileRepo.DeleteByAccountKey(ctx, prepared.accountKey); err != nil {
 			return nil, err
 		}
 	}
 	outputProfiles := make([]ProfileSummary, 0, len(prepared.discoveredProfiles))
 	for index, discoveredProfile := range prepared.discoveredProfiles {
 		profile := &biz.Profile{
-			BindingID:         input.BindingID,
-			PlatformAccountID: prepared.platformAccountID,
-			GameBiz:           discoveredProfile.GameBiz,
-			Region:            discoveredProfile.Region,
-			PlayerID:          discoveredProfile.PlayerID,
-			Nickname:          discoveredProfile.Nickname,
-			Level:             int(discoveredProfile.Level),
-			IsDefault:         index == 0,
-			DiscoveredAt:      now,
+			BindingRef:   input.BindingRef,
+			AccountKey:   prepared.accountKey,
+			ProfileRef:   FormatProfileRef(prepared.accountKey, discoveredProfile.GameBiz, discoveredProfile.Region, discoveredProfile.PlayerID),
+			GameBiz:      discoveredProfile.GameBiz,
+			Region:       discoveredProfile.Region,
+			PlayerID:     discoveredProfile.PlayerID,
+			Nickname:     discoveredProfile.Nickname,
+			Level:        int(discoveredProfile.Level),
+			IsDefault:    index == 0,
+			DiscoveredAt: now,
 		}
 		if err := uc.profileRepo.Save(ctx, profile); err != nil {
 			return nil, err
@@ -221,11 +228,11 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 		outputProfiles = append(outputProfiles, *toProfileSummary(profile))
 	}
 
-	if previousPlatformAccountID != "" {
-		if err := uc.deviceRepo.DeleteByPlatformAccountID(ctx, previousPlatformAccountID); err != nil {
+	if previousAccountKey != "" {
+		if err := uc.deviceRepo.DeleteByAccountKey(ctx, previousAccountKey); err != nil {
 			return nil, err
 		}
-		if err := uc.credentialRepo.DeleteByPlatformAccountID(ctx, previousPlatformAccountID); err != nil {
+		if err := uc.credentialRepo.DeleteByAccountKey(ctx, previousAccountKey); err != nil {
 			return nil, err
 		}
 	}
@@ -233,10 +240,10 @@ func (uc *BindUsecase) bindPreparedCredential(ctx context.Context, input BindCre
 	rollback = false
 
 	return &BindCredentialOutput{
-		BindingID:         input.BindingID,
-		PlatformAccountID: prepared.platformAccountID,
-		Profiles:          outputProfiles,
-		Status:            CredentialStatusActive,
+		BindingRef: input.BindingRef,
+		AccountKey: prepared.accountKey,
+		Profiles:   outputProfiles,
+		Status:     CredentialStatusActive,
 	}, nil
 }
 
@@ -247,8 +254,8 @@ func (uc *BindUsecase) persistCredential(ctx context.Context, credential *biz.Cr
 	return uc.credentialRepo.Save(ctx, credential)
 }
 
-func (uc *BindUsecase) UpsertDevice(ctx context.Context, platformAccountID string, deviceID string, deviceFP string, deviceName string) error {
-	credential, err := uc.credentialRepo.GetByPlatformAccountID(ctx, platformAccountID)
+func (uc *BindUsecase) UpsertDevice(ctx context.Context, accountKey string, deviceID string, deviceFP string, deviceName string) error {
+	credential, err := uc.credentialRepo.GetByAccountKey(ctx, accountKey)
 	if err != nil {
 		return err
 	}
@@ -257,11 +264,11 @@ func (uc *BindUsecase) UpsertDevice(ctx context.Context, platformAccountID strin
 	}
 
 	device := &biz.Device{
-		BindingID:         credential.BindingID,
-		PlatformAccountID: platformAccountID,
-		DeviceID:          deviceID,
-		DeviceFP:          deviceFP,
-		IsValid:           true,
+		BindingRef: credential.BindingRef,
+		AccountKey: accountKey,
+		DeviceID:   deviceID,
+		DeviceFP:   deviceFP,
+		IsValid:    true,
 	}
 	if deviceName != "" {
 		name := deviceName

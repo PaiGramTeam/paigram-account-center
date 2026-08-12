@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -32,6 +33,8 @@ const (
 // PlatformAccountBinding is the control-plane owner record for one external account.
 type PlatformAccountBinding struct {
 	ID                  uint64                       `gorm:"primaryKey"`
+	BindingRef          string                       `gorm:"size:64;not null;uniqueIndex:uk_platform_account_bindings_ref"`
+	Generation          uint64                       `gorm:"not null;default:0"`
 	OwnerUserID         uint64                       `gorm:"not null;index:idx_platform_account_bindings_owner"`
 	Platform            string                       `gorm:"size:64;not null"`
 	ExternalAccountKey  sql.NullString               `gorm:"size:191"`
@@ -41,16 +44,25 @@ type PlatformAccountBinding struct {
 	StatusReasonCode    string                       `gorm:"size:64"`
 	StatusReasonMessage string                       `gorm:"size:255"`
 	// PrimaryProfileID is validated in SQL against the composite (binding_id, id) key on platform_account_profiles.
-	PrimaryProfileID sql.NullInt64  `gorm:"type:bigint;index:idx_platform_account_bindings_primary_profile_id"`
-	LastValidatedAt  sql.NullTime   `gorm:"type:timestamptz"`
-	LastSyncedAt     sql.NullTime   `gorm:"type:timestamptz"`
-	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	UpdatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
+	PrimaryProfileID        sql.NullInt64  `gorm:"type:bigint;index:idx_platform_account_bindings_primary_profile_id"`
+	LastValidatedAt         sql.NullTime   `gorm:"type:timestamptz"`
+	LastSyncedAt            sql.NullTime   `gorm:"type:timestamptz"`
+	ProfileRevision         uint64         `gorm:"not null;default:0"`
+	ProfileObservedRevision uint64         `gorm:"not null;default:0"`
+	CreatedAt               time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	UpdatedAt               time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
+	DeletedAt               gorm.DeletedAt `gorm:"index"`
 
 	Owner          User                     `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:OwnerUserID;references:ID"`
 	Profiles       []PlatformAccountProfile `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BindingID;references:ID"`
 	ConsumerGrants []ConsumerGrant          `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BindingID;references:ID"`
+}
+
+func (binding *PlatformAccountBinding) BeforeCreate(*gorm.DB) error {
+	if binding.BindingRef == "" {
+		binding.BindingRef = "bind_" + uuid.NewString()
+	}
+	return nil
 }
 
 func (PlatformAccountBinding) TableName() string {
@@ -63,6 +75,7 @@ type PlatformAccountProfile struct {
 	ID                 uint64        `gorm:"primaryKey"`
 	BindingID          uint64        `gorm:"not null;uniqueIndex:uk_platform_account_profiles_binding_key,priority:1;index:idx_platform_account_profiles_binding_id"`
 	PlatformProfileKey string        `gorm:"size:191;not null;uniqueIndex:uk_platform_account_profiles_binding_key,priority:2"`
+	ProfileRef         string        `gorm:"size:64;not null;uniqueIndex:uk_platform_account_profiles_ref"`
 	GameBiz            string        `gorm:"size:64;not null"`
 	Region             string        `gorm:"size:64;not null"`
 	PlayerUID          string        `gorm:"size:64;not null;index:idx_platform_account_profiles_player_uid"`
@@ -74,6 +87,13 @@ type PlatformAccountProfile struct {
 	UpdatedAt          time.Time     `gorm:"not null;default:CURRENT_TIMESTAMP"`
 
 	Binding PlatformAccountBinding `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:BindingID;references:ID"`
+}
+
+func (profile *PlatformAccountProfile) BeforeCreate(*gorm.DB) error {
+	if profile.ProfileRef == "" {
+		profile.ProfileRef = "prof_" + uuid.NewString()
+	}
+	return nil
 }
 
 func (PlatformAccountProfile) TableName() string {

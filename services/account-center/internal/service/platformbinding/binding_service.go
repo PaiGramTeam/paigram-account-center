@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"paigram/internal/dberror"
 	"paigram/internal/model"
@@ -180,27 +181,54 @@ func (s *BindingService) UpdateBindingFailure(bindingID uint64, status model.Pla
 }
 
 func (s *BindingService) PersistRuntimeSummary(bindingID uint64, summary RuntimeSummary) (*model.PlatformAccountBinding, error) {
-	binding, err := s.GetBindingByID(bindingID)
+	var binding model.PlatformAccountBinding
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&binding, bindingID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrBindingNotFound
+			}
+			return err
+		}
+		if summary.Generation > 0 && summary.Generation < binding.Generation {
+			return nil
+		}
+
+		updates := map[string]any{
+			"status":                bindingStatusFromRuntimeSummary(summary.Status, binding.Status),
+			"status_reason_code":    statusReasonCodeFromRuntimeSummary(summary.Status),
+			"status_reason_message": "",
+			"last_validated_at":     nullableRuntimeTime(summary.LastValidatedAt),
+			"last_synced_at":        nullableRuntimeTime(summary.LastRefreshedAt),
+		}
+		if summary.PlatformAccountID != "" {
+			updates["external_account_key"] = summary.PlatformAccountID
+		}
+		if summary.Generation > 0 {
+			updates["generation"] = summary.Generation
+		}
+		if summary.ProfileObservedRevision >= binding.ProfileObservedRevision && summary.ProfileRevision >= binding.ProfileRevision {
+			updates["profile_revision"] = summary.ProfileRevision
+			updates["profile_observed_revision"] = summary.ProfileObservedRevision
+		}
+		return tx.Model(&model.PlatformAccountBinding{}).Where("id = ?", binding.ID).Updates(updates).Error
+	})
 	if err != nil {
-		return nil, err
+		return s.handlePersistRuntimeSummaryError(err, &binding, summary)
 	}
-
-	updates := map[string]any{
-		"status":                bindingStatusFromRuntimeSummary(summary.Status, binding.Status),
-		"status_reason_code":    statusReasonCodeFromRuntimeSummary(summary.Status),
-		"status_reason_message": "",
-		"last_validated_at":     nullableRuntimeTime(summary.LastValidatedAt),
-		"last_synced_at":        nullableRuntimeTime(summary.LastRefreshedAt),
-	}
-	if summary.PlatformAccountID != "" {
-		updates["external_account_key"] = summary.PlatformAccountID
-	}
-
-	if err := s.db.Model(&model.PlatformAccountBinding{}).Where("id = ?", binding.ID).Updates(updates).Error; err != nil {
-		return s.handlePersistRuntimeSummaryError(err, binding, summary)
-	}
-
 	return s.GetBindingByID(binding.ID)
+}
+
+func (s *BindingService) AdvanceBindingGeneration(bindingID, expectedGeneration uint64) error {
+	result := s.db.Model(&model.PlatformAccountBinding{}).
+		Where("id = ? AND generation = ?", bindingID, expectedGeneration).
+		Update("generation", expectedGeneration+1)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return ErrBindingGenerationConflict
+	}
+	return nil
 }
 
 func (s *BindingService) handlePersistRuntimeSummaryError(err error, binding *model.PlatformAccountBinding, summary RuntimeSummary) (*model.PlatformAccountBinding, error) {

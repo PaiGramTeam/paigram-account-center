@@ -3,6 +3,6 @@ package biz
 import "context"
 
 type CredentialManagementRepository interface {
-	DeleteCredentialGraph(ctx context.Context, platformAccountID string) error
-	DeleteCredentialGraphByBindingID(ctx context.Context, bindingID uint64) error
+	DeleteCredentialGraph(ctx context.Context, accountKey string) error
+	DeleteCredentialGraphByBindingRef(ctx context.Context, bindingRef string) error
 }

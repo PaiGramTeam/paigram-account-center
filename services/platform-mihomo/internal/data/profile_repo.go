@@ -26,36 +26,37 @@ func NewProfileRepo(db *gorm.DB) *ProfileRepo {
 func (r *ProfileRepo) Save(ctx context.Context, profile *biz.Profile) error {
 	db := dbFromContext(ctx, r.db)
 	record := model.AccountProfile{
-		BindingID:         profile.BindingID,
-		PlatformAccountID: profile.PlatformAccountID,
-		GameBiz:           profile.GameBiz,
-		Region:            profile.Region,
-		PlayerID:          profile.PlayerID,
-		Nickname:          profile.Nickname,
-		Level:             profile.Level,
-		IsDefault:         profile.IsDefault,
-		DiscoveredAt:      profile.DiscoveredAt,
+		BindingRef:   profile.BindingRef,
+		AccountKey:   profile.AccountKey,
+		ProfileRef:   profile.ProfileRef,
+		GameBiz:      profile.GameBiz,
+		Region:       profile.Region,
+		PlayerID:     profile.PlayerID,
+		Nickname:     profile.Nickname,
+		Level:        profile.Level,
+		IsDefault:    profile.IsDefault,
+		DiscoveredAt: profile.DiscoveredAt,
 	}
 	if profile.IsDefault {
 		return saveDefaultProfile(db, profile, &record)
 	}
 
 	return db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "binding_id"}, {Name: "player_id"}, {Name: "region"}},
-		DoUpdates: clause.AssignmentColumns([]string{"platform_account_id", "game_biz", "nickname", "level", "is_default", "updated_at"}),
+		Columns:   []clause.Column{{Name: "binding_ref"}, {Name: "player_id"}, {Name: "region"}},
+		DoUpdates: clause.AssignmentColumns([]string{"account_key", "profile_ref", "game_biz", "nickname", "level", "is_default", "updated_at"}),
 	}).Create(&record).Error
 }
 
-func (r *ProfileRepo) SetDefaultByBindingAndPlayerID(ctx context.Context, bindingID uint64, platformAccountID string, playerID string) error {
+func (r *ProfileRepo) SetDefaultByBindingAndPlayerID(ctx context.Context, bindingRef string, accountKey string, playerID string) error {
 	return dbFromContext(ctx, r.db).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.AccountProfile{}).
-			Where("binding_id = ? AND is_default = ?", bindingID, true).
+			Where("binding_ref = ? AND is_default = ?", bindingRef, true).
 			Update("is_default", false).Error; err != nil {
 			return err
 		}
 
 		result := tx.Model(&model.AccountProfile{}).
-			Where("binding_id = ? AND platform_account_id = ? AND player_id = ?", bindingID, platformAccountID, playerID).
+			Where("binding_ref = ? AND account_key = ? AND player_id = ?", bindingRef, accountKey, playerID).
 			Update("is_default", true)
 		if err := mapDefaultProfileDuplicateError(result.Error); err != nil {
 			return err
@@ -69,7 +70,7 @@ func (r *ProfileRepo) SetDefaultByBindingAndPlayerID(ctx context.Context, bindin
 
 func saveDefaultProfile(db *gorm.DB, profile *biz.Profile, record *model.AccountProfile) error {
 	var existing model.AccountProfile
-	err := db.Where("binding_id = ? AND player_id = ? AND region = ?", profile.BindingID, profile.PlayerID, profile.Region).
+	err := db.Where("binding_ref = ? AND player_id = ? AND region = ?", profile.BindingRef, profile.PlayerID, profile.Region).
 		Take(&existing).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -82,11 +83,12 @@ func saveDefaultProfile(db *gorm.DB, profile *biz.Profile, record *model.Account
 		return mapDefaultProfileDuplicateError(db.Model(&model.AccountProfile{}).
 			Where("id = ?", existing.ID).
 			Updates(map[string]any{
-				"platform_account_id": profile.PlatformAccountID,
-				"game_biz":            profile.GameBiz,
-				"nickname":            profile.Nickname,
-				"level":               profile.Level,
-				"is_default":          true,
+				"account_key": profile.AccountKey,
+				"profile_ref": profile.ProfileRef,
+				"game_biz":    profile.GameBiz,
+				"nickname":    profile.Nickname,
+				"level":       profile.Level,
+				"is_default":  true,
 			}).Error)
 	}
 
@@ -98,8 +100,8 @@ func saveDefaultProfile(db *gorm.DB, profile *biz.Profile, record *model.Account
 
 func ensureNoConflictingDefaultProfile(db *gorm.DB, profile *biz.Profile, excludeID uint64) error {
 	query := db.Model(&model.AccountProfile{}).
-		Where("binding_id = ? AND is_default = ?", profile.BindingID, true).
-		Where("NOT (binding_id = ? AND player_id = ? AND region = ?)", profile.BindingID, profile.PlayerID, profile.Region)
+		Where("binding_ref = ? AND is_default = ?", profile.BindingRef, true).
+		Where("NOT (binding_ref = ? AND player_id = ? AND region = ?)", profile.BindingRef, profile.PlayerID, profile.Region)
 	if excludeID != 0 {
 		query = query.Where("id <> ?", excludeID)
 	}
@@ -128,30 +130,43 @@ func mapDefaultProfileDuplicateError(err error) error {
 	return err
 }
 
-func (r *ProfileRepo) ListByBindingID(ctx context.Context, bindingID uint64) ([]*biz.Profile, error) {
+func (r *ProfileRepo) ListByBindingRef(ctx context.Context, bindingRef string) ([]*biz.Profile, error) {
 	var records []model.AccountProfile
-	if err := dbFromContext(ctx, r.db).Where("binding_id = ?", bindingID).Order("id asc").Find(&records).Error; err != nil {
+	if err := dbFromContext(ctx, r.db).Where("binding_ref = ?", bindingRef).Order("id asc").Find(&records).Error; err != nil {
 		return nil, err
 	}
 
 	return profilesFromRecords(records), nil
 }
 
-func (r *ProfileRepo) ListByPlatformAccountID(ctx context.Context, platformAccountID string) ([]*biz.Profile, error) {
+func (r *ProfileRepo) GetByProfileRef(ctx context.Context, bindingRef string, profileRef string) (*biz.Profile, error) {
+	var record model.AccountProfile
+	err := dbFromContext(ctx, r.db).Where("binding_ref = ? AND profile_ref = ?", bindingRef, profileRef).Take(&record).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	profiles := profilesFromRecords([]model.AccountProfile{record})
+	return profiles[0], nil
+}
+
+func (r *ProfileRepo) ListByAccountKey(ctx context.Context, accountKey string) ([]*biz.Profile, error) {
 	var records []model.AccountProfile
-	if err := dbFromContext(ctx, r.db).Where("platform_account_id = ?", platformAccountID).Order("id asc").Find(&records).Error; err != nil {
+	if err := dbFromContext(ctx, r.db).Where("account_key = ?", accountKey).Order("id asc").Find(&records).Error; err != nil {
 		return nil, err
 	}
 
 	return profilesFromRecords(records), nil
 }
 
-func (r *ProfileRepo) DeleteByPlatformAccountID(ctx context.Context, platformAccountID string) error {
-	return dbFromContext(ctx, r.db).Where("platform_account_id = ?", platformAccountID).Delete(&model.AccountProfile{}).Error
+func (r *ProfileRepo) DeleteByAccountKey(ctx context.Context, accountKey string) error {
+	return dbFromContext(ctx, r.db).Where("account_key = ?", accountKey).Delete(&model.AccountProfile{}).Error
 }
 
-func (r *ProfileRepo) DeleteMissingByBindingID(ctx context.Context, bindingID uint64, keep []biz.ProfileIdentity) error {
-	query := dbFromContext(ctx, r.db).Where("binding_id = ?", bindingID)
+func (r *ProfileRepo) DeleteMissingByBindingRef(ctx context.Context, bindingRef string, keep []biz.ProfileIdentity) error {
+	query := dbFromContext(ctx, r.db).Where("binding_ref = ?", bindingRef)
 	if len(keep) == 0 {
 		return query.Delete(&model.AccountProfile{}).Error
 	}
@@ -165,9 +180,9 @@ func (r *ProfileRepo) DeleteMissingByBindingID(ctx context.Context, bindingID ui
 	return query.Where("NOT ("+strings.Join(clauses, " OR ")+")", args...).Delete(&model.AccountProfile{}).Error
 }
 
-func (r *ProfileRepo) DeleteMissingByPlatformAccountID(ctx context.Context, platformAccountID string, keep []biz.ProfileIdentity) error {
+func (r *ProfileRepo) DeleteMissingByAccountKey(ctx context.Context, accountKey string, keep []biz.ProfileIdentity) error {
 	var records []model.AccountProfile
-	if err := dbFromContext(ctx, r.db).Where("platform_account_id = ?", platformAccountID).Find(&records).Error; err != nil {
+	if err := dbFromContext(ctx, r.db).Where("account_key = ?", accountKey).Find(&records).Error; err != nil {
 		return err
 	}
 	keepSet := make(map[string]struct{}, len(keep))
@@ -191,16 +206,17 @@ func profilesFromRecords(records []model.AccountProfile) []*biz.Profile {
 	for _, record := range records {
 		record := record
 		profiles = append(profiles, &biz.Profile{
-			ID:                record.ID,
-			BindingID:         record.BindingID,
-			PlatformAccountID: record.PlatformAccountID,
-			GameBiz:           record.GameBiz,
-			Region:            record.Region,
-			PlayerID:          record.PlayerID,
-			Nickname:          record.Nickname,
-			Level:             record.Level,
-			IsDefault:         record.IsDefault,
-			DiscoveredAt:      record.DiscoveredAt,
+			ID:           record.ID,
+			BindingRef:   record.BindingRef,
+			AccountKey:   record.AccountKey,
+			ProfileRef:   record.ProfileRef,
+			GameBiz:      record.GameBiz,
+			Region:       record.Region,
+			PlayerID:     record.PlayerID,
+			Nickname:     record.Nickname,
+			Level:        record.Level,
+			IsDefault:    record.IsDefault,
+			DiscoveredAt: record.DiscoveredAt,
 		})
 	}
 

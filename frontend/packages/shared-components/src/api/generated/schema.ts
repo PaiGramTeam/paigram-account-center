@@ -1816,9 +1816,16 @@ export interface components {
             devices: {
                 [key: string]: unknown;
             }[] | null;
+            /** Format: int64 */
+            generation: number;
             last_refreshed_at: unknown;
             last_validated_at: unknown;
             platform_account_id: string;
+            /** Format: int64 */
+            profile_observed_revision: number;
+            /** Format: int64 */
+            profile_revision: number;
+            profile_snapshot_complete: boolean;
             profiles: {
                 [key: string]: unknown;
             }[] | null;

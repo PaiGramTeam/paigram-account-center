@@ -14,31 +14,31 @@ import (
 	"platform-mihomo-service/internal/service"
 )
 
-func TestNewGRPCServerOnlyRegistersUnifiedPlatformAPI(t *testing.T) {
-	srv := NewGRPCServer(
-		testBootstrap(),
-		service.NewGenericPlatformService(nil, nil, nil, nil, nil),
-	)
+func TestNewGRPCServerRegistersOnlyV2PlatformAPIs(t *testing.T) {
+	control, runtime := testV2Services()
+	srv := NewGRPCServer(testBootstrap(), control, runtime)
 
 	services := srv.GetServiceInfo()
-	for _, legacyService := range []string{"mihomo.v1.MihomoAccountService", "paigram.mihomo.v1.MihomoCredentialService"} {
+	for _, legacyService := range []string{"mihomo.v1.MihomoAccountService", "paigram.mihomo.v1.MihomoCredentialService", "paigram.platform.v1.PlatformService"} {
 		if _, ok := services[legacyService]; ok {
 			t.Fatalf("legacy service %q is registered", legacyService)
 		}
 	}
-	if _, ok := services["paigram.platform.v1.PlatformService"]; !ok {
-		t.Fatal("unified platform service is not registered")
+	for _, v2Service := range []string{"paigram.platform.v2.PlatformControlService", "paigram.mihomo.v2.MihomoRuntimeService"} {
+		if _, ok := services[v2Service]; !ok {
+			t.Fatalf("v2 service %q is not registered", v2Service)
+		}
 	}
 }
 
-func TestNewGRPCServerRequiresUnifiedPlatformService(t *testing.T) {
+func TestNewGRPCServerRequiresBothV2Services(t *testing.T) {
 	defer func() {
-		if recovered := recover(); recovered != "generic platform service is required" {
-			t.Fatalf("panic = %v, want generic platform service is required", recovered)
+		if recovered := recover(); recovered != "v2 control and runtime services are required" {
+			t.Fatalf("panic = %v, want v2 control and runtime services are required", recovered)
 		}
 	}()
 
-	NewGRPCServer(testBootstrap(), nil)
+	NewGRPCServer(testBootstrap(), nil, nil)
 }
 
 func TestRegisterHealthServerSkipsDuplicateRegistration(t *testing.T) {
@@ -56,7 +56,8 @@ func TestNewGRPCServerExposesHealth(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	srv := NewGRPCServer(testBootstrap(), service.NewGenericPlatformService(nil, nil, nil, nil, nil))
+	control, runtime := testV2Services()
+	srv := NewGRPCServer(testBootstrap(), control, runtime)
 
 	endpoint, err := srv.Endpoint()
 	if err != nil {
@@ -99,6 +100,11 @@ func TestNewGRPCServerExposesHealth(t *testing.T) {
 	if resp.GetStatus() != healthpb.HealthCheckResponse_SERVING {
 		t.Fatalf("health status = %s, want %s", resp.GetStatus(), healthpb.HealthCheckResponse_SERVING)
 	}
+}
+
+func testV2Services() (*service.PlatformControlService, *service.MihomoRuntimeService) {
+	return service.NewPlatformControlService(nil, nil, nil, nil, nil, nil, nil, nil),
+		service.NewMihomoRuntimeService(nil, nil, nil, nil, nil, nil)
 }
 
 func testBootstrap() *conf.Bootstrap {

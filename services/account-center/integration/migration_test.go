@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
@@ -88,9 +89,9 @@ func TestUnifiedUserPlatformSchemaConstraints(t *testing.T) {
 
 	bindingOneID := insertTestBinding(t, ctx, stack.SQLDB, ownerOneID, "mihomo", "cn:1001")
 	_, err := stack.SQLDB.ExecContext(ctx, `
-		INSERT INTO platform_account_bindings (owner_user_id, platform, external_account_key, platform_service_key, display_name)
-		VALUES ($1, $2, $3, 'mihomo', 'Duplicate Active Binding')
-	`, ownerTwoID, "mihomo", "cn:1001")
+		INSERT INTO platform_account_bindings (binding_ref, owner_user_id, platform, external_account_key, platform_service_key, display_name)
+		VALUES ($1, $2, $3, $4, 'mihomo', 'Duplicate Active Binding')
+	`, "bind_"+uuid.NewString(), ownerTwoID, "mihomo", "cn:1001")
 	require.Error(t, err, "expected duplicate active binding to be rejected")
 
 	_, err = stack.SQLDB.ExecContext(ctx, `
@@ -105,9 +106,9 @@ func TestUnifiedUserPlatformSchemaConstraints(t *testing.T) {
 
 	primaryProfileID := insertTestProfile(t, ctx, stack.SQLDB, recreatedBindingID, "profile:1", true)
 	_, err = stack.SQLDB.ExecContext(ctx, `
-		INSERT INTO platform_account_profiles (binding_id, platform_profile_key, game_biz, region, player_uid, nickname, is_primary)
-		VALUES ($1, 'profile:2', 'hk4e_cn', 'cn_gf01', '10002', 'Second Primary', TRUE)
-	`, recreatedBindingID)
+		INSERT INTO platform_account_profiles (binding_id, platform_profile_key, profile_ref, game_biz, region, player_uid, nickname, is_primary)
+		VALUES ($1, 'profile:2', $2, 'hk4e_cn', 'cn_gf01', '10002', 'Second Primary', TRUE)
+	`, recreatedBindingID, "prof_"+uuid.NewString())
 	require.Error(t, err, "expected only one primary profile per binding")
 
 	_, err = stack.SQLDB.ExecContext(ctx, `
@@ -183,10 +184,10 @@ func insertTestBinding(t *testing.T, ctx context.Context, db *sql.DB, ownerUserI
 
 	var id uint64
 	err := db.QueryRowContext(ctx, `
-		INSERT INTO platform_account_bindings (owner_user_id, platform, external_account_key, platform_service_key, display_name)
-		VALUES ($1, $2, $3, 'mihomo', 'Binding')
+		INSERT INTO platform_account_bindings (binding_ref, owner_user_id, platform, external_account_key, platform_service_key, display_name)
+		VALUES ($1, $2, $3, $4, 'mihomo', 'Binding')
 		RETURNING id
-	`, ownerUserID, platform, externalAccountKey).Scan(&id)
+	`, "bind_"+uuid.NewString(), ownerUserID, platform, externalAccountKey).Scan(&id)
 	require.NoError(t, err)
 	return id
 }
@@ -196,10 +197,10 @@ func insertTestProfile(t *testing.T, ctx context.Context, db *sql.DB, bindingID 
 
 	var id uint64
 	err := db.QueryRowContext(ctx, `
-		INSERT INTO platform_account_profiles (binding_id, platform_profile_key, game_biz, region, player_uid, nickname, is_primary)
-		VALUES ($1, $2, 'hk4e_cn', 'cn_gf01', '10001', 'Primary Profile', $3)
+		INSERT INTO platform_account_profiles (binding_id, platform_profile_key, profile_ref, game_biz, region, player_uid, nickname, is_primary)
+		VALUES ($1, $2, $3, 'hk4e_cn', 'cn_gf01', '10001', 'Primary Profile', $4)
 		RETURNING id
-	`, bindingID, profileKey, isPrimary).Scan(&id)
+	`, bindingID, profileKey, "prof_"+uuid.NewString(), isPrimary).Scan(&id)
 	require.NoError(t, err)
 	return id
 }

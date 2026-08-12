@@ -4,6 +4,8 @@ import "context"
 
 type GrantInvalidationInput struct {
 	BindingID           uint64
+	BindingRef          string
+	Generation          uint64
 	OwnerUserID         uint64
 	Platform            string
 	PlatformServiceKey  string

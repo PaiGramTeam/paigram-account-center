@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package paigram.platform.v2;
+
+option go_package = "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2;platformv2";
+
+import "platform/v2/types.proto";
+
+service PlatformControlService {
+  rpc BindCredential(BindCredentialRequest) returns (BindCredentialResponse);
+  rpc ReplaceCredential(ReplaceCredentialRequest) returns (ReplaceCredentialResponse);
+  rpc RefreshCredential(RefreshCredentialRequest) returns (RefreshCredentialResponse);
+  rpc DeleteCredential(DeleteCredentialRequest) returns (DeleteCredentialResponse);
+  rpc ApplyAuthorizationFence(ApplyAuthorizationFenceRequest) returns (ApplyAuthorizationFenceResponse);
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
+  rpc ResolveOperation(ResolveOperationRequest) returns (ResolveOperationResponse);
+  rpc GetBindingState(GetBindingStateRequest) returns (GetBindingStateResponse);
+}
+
+message BindCredentialRequest {
+  OperationRef operation = 1;
+  string credential_payload_json = 2;
+}
+
+message BindCredentialResponse {
+  OperationResult result = 1;
+}
+
+message ReplaceCredentialRequest {
+  OperationRef operation = 1;
+  string account_key = 2;
+  string credential_payload_json = 3;
+}
+
+message ReplaceCredentialResponse {
+  OperationResult result = 1;
+}
+
+message RefreshCredentialRequest {
+  OperationRef operation = 1;
+  string account_key = 2;
+}
+
+message RefreshCredentialResponse {
+  OperationResult result = 1;
+}
+
+message DeleteCredentialRequest {
+  OperationRef operation = 1;
+  string account_key = 2;
+}
+
+message DeleteCredentialResponse {
+  OperationResult result = 1;
+}
+
+message ApplyAuthorizationFenceRequest {
+  OperationRef operation = 1;
+  string consumer_principal = 2;
+  uint64 minimum_grant_version = 3;
+  uint64 minimum_owner_epoch = 4;
+  uint64 minimum_consumer_epoch = 5;
+  uint64 minimum_entry_epoch = 6;
+}
+
+message ApplyAuthorizationFenceResponse {
+  OperationResult result = 1;
+}
+
+message GetOperationRequest {
+  string operation_id = 1;
+}
+
+message GetOperationResponse {
+  OperationResult result = 1;
+}
+
+message ResolveOperationRequest {
+  OperationRef operation = 1;
+}
+
+message ResolveOperationResponse {
+  OperationResult result = 1;
+}
+
+message GetBindingStateRequest {
+  string binding_ref = 1;
+}
+
+message GetBindingStateResponse {
+  BindingState state = 1;
+}

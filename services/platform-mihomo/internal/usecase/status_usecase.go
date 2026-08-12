@@ -45,8 +45,8 @@ func NewStatusUsecase(
 	}
 }
 
-func (uc *StatusUsecase) GetCredentialStatus(ctx context.Context, platformAccountID string) (*GetCredentialStatusOutput, error) {
-	credential, err := uc.getCredential(ctx, platformAccountID)
+func (uc *StatusUsecase) GetCredentialStatus(ctx context.Context, accountKey string) (*GetCredentialStatusOutput, error) {
+	credential, err := uc.getCredential(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +57,8 @@ func (uc *StatusUsecase) GetCredentialStatus(ctx context.Context, platformAccoun
 	}, nil
 }
 
-func (uc *StatusUsecase) ValidateCredential(ctx context.Context, platformAccountID string) (*ValidateCredentialOutput, error) {
-	credential, err := uc.getCredential(ctx, platformAccountID)
+func (uc *StatusUsecase) ValidateCredential(ctx context.Context, accountKey string) (*ValidateCredentialOutput, error) {
+	credential, err := uc.getCredential(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -75,8 +75,8 @@ func (uc *StatusUsecase) ValidateCredential(ctx context.Context, platformAccount
 // It does not rotate or replace credential material; it validates the stored
 // credential blob, updates status metadata, and records LastRefreshedAt when
 // validation succeeds.
-func (uc *StatusUsecase) RefreshCredential(ctx context.Context, platformAccountID string) (*RefreshCredentialOutput, error) {
-	credential, err := uc.getCredential(ctx, platformAccountID)
+func (uc *StatusUsecase) RefreshCredential(ctx context.Context, accountKey string) (*RefreshCredentialOutput, error) {
+	credential, err := uc.getCredential(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +89,8 @@ func (uc *StatusUsecase) RefreshCredential(ctx context.Context, platformAccountI
 	return &RefreshCredentialOutput{Status: status, RefreshedAt: credential.LastRefreshedAt}, nil
 }
 
-func (uc *StatusUsecase) getCredential(ctx context.Context, platformAccountID string) (*biz.Credential, error) {
-	credential, err := uc.credentials.GetByPlatformAccountID(ctx, platformAccountID)
+func (uc *StatusUsecase) getCredential(ctx context.Context, accountKey string) (*biz.Credential, error) {
+	credential, err := uc.credentials.GetByAccountKey(ctx, accountKey)
 	if err != nil {
 		return nil, err
 	}

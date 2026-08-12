@@ -141,7 +141,7 @@ func TestBindingAccessService_ListAccessibleBindingsFiltersByConsumerGrant(t *te
 	assert.Empty(t, otherBotAccounts)
 }
 
-func TestBindingAccessService_GetGrantedBindingForConsumer(t *testing.T) {
+func TestBindingAccessService_GetGrantedBindingByRefForConsumer(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
 	service := &BindingAccessService{db: db}
 
@@ -159,14 +159,14 @@ func TestBindingAccessService_GetGrantedBindingForConsumer(t *testing.T) {
 	grant := model.ConsumerGrant{BindingID: binding.ID, Consumer: consumer, Status: model.ConsumerGrantStatusActive, GrantedAt: time.Now().UTC()}
 	require.NoError(t, db.Create(&grant).Error)
 
-	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBindingForConsumer(identity.BotID, consumer, identity.ExternalUserID, binding.ID, 0)
+	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBindingByRefForConsumer(identity.BotID, consumer, identity.ExternalUserID, binding.BindingRef, "")
 	require.NoError(t, err)
 	assert.Equal(t, identity.ID, resolvedIdentity.ID)
 	assert.Equal(t, binding.ID, resolvedBinding.ID)
 	assert.Equal(t, binding.ID, resolvedGrant.BindingID)
 }
 
-func TestBindingAccessService_GetGrantedBindingForConsumerRejectsProfileFromOtherBinding(t *testing.T) {
+func TestBindingAccessService_GetGrantedBindingByRefForConsumerRejectsProfileFromOtherBinding(t *testing.T) {
 	db := setupBotAccessServiceTestDB(t)
 	service := &BindingAccessService{db: db}
 
@@ -201,7 +201,7 @@ func TestBindingAccessService_GetGrantedBindingForConsumerRejectsProfileFromOthe
 	}
 	require.NoError(t, db.Create(&foreignProfile).Error)
 
-	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBindingForConsumer(identity.BotID, consumer, identity.ExternalUserID, binding.ID, foreignProfile.ID)
+	resolvedIdentity, resolvedBinding, resolvedGrant, err := service.GetGrantedBindingByRefForConsumer(identity.BotID, consumer, identity.ExternalUserID, binding.BindingRef, foreignProfile.ProfileRef)
 	require.ErrorIs(t, err, ErrPlatformAccountMissing)
 	assert.Nil(t, resolvedIdentity)
 	assert.Nil(t, resolvedBinding)

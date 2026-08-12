@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1b\x61\x63\x63ount/v1/bot_access.proto\x12\npaigram.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbc\x02\n\x16PlatformAccountBinding\x12\n\n\x02id\x18\x01 \x01(\x04\x12\x0f\n\x07user_id\x18\x02 \x01(\x04\x12\x10\n\x08platform\x18\x03 \x01(\t\x12\x1c\n\x14platform_service_key\x18\x04 \x01(\t\x12\x1b\n\x13platform_account_id\x18\x05 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x06 \x01(\t\x12\x31\n\x06status\x18\x07 \x01(\x0e\x32!.paigram.v1.PlatformAccountStatus\x12.\n\ncreated_at\x18\t \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nupdated_at\x18\n \x01(\x0b\x32\x1a.google.protobuf.TimestampJ\x04\x08\x08\x10\tR\tmeta_json\"1\n\x15ResolveBotUserRequest\x12\x18\n\x10\x65xternal_user_id\x18\x01 \x01(\t\"n\n\x16ResolveBotUserResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\x04\x12\x0e\n\x06\x62ot_id\x18\x02 \x01(\t\x12\x18\n\x10\x65xternal_user_id\x18\x03 \x01(\t\x12\x19\n\x11\x65xternal_username\x18\x04 \x01(\t\"K\n\x1dListAccessibleBindingsRequest\x12\x18\n\x10\x65xternal_user_id\x18\x01 \x01(\t\x12\x10\n\x08platform\x18\x02 \x01(\t\"V\n\x1eListAccessibleBindingsResponse\x12\x34\n\x08\x62indings\x18\x01 \x03(\x0b\x32\".paigram.v1.PlatformAccountBinding\"\x87\x01\n\x19IssueServiceTicketRequest\x12\x18\n\x10\x65xternal_user_id\x18\x01 \x01(\t\x12\x12\n\nbinding_id\x18\x02 \x01(\x04\x12\x18\n\x10requested_scopes\x18\x03 \x03(\t\x12\x12\n\nprofile_id\x18\x05 \x01(\x04J\x04\x08\x04\x10\x05R\x08\x61udience\"\xa3\x01\n\x1aIssueServiceTicketResponse\x12\x0e\n\x06ticket\x18\x01 \x01(\t\x12\x10\n\x08\x61udience\x18\x02 \x01(\t\x12.\n\nexpires_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x33\n\x07\x62inding\x18\x04 \x01(\x0b\x32\".paigram.v1.PlatformAccountBinding*\xaf\x01\n\x15PlatformAccountStatus\x12\'\n#PLATFORM_ACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\"\n\x1ePLATFORM_ACCOUNT_STATUS_ACTIVE\x10\x01\x12$\n PLATFORM_ACCOUNT_STATUS_INACTIVE\x10\x02\x12#\n\x1fPLATFORM_ACCOUNT_STATUS_REVOKED\x10\x03\x32\xc1\x02\n\x10\x42otAccessService\x12W\n\x0eResolveBotUser\x12!.paigram.v1.ResolveBotUserRequest\x1a\".paigram.v1.ResolveBotUserResponse\x12o\n\x16ListAccessibleBindings\x12).paigram.v1.ListAccessibleBindingsRequest\x1a*.paigram.v1.ListAccessibleBindingsResponse\x12\x63\n\x12IssueServiceTicket\x12%.paigram.v1.IssueServiceTicketRequest\x1a&.paigram.v1.IssueServiceTicketResponseBUZSgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1;accountv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1b\x61\x63\x63ount/v1/bot_access.proto\x12\npaigram.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xde\x02\n\x16PlatformAccountBinding\x12\x13\n\x0b\x62inding_ref\x18\x01 \x01(\t\x12\x10\n\x08platform\x18\x03 \x01(\t\x12\x1c\n\x14platform_service_key\x18\x04 \x01(\t\x12\x13\n\x0b\x61\x63\x63ount_key\x18\x05 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x06 \x01(\t\x12\x31\n\x06status\x18\x07 \x01(\x0e\x32!.paigram.v1.PlatformAccountStatus\x12\x12\n\ngeneration\x18\x08 \x01(\x04\x12.\n\ncreated_at\x18\t \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12.\n\nupdated_at\x18\n \x01(\x0b\x32\x1a.google.protobuf.TimestampJ\x04\x08\x02\x10\x03R\x07user_idR\tmeta_jsonR\x13platform_account_id\"1\n\x15ResolveBotUserRequest\x12\x18\n\x10\x65xternal_user_id\x18\x01 \x01(\t\"n\n\x16ResolveBotUserResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\x04\x12\x0e\n\x06\x62ot_id\x18\x02 \x01(\t\x12\x18\n\x10\x65xternal_user_id\x18\x03 \x01(\t\x12\x19\n\x11\x65xternal_username\x18\x04 \x01(\t\"K\n\x1dListAccessibleBindingsRequest\x12\x18\n\x10\x65xternal_user_id\x18\x01 \x01(\t\x12\x10\n\x08platform\x18\x02 \x01(\t\"V\n\x1eListAccessibleBindingsResponse\x12\x34\n\x08\x62indings\x18\x01 \x03(\x0b\x32\".paigram.v1.PlatformAccountBinding\"\x89\x01\n\x19IssueServiceTicketRequest\x12\x18\n\x10\x65xternal_user_id\x18\x01 \x01(\t\x12\x13\n\x0b\x62inding_ref\x18\x02 \x01(\t\x12\x18\n\x10requested_action\x18\x03 \x01(\t\x12\x13\n\x0bprofile_ref\x18\x05 \x01(\tJ\x04\x08\x04\x10\x05R\x08\x61udience\"\xa3\x01\n\x1aIssueServiceTicketResponse\x12\x0e\n\x06ticket\x18\x01 \x01(\t\x12\x10\n\x08\x61udience\x18\x02 \x01(\t\x12.\n\nexpires_at\x18\x03 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x33\n\x07\x62inding\x18\x04 \x01(\x0b\x32\".paigram.v1.PlatformAccountBinding*\xaf\x01\n\x15PlatformAccountStatus\x12\'\n#PLATFORM_ACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\"\n\x1ePLATFORM_ACCOUNT_STATUS_ACTIVE\x10\x01\x12$\n PLATFORM_ACCOUNT_STATUS_INACTIVE\x10\x02\x12#\n\x1fPLATFORM_ACCOUNT_STATUS_REVOKED\x10\x03\x32\xc1\x02\n\x10\x42otAccessService\x12W\n\x0eResolveBotUser\x12!.paigram.v1.ResolveBotUserRequest\x1a\".paigram.v1.ResolveBotUserResponse\x12o\n\x16ListAccessibleBindings\x12).paigram.v1.ListAccessibleBindingsRequest\x1a*.paigram.v1.ListAccessibleBindingsResponse\x12\x63\n\x12IssueServiceTicket\x12%.paigram.v1.IssueServiceTicketRequest\x1a&.paigram.v1.IssueServiceTicketResponseBUZSgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1;accountv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,22 +33,22 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'account.v1.bot_access_pb2',
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'ZSgithub.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1;accountv1'
-  _globals['_PLATFORMACCOUNTSTATUS']._serialized_start=1028
-  _globals['_PLATFORMACCOUNTSTATUS']._serialized_end=1203
+  _globals['_PLATFORMACCOUNTSTATUS']._serialized_start=1064
+  _globals['_PLATFORMACCOUNTSTATUS']._serialized_end=1239
   _globals['_PLATFORMACCOUNTBINDING']._serialized_start=77
-  _globals['_PLATFORMACCOUNTBINDING']._serialized_end=393
-  _globals['_RESOLVEBOTUSERREQUEST']._serialized_start=395
-  _globals['_RESOLVEBOTUSERREQUEST']._serialized_end=444
-  _globals['_RESOLVEBOTUSERRESPONSE']._serialized_start=446
-  _globals['_RESOLVEBOTUSERRESPONSE']._serialized_end=556
-  _globals['_LISTACCESSIBLEBINDINGSREQUEST']._serialized_start=558
-  _globals['_LISTACCESSIBLEBINDINGSREQUEST']._serialized_end=633
-  _globals['_LISTACCESSIBLEBINDINGSRESPONSE']._serialized_start=635
-  _globals['_LISTACCESSIBLEBINDINGSRESPONSE']._serialized_end=721
-  _globals['_ISSUESERVICETICKETREQUEST']._serialized_start=724
-  _globals['_ISSUESERVICETICKETREQUEST']._serialized_end=859
-  _globals['_ISSUESERVICETICKETRESPONSE']._serialized_start=862
-  _globals['_ISSUESERVICETICKETRESPONSE']._serialized_end=1025
-  _globals['_BOTACCESSSERVICE']._serialized_start=1206
-  _globals['_BOTACCESSSERVICE']._serialized_end=1527
+  _globals['_PLATFORMACCOUNTBINDING']._serialized_end=427
+  _globals['_RESOLVEBOTUSERREQUEST']._serialized_start=429
+  _globals['_RESOLVEBOTUSERREQUEST']._serialized_end=478
+  _globals['_RESOLVEBOTUSERRESPONSE']._serialized_start=480
+  _globals['_RESOLVEBOTUSERRESPONSE']._serialized_end=590
+  _globals['_LISTACCESSIBLEBINDINGSREQUEST']._serialized_start=592
+  _globals['_LISTACCESSIBLEBINDINGSREQUEST']._serialized_end=667
+  _globals['_LISTACCESSIBLEBINDINGSRESPONSE']._serialized_start=669
+  _globals['_LISTACCESSIBLEBINDINGSRESPONSE']._serialized_end=755
+  _globals['_ISSUESERVICETICKETREQUEST']._serialized_start=758
+  _globals['_ISSUESERVICETICKETREQUEST']._serialized_end=895
+  _globals['_ISSUESERVICETICKETRESPONSE']._serialized_start=898
+  _globals['_ISSUESERVICETICKETRESPONSE']._serialized_end=1061
+  _globals['_BOTACCESSSERVICE']._serialized_start=1242
+  _globals['_BOTACCESSSERVICE']._serialized_end=1563
 # @@protoc_insertion_point(module_scope)

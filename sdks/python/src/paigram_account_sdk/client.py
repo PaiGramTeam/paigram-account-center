@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timezone
 from types import TracebackType
 from typing import TypeVar, cast
@@ -13,7 +13,8 @@ from google.protobuf.json_format import MessageToDict
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from paigram_account_sdk._generated.account.v1 import bot_access_pb2, bot_access_pb2_grpc
-from paigram_account_sdk._generated.platform.v1 import platform_pb2, platform_pb2_grpc
+from paigram_account_sdk._generated.mihomo.v2 import runtime_pb2, runtime_pb2_grpc
+from paigram_account_sdk._generated.platform.v2 import types_pb2
 
 from ._auth import _ClientCredentialsTokenProvider
 from .errors import (
@@ -33,8 +34,6 @@ from .models import (
     BotUser,
     CredentialStatus,
     CredentialStatusResult,
-    CredentialSummary,
-    DeviceInfo,
     DeviceSummary,
     PlatformAccountStatus,
     PlatformBinding,
@@ -89,7 +88,7 @@ class PaiGramAccountClient:
         )
         self._account = bot_access_pb2_grpc.BotAccessServiceStub(self._account_channel)  # type: ignore[no-untyped-call]
         self._platform_channels: dict[str, grpc.aio.Channel] = {}
-        self._platform_stubs: dict[str, platform_pb2_grpc.PlatformServiceStub] = {}
+        self._platform_stubs: dict[str, runtime_pb2_grpc.MihomoRuntimeServiceStub] = {}
         self._request_id_factory = request_id_factory or (lambda: uuid4().hex)
         self._closed = False
 
@@ -170,9 +169,9 @@ class PaiGramAccountClient:
         self,
         *,
         external_user_id: str,
-        binding_id: int,
-        requested_scopes: Sequence[str],
-        profile_id: int,
+        binding_ref: str,
+        requested_action: str,
+        profile_ref: str,
         request_id: str,
     ) -> ServiceTicket:
         response = cast(
@@ -181,9 +180,9 @@ class PaiGramAccountClient:
                 self._account.IssueServiceTicket,
                 bot_access_pb2.IssueServiceTicketRequest(
                     external_user_id=external_user_id,
-                    binding_id=binding_id,
-                    requested_scopes=requested_scopes,
-                    profile_id=profile_id,
+                    binding_ref=binding_ref,
+                    requested_action=requested_action,
+                    profile_ref=profile_ref,
                 ),
                 request_id,
             ),
@@ -202,7 +201,7 @@ class PaiGramAccountClient:
         stub = self._platform_stub(service_key)
         response = await _grpc_call(
             stub.DescribePlatform(
-                platform_pb2.DescribePlatformRequest(),
+                runtime_pb2.DescribePlatformRequest(),
                 metadata=_correlation_metadata(request_id),
                 timeout=self._timeout,
             ),
@@ -216,35 +215,8 @@ class PaiGramAccountClient:
             service_audience=response.service_audience,
             supported_actions=tuple(response.supported_actions),
             credential_schema=schema,
-            version=response.version,
+            contract_version=response.contract_version,
         )
-
-    async def get_credential_summary(
-        self,
-        *,
-        external_user_id: str,
-        binding: PlatformBinding,
-        request_id: str | None = None,
-    ) -> CredentialSummary:
-        resolved_request_id = self._resolve_request_id(request_id)
-        stub, ticket = await self._authorize_platform_action(
-            external_user_id=external_user_id,
-            binding=binding,
-            action_suffix="credential.read_meta",
-            request_id=resolved_request_id,
-        )
-        response = await _grpc_call(
-            stub.GetCredentialSummary(
-                platform_pb2.GetCredentialSummaryRequest(
-                    platform_account_id=binding.platform_account_id,
-                ),
-                metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
-                timeout=self._timeout,
-            ),
-            resolved_request_id,
-            failed_precondition_error=CredentialError,
-        )
-        return _credential_summary_from_proto(response)
 
     async def get_credential_status(
         self,
@@ -257,14 +229,12 @@ class PaiGramAccountClient:
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="status.read",
+            action="mihomo.status.read",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
-            stub.GetCredentialStatus(
-                platform_pb2.GetCredentialStatusRequest(
-                    platform_account_id=binding.platform_account_id,
-                ),
+            stub.GetStatus(
+                runtime_pb2.GetStatusRequest(resource=_binding_resource(binding)),
                 metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
@@ -287,21 +257,19 @@ class PaiGramAccountClient:
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="credential.validate",
+            action="mihomo.credential.validate",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
             stub.ValidateCredential(
-                platform_pb2.ValidateCredentialRequest(
-                    platform_account_id=binding.platform_account_id,
-                ),
+                runtime_pb2.ValidateCredentialRequest(resource=_binding_resource(binding)),
                 metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
             failed_precondition_error=CredentialError,
         )
-        return ValidationResult(status=_credential_status(response.status), error_code=response.error_code)
+        return ValidationResult(status=_credential_status(response.status), reason_code=response.reason_code)
 
     async def list_profiles(
         self,
@@ -314,21 +282,19 @@ class PaiGramAccountClient:
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="profile.read",
+            action="mihomo.profile.read",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
             stub.ListProfiles(
-                platform_pb2.ListProfilesRequest(
-                    platform_account_id=binding.platform_account_id,
-                ),
+                runtime_pb2.ListProfilesRequest(resource=_binding_resource(binding)),
                 metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
             resolved_request_id,
             failed_precondition_error=CredentialError,
         )
-        return tuple(_profile_summary_from_proto(profile) for profile in response.profiles)
+        return tuple(_profile_summary_from_proto(profile) for profile in response.snapshot.profiles)
 
     async def get_primary_profile(
         self,
@@ -341,14 +307,12 @@ class PaiGramAccountClient:
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="profile.read",
+            action="mihomo.profile.read",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
             stub.GetPrimaryProfile(
-                platform_pb2.GetPrimaryProfileRequest(
-                    platform_account_id=binding.platform_account_id,
-                ),
+                runtime_pb2.GetPrimaryProfileRequest(resource=_binding_resource(binding)),
                 metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
             ),
@@ -362,23 +326,24 @@ class PaiGramAccountClient:
         *,
         external_user_id: str,
         binding: PlatformBinding,
-        player_id: str,
+        profile_ref: str,
         request_id: str | None = None,
     ) -> AuthKey:
-        if not player_id:
-            raise InvalidRequestError("player_id is required")
+        if not profile_ref:
+            raise InvalidRequestError("profile_ref is required")
         resolved_request_id = self._resolve_request_id(request_id)
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="authkey.issue",
+            action="mihomo.authkey.issue",
+            profile_ref=profile_ref,
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
             stub.GetAuthKey(
-                platform_pb2.GetAuthKeyRequest(
-                    platform_account_id=binding.platform_account_id,
-                    player_id=player_id,
+                runtime_pb2.GetAuthKeyRequest(
+                    resource=_binding_resource(binding),
+                    profile_ref=profile_ref,
                 ),
                 metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
@@ -388,32 +353,28 @@ class PaiGramAccountClient:
         )
         return AuthKey(value=response.authkey, expires_at=_datetime_from_timestamp(response.expires_at))
 
-    async def upsert_device(
+    async def get_device(
         self,
         *,
         external_user_id: str,
         binding: PlatformBinding,
-        device: DeviceInfo,
+        device_ref: str,
         request_id: str | None = None,
-    ) -> bool:
-        if not device.device_id or not device.device_fp:
-            raise InvalidRequestError("device_id and device_fp are required")
+    ) -> DeviceSummary:
+        if not device_ref:
+            raise InvalidRequestError("device_ref is required")
         resolved_request_id = self._resolve_request_id(request_id)
         stub, ticket = await self._authorize_platform_action(
             external_user_id=external_user_id,
             binding=binding,
-            action_suffix="device.update",
+            action="mihomo.device.read",
             request_id=resolved_request_id,
         )
         response = await _grpc_call(
-            stub.UpsertDevice(
-                platform_pb2.UpsertDeviceRequest(
-                    platform_account_id=binding.platform_account_id,
-                    device=platform_pb2.DeviceInfo(
-                        device_id=device.device_id,
-                        device_fp=device.device_fp,
-                        device_name=device.device_name,
-                    ),
+            stub.GetDevice(
+                runtime_pb2.GetDeviceRequest(
+                    resource=_binding_resource(binding),
+                    device_ref=device_ref,
                 ),
                 metadata=_service_ticket_metadata(ticket.token, resolved_request_id),
                 timeout=self._timeout,
@@ -421,7 +382,7 @@ class PaiGramAccountClient:
             resolved_request_id,
             failed_precondition_error=CredentialError,
         )
-        return bool(response.success)
+        return _device_summary_from_proto(response.device)
 
     async def _account_call(
         self,
@@ -446,21 +407,20 @@ class PaiGramAccountClient:
         *,
         external_user_id: str,
         binding: PlatformBinding,
-        action_suffix: str,
+        action: str,
         request_id: str,
-    ) -> tuple[platform_pb2_grpc.PlatformServiceStub, ServiceTicket]:
-        descriptor = await self._describe_platform(binding.platform_service_key, request_id)
-        action = _find_action(descriptor.supported_actions, action_suffix)
+        profile_ref: str = "",
+    ) -> tuple[runtime_pb2_grpc.MihomoRuntimeServiceStub, ServiceTicket]:
         ticket = await self._issue_service_ticket(
             external_user_id=external_user_id,
-            binding_id=binding.id,
-            requested_scopes=(action,),
-            profile_id=0,
+            binding_ref=binding.binding_ref,
+            requested_action=action,
+            profile_ref=profile_ref,
             request_id=request_id,
         )
         return self._platform_stub(binding.platform_service_key), ticket
 
-    def _platform_stub(self, service_key: str) -> platform_pb2_grpc.PlatformServiceStub:
+    def _platform_stub(self, service_key: str) -> runtime_pb2_grpc.MihomoRuntimeServiceStub:
         self._ensure_open()
         endpoint = self._platform_endpoints.get(service_key)
         if endpoint is None:
@@ -474,7 +434,7 @@ class PaiGramAccountClient:
             secure=endpoint.secure,
             root_certificates=endpoint.root_certificates,
         )
-        stub = platform_pb2_grpc.PlatformServiceStub(channel)  # type: ignore[no-untyped-call]
+        stub = runtime_pb2_grpc.MihomoRuntimeServiceStub(channel)  # type: ignore[no-untyped-call]
         self._platform_channels[service_key] = channel
         self._platform_stubs[service_key] = stub
         return stub
@@ -555,13 +515,13 @@ def _map_grpc_error(
 
 def _binding_from_proto(binding: bot_access_pb2.PlatformAccountBinding) -> PlatformBinding:
     return PlatformBinding(
-        id=binding.id,
-        user_id=binding.user_id,
+        binding_ref=binding.binding_ref,
         platform=binding.platform,
         platform_service_key=binding.platform_service_key,
-        platform_account_id=binding.platform_account_id,
+        account_key=binding.account_key,
         display_name=binding.display_name,
         status=_platform_account_status(binding.status),
+        generation=binding.generation,
         created_at=_datetime_from_timestamp(binding.created_at),
         updated_at=_datetime_from_timestamp(binding.updated_at),
     )
@@ -578,44 +538,37 @@ def _platform_account_status(value: int) -> PlatformAccountStatus:
 
 def _credential_status(value: int) -> CredentialStatus:
     statuses: dict[int, CredentialStatus] = {
-        platform_pb2.CREDENTIAL_STATUS_ACTIVE: CredentialStatus.ACTIVE,
-        platform_pb2.CREDENTIAL_STATUS_EXPIRED: CredentialStatus.EXPIRED,
-        platform_pb2.CREDENTIAL_STATUS_INVALID: CredentialStatus.INVALID,
-        platform_pb2.CREDENTIAL_STATUS_CHALLENGE_REQUIRED: CredentialStatus.CHALLENGE_REQUIRED,
+        types_pb2.CREDENTIAL_STATUS_ACTIVE: CredentialStatus.ACTIVE,
+        types_pb2.CREDENTIAL_STATUS_EXPIRED: CredentialStatus.EXPIRED,
+        types_pb2.CREDENTIAL_STATUS_INVALID: CredentialStatus.INVALID,
+        types_pb2.CREDENTIAL_STATUS_CHALLENGE_REQUIRED: CredentialStatus.CHALLENGE_REQUIRED,
     }
     return statuses.get(value, CredentialStatus.UNSPECIFIED)
 
 
-def _credential_summary_from_proto(response: platform_pb2.GetCredentialSummaryResponse) -> CredentialSummary:
-    return CredentialSummary(
-        platform_account_id=response.platform_account_id,
-        status=_credential_status(response.status),
-        last_validated_at=_datetime_from_timestamp(response.last_validated_at),
-        last_refreshed_at=_datetime_from_timestamp(response.last_refreshed_at),
-        devices=tuple(
-            DeviceSummary(
-                device_id=device.device_id,
-                device_fp=device.device_fp,
-                device_name=device.device_name,
-                is_valid=device.is_valid,
-                last_seen_at=_datetime_from_timestamp(device.last_seen_at),
-            )
-            for device in response.devices
-        ),
-        profiles=tuple(_profile_summary_from_proto(profile) for profile in response.profiles),
-    )
+def _binding_resource(binding: PlatformBinding) -> types_pb2.BindingResource:
+    return types_pb2.BindingResource(binding_ref=binding.binding_ref, account_key=binding.account_key)
 
 
-def _profile_summary_from_proto(profile: platform_pb2.ProfileSummary) -> ProfileSummary:
+def _profile_summary_from_proto(profile: types_pb2.ProfileSummary) -> ProfileSummary:
     return ProfileSummary(
-        id=profile.id,
-        platform_account_id=profile.platform_account_id,
+        profile_ref=profile.profile_ref,
+        account_key=profile.account_key,
         game_biz=profile.game_biz,
         region=profile.region,
         player_id=profile.player_id,
         nickname=profile.nickname,
         level=profile.level,
         is_default=profile.is_default,
+    )
+
+
+def _device_summary_from_proto(device: types_pb2.DeviceSummary) -> DeviceSummary:
+    return DeviceSummary(
+        device_ref=device.device_ref,
+        device_name=device.device_name,
+        is_valid=device.is_valid,
+        last_seen_at=_datetime_from_timestamp(device.last_seen_at),
     )
 
 
@@ -627,14 +580,6 @@ def _datetime_from_timestamp(value: Timestamp) -> datetime | None:
         logger.error("Remote service returned an invalid protobuf timestamp")
         raise TransportError("remote service returned an invalid timestamp")
     return converted
-
-
-def _find_action(actions: Sequence[str], suffix: str) -> str:
-    matches = [action for action in actions if action == suffix or action.endswith(f".{suffix}")]
-    if len(matches) != 1:
-        logger.warning("Platform does not advertise exactly one %s action", suffix)
-        raise AuthorizationError(f"platform does not advertise exactly one {suffix} action")
-    return matches[0]
 
 
 def _correlation_metadata(request_id: str) -> tuple[tuple[str, str]]:

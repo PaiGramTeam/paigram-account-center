@@ -9,7 +9,6 @@ from paigram_account_sdk import (
     AuthenticationError,
     CredentialError,
     CredentialStatus,
-    DeviceInfo,
     NotFoundError,
     PaiGramAccountClient,
     PlatformAccountStatus,
@@ -17,7 +16,8 @@ from paigram_account_sdk import (
     ServiceUnavailableError,
 )
 from paigram_account_sdk._generated.account.v1 import bot_access_pb2, bot_access_pb2_grpc
-from paigram_account_sdk._generated.platform.v1 import platform_pb2, platform_pb2_grpc
+from paigram_account_sdk._generated.mihomo.v2 import runtime_pb2, runtime_pb2_grpc
+from paigram_account_sdk._generated.platform.v2 import types_pb2
 
 
 class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
@@ -44,108 +44,77 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
 
     async def IssueServiceTicket(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         await require_account_metadata(context)
-        allowed_scopes = {
+        allowed_actions = {
             "mihomo.authkey.issue",
-            "mihomo.credential.delete",
-            "mihomo.credential.read_meta",
-            "mihomo.credential.refresh",
             "mihomo.credential.validate",
-            "mihomo.device.update",
+            "mihomo.device.read",
             "mihomo.profile.read",
             "mihomo.status.read",
         }
-        if len(request.requested_scopes) != 1 or request.requested_scopes[0] not in allowed_scopes:
+        if request.binding_ref != "binding-7" or request.requested_action not in allowed_actions:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "unexpected ticket request")
+        if request.requested_action == "mihomo.authkey.issue" and request.profile_ref != "profile-99":
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "profile scope is required")
         return bot_access_pb2.IssueServiceTicketResponse(
             ticket="service-ticket",
-            audience="mihomo-service",
+            audience="platform-mihomo-service",
             binding=binding_proto(),
         )
 
 
-class PlatformService(platform_pb2_grpc.PlatformServiceServicer):
+class MihomoRuntimeService(runtime_pb2_grpc.MihomoRuntimeServiceServicer):
     async def DescribePlatform(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         await require_request_id(context)
-        return platform_pb2.DescribePlatformResponse(
+        return runtime_pb2.DescribePlatformResponse(
             platform_key="mihomo",
             display_name="Mihomo",
-            service_audience="mihomo-service",
+            service_audience="platform-mihomo-service",
             supported_actions=[
-                "mihomo.credential.read_meta",
-                "mihomo.credential.refresh",
-                "mihomo.credential.validate",
-                "mihomo.credential.delete",
-                "mihomo.status.read",
-                "mihomo.profile.read",
                 "mihomo.authkey.issue",
-                "mihomo.device.update",
+                "mihomo.credential.validate",
+                "mihomo.device.read",
+                "mihomo.profile.read",
+                "mihomo.status.read",
             ],
-            version="v1",
+            contract_version="v2",
         )
 
-    async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        if request.platform_account_id != "binding_7_10001":
-            await context.abort(grpc.StatusCode.PERMISSION_DENIED, "invalid service ticket")
-        return platform_pb2.GetCredentialSummaryResponse(
-            platform_account_id=request.platform_account_id,
-            status=platform_pb2.CREDENTIAL_STATUS_ACTIVE,
-            devices=[
-                platform_pb2.DeviceSummary(
-                    device_id="device-id",
-                    device_name="Phone",
-                    is_valid=True,
-                )
-            ],
-            profiles=[
-                platform_pb2.ProfileSummary(
-                    id=99,
-                    platform_account_id=request.platform_account_id,
-                    game_biz="hk4e_global",
-                    player_id="10001",
-                    nickname="Traveler",
-                    level=60,
-                    is_default=True,
-                )
-            ],
-        )
-
-    async def RefreshCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.RefreshCredentialResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
-
-    async def DeleteCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.DeleteCredentialResponse(success=True)
-
-    async def GetCredentialStatus(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.GetCredentialStatusResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
+    async def GetStatus(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_platform_request(request.resource, context)
+        return runtime_pb2.GetStatusResponse(status=types_pb2.CREDENTIAL_STATUS_ACTIVE)
 
     async def ValidateCredential(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.ValidateCredentialResponse(status=platform_pb2.CREDENTIAL_STATUS_ACTIVE)
+        await require_platform_request(request.resource, context)
+        return runtime_pb2.ValidateCredentialResponse(status=types_pb2.CREDENTIAL_STATUS_ACTIVE)
 
     async def ListProfiles(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.ListProfilesResponse(profiles=[profile_proto(request.platform_account_id)])
+        await require_platform_request(request.resource, context)
+        return runtime_pb2.ListProfilesResponse(
+            snapshot=types_pb2.ProfileSnapshot(profiles=[profile_proto(request.resource.account_key)], complete=True)
+        )
 
     async def GetPrimaryProfile(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.GetPrimaryProfileResponse(profile=profile_proto(request.platform_account_id))
+        await require_platform_request(request.resource, context)
+        return runtime_pb2.GetPrimaryProfileResponse(profile=profile_proto(request.resource.account_key))
 
     async def GetAuthKey(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.GetAuthKeyResponse(authkey=f"authkey-{request.player_id}")
+        await require_platform_request(request.resource, context)
+        if request.profile_ref != "profile-99":
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "unexpected profile_ref")
+        return runtime_pb2.GetAuthKeyResponse(authkey="authkey-profile-99")
 
-    async def UpsertDevice(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
-        return platform_pb2.UpsertDeviceResponse(success=bool(request.device.device_id))
+    async def GetDevice(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_platform_request(request.resource, context)
+        if request.device_ref != "device-1":
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "unexpected device_ref")
+        return runtime_pb2.GetDeviceResponse(
+            device=types_pb2.DeviceSummary(device_ref="device-1", device_name="Phone", is_valid=True)
+        )
 
 
-class PreconditionPlatformService(PlatformService):
-    async def GetCredentialSummary(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
-        await require_platform_metadata(context)
+class PreconditionMihomoRuntimeService(MihomoRuntimeService):
+    async def GetStatus(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_platform_request(request.resource, context)
         await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "credential is inactive")
 
 
@@ -162,29 +131,31 @@ async def require_account_metadata(context):  # type: ignore[no-untyped-def, no-
     await require_request_id(context)
 
 
-async def require_platform_metadata(context):  # type: ignore[no-untyped-def, no-untyped-call]
+async def require_platform_request(resource, context):  # type: ignore[no-untyped-def, no-untyped-call]
     metadata = dict(context.invocation_metadata())
     if metadata.get("authorization") != "Bearer service-ticket":
         await context.abort(grpc.StatusCode.UNAUTHENTICATED, "missing service ticket")
     await require_request_id(context)
+    if resource.binding_ref != "binding-7" or resource.account_key != "account-10001":
+        await context.abort(grpc.StatusCode.PERMISSION_DENIED, "invalid binding resource")
 
 
-def binding_proto():  # type: ignore[no-untyped-def]
+def binding_proto() -> bot_access_pb2.PlatformAccountBinding:
     return bot_access_pb2.PlatformAccountBinding(
-        id=7,
-        user_id=42,
+        binding_ref="binding-7",
         platform="mihomo",
-        platform_service_key="mihomo",
-        platform_account_id="binding_7_10001",
+        platform_service_key="platform-mihomo-service",
+        account_key="account-10001",
         display_name="Traveler",
         status=bot_access_pb2.PLATFORM_ACCOUNT_STATUS_ACTIVE,
+        generation=4,
     )
 
 
-def profile_proto(platform_account_id):  # type: ignore[no-untyped-def]
-    return platform_pb2.ProfileSummary(
-        id=99,
-        platform_account_id=platform_account_id,
+def profile_proto(account_key: str) -> types_pb2.ProfileSummary:
+    return types_pb2.ProfileSummary(
+        profile_ref="profile-99",
+        account_key=account_key,
         game_biz="hk4e_global",
         player_id="10001",
         nickname="Traveler",
@@ -206,9 +177,9 @@ async def account_server() -> AsyncIterator[str]:
 
 
 @asynccontextmanager
-async def platform_server(service: PlatformService | None = None) -> AsyncIterator[str]:
+async def platform_server(service: MihomoRuntimeService | None = None) -> AsyncIterator[str]:
     server = grpc.aio.server()
-    platform_pb2_grpc.add_PlatformServiceServicer_to_server(service or PlatformService(), server)
+    runtime_pb2_grpc.add_MihomoRuntimeServiceServicer_to_server(service or MihomoRuntimeService(), server)
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
     try:
@@ -235,20 +206,23 @@ def token_transport() -> httpx.MockTransport:
     return httpx.MockTransport(issue_token)
 
 
+def client_for(account_target: str, platform_target: str = "127.0.0.1:1") -> PaiGramAccountClient:
+    return PaiGramAccountClient(
+        account_http_url="https://account.example.test",
+        account_grpc_target=account_target,
+        account_grpc_secure=False,
+        client_id="paigram",
+        client_secret="secret",
+        platform_endpoints={
+            "platform-mihomo-service": PlatformEndpoint(target=platform_target, secure=False),
+        },
+        http_transport=token_transport(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_resolve_user_returns_public_model() -> None:
-    async with (
-        account_server() as target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={"mihomo": PlatformEndpoint(target="127.0.0.1:1", secure=False)},
-            http_transport=token_transport(),
-        ) as client,
-    ):
+    async with account_server() as target, client_for(target) as client:
         user = await client.resolve_user("telegram:10001", request_id="request-123")
 
     assert user.user_id == 42
@@ -259,92 +233,33 @@ async def test_resolve_user_returns_public_model() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_user_maps_grpc_not_found() -> None:
-    async with (
-        account_server() as target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={},
-            http_transport=token_transport(),
-        ) as client,
-    ):
+    async with account_server() as target, client_for(target) as client:
         with pytest.raises(NotFoundError, match="user not found"):
             await client.resolve_user("missing", request_id="request-123")
 
 
 @pytest.mark.asyncio
 async def test_list_bindings_returns_stable_public_models() -> None:
-    async with (
-        account_server() as target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={},
-            http_transport=token_transport(),
-        ) as client,
-    ):
-        bindings = await client.list_bindings(
-            "telegram:10001",
-            platform="mihomo",
-            request_id="request-123",
-        )
+    async with account_server() as target, client_for(target) as client:
+        bindings = await client.list_bindings("telegram:10001", platform="mihomo", request_id="request-123")
 
     assert len(bindings) == 1
-    assert bindings[0].platform_service_key == "mihomo"
-    assert bindings[0].platform_account_id == "binding_7_10001"
+    assert bindings[0].binding_ref == "binding-7"
+    assert bindings[0].platform_service_key == "platform-mihomo-service"
+    assert bindings[0].account_key == "account-10001"
+    assert bindings[0].generation == 4
     assert bindings[0].status is PlatformAccountStatus.ACTIVE
 
 
 @pytest.mark.asyncio
-async def test_get_credential_summary_orchestrates_service_ticket() -> None:
+async def test_platform_runtime_methods_use_v2_resources_and_public_models() -> None:
     async with (
         account_server() as account_target,
         platform_server() as platform_target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=account_target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={"mihomo": PlatformEndpoint(target=platform_target, secure=False)},
-            http_transport=token_transport(),
-        ) as client,
+        client_for(account_target, platform_target) as client,
     ):
         binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
-        summary = await client.get_credential_summary(
-            external_user_id="telegram:10001",
-            binding=binding,
-            request_id="request-123",
-        )
-
-    assert summary.platform_account_id == "binding_7_10001"
-    assert summary.status is CredentialStatus.ACTIVE
-    assert summary.devices[0].device_name == "Phone"
-    assert summary.profiles[0].nickname == "Traveler"
-
-
-@pytest.mark.asyncio
-async def test_platform_consumer_methods_use_public_models() -> None:
-    async with (
-        account_server() as account_target,
-        platform_server() as platform_target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=account_target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={"mihomo": PlatformEndpoint(target=platform_target, secure=False)},
-            http_transport=token_transport(),
-        ) as client,
-    ):
-        binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
+        descriptor = await client.describe_platform(binding.platform_service_key, request_id="request-123")
         status_result = await client.get_credential_status(
             external_user_id="telegram:10001", binding=binding, request_id="request-123"
         )
@@ -360,22 +275,25 @@ async def test_platform_consumer_methods_use_public_models() -> None:
         authkey = await client.get_auth_key(
             external_user_id="telegram:10001",
             binding=binding,
-            player_id="10001",
+            profile_ref="profile-99",
             request_id="request-123",
         )
-        device_updated = await client.upsert_device(
+        device = await client.get_device(
             external_user_id="telegram:10001",
             binding=binding,
-            device=DeviceInfo(device_id="device-id", device_fp="device-fp", device_name="Phone"),
+            device_ref="device-1",
             request_id="request-123",
         )
 
+    assert descriptor.contract_version == "v2"
     assert status_result.status is CredentialStatus.ACTIVE
     assert validation.status is CredentialStatus.ACTIVE
+    assert profiles[0].profile_ref == "profile-99"
     assert profiles[0].nickname == "Traveler"
     assert primary is not None and primary.is_default
-    assert authkey.value == "authkey-10001"
-    assert device_updated is True
+    assert authkey.value == "authkey-profile-99"
+    assert device.device_ref == "device-1"
+    assert device.device_name == "Phone"
 
 
 @pytest.mark.asyncio
@@ -422,18 +340,7 @@ async def test_oauth_server_failure_is_retryable() -> None:
 
 @pytest.mark.asyncio
 async def test_account_precondition_maps_credential_state() -> None:
-    async with (
-        account_server() as target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={},
-            http_transport=token_transport(),
-        ) as client,
-    ):
+    async with account_server() as target, client_for(target) as client:
         with pytest.raises(CredentialError, match="binding is inactive"):
             await client.resolve_user("inactive", request_id="request-123")
 
@@ -442,20 +349,12 @@ async def test_account_precondition_maps_credential_state() -> None:
 async def test_platform_precondition_maps_credential_state() -> None:
     async with (
         account_server() as account_target,
-        platform_server(PreconditionPlatformService()) as platform_target,
-        PaiGramAccountClient(
-            account_http_url="https://account.example.test",
-            account_grpc_target=account_target,
-            account_grpc_secure=False,
-            client_id="paigram",
-            client_secret="secret",
-            platform_endpoints={"mihomo": PlatformEndpoint(target=platform_target, secure=False)},
-            http_transport=token_transport(),
-        ) as client,
+        platform_server(PreconditionMihomoRuntimeService()) as platform_target,
+        client_for(account_target, platform_target) as client,
     ):
         binding = (await client.list_bindings("telegram:10001", request_id="request-123"))[0]
         with pytest.raises(CredentialError, match="credential is inactive"):
-            await client.get_credential_summary(
+            await client.get_credential_status(
                 external_user_id="telegram:10001",
                 binding=binding,
                 request_id="request-123",

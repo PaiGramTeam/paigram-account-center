@@ -4,80 +4,147 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type platformBindingRouteStub struct {
-	platformv1.UnimplementedPlatformServiceServer
-	summaryResponse           *platformv1.GetCredentialSummaryResponse
-	credentialMutationSummary *platformv1.GetCredentialSummaryResponse
+	platformv2.UnimplementedPlatformControlServiceServer
+	summaryResponse           *routeCredentialSummary
+	credentialMutationSummary *routeCredentialSummary
 	credentialMutationErr     error
 	deleteErr                 error
-	confirmPrimaryProfileErr  error
-	lastBind                  *platformv1.BindCredentialRequest
-	lastReplace               *platformv1.ReplaceCredentialRequest
-	deleteRequests            []*platformv1.DeleteCredentialRequest
-	lastConfirmPrimaryProfile *platformv1.ConfirmPrimaryProfileRequest
-	lastConfirmAuthorization  []string
+	lastBind                  *platformv2.BindCredentialRequest
+	lastReplace               *platformv2.ReplaceCredentialRequest
+	deleteRequests            []*platformv2.DeleteCredentialRequest
 }
 
-func (s *platformBindingRouteStub) DescribePlatform(context.Context, *platformv1.DescribePlatformRequest) (*platformv1.DescribePlatformResponse, error) {
-	return &platformv1.DescribePlatformResponse{}, nil
+type routeCredentialSummary struct {
+	PlatformAccountId string
+	Status            platformv2.CredentialStatus
+	LastValidatedAt   *timestamppb.Timestamp
+	LastRefreshedAt   *timestamppb.Timestamp
+	Profiles          []*routeProfileSummary
 }
 
-func (s *platformBindingRouteStub) GetCredentialSummary(context.Context, *platformv1.GetCredentialSummaryRequest) (*platformv1.GetCredentialSummaryResponse, error) {
+type routeProfileSummary struct {
+	Id                uint64
+	PlatformAccountId string
+	GameBiz           string
+	Region            string
+	PlayerId          string
+	Nickname          string
+	Level             int32
+	IsDefault         bool
+}
+
+func (s *platformBindingRouteStub) GetBindingState(_ context.Context, req *platformv2.GetBindingStateRequest) (*platformv2.GetBindingStateResponse, error) {
 	if s.summaryResponse != nil {
-		return s.summaryResponse, nil
+		state := routeSummaryToBindingState(s.summaryResponse)
+		state.BindingRef = req.GetBindingRef()
+		return &platformv2.GetBindingStateResponse{State: state}, nil
 	}
-	return &platformv1.GetCredentialSummaryResponse{}, nil
+	return &platformv2.GetBindingStateResponse{}, nil
 }
 
-func (s *platformBindingRouteStub) BindCredential(_ context.Context, req *platformv1.BindCredentialRequest) (*platformv1.BindCredentialResponse, error) {
+func (s *platformBindingRouteStub) BindCredential(_ context.Context, req *platformv2.BindCredentialRequest) (*platformv2.BindCredentialResponse, error) {
 	s.lastBind = req
 	if s.credentialMutationErr != nil {
 		return nil, s.credentialMutationErr
 	}
-	return &platformv1.BindCredentialResponse{Summary: s.credentialMutationSummary}, nil
+	return &platformv2.BindCredentialResponse{Result: operationResultForRequest(routeSummaryToOperationResult(s.credentialMutationSummary), req.GetOperation())}, nil
 }
 
-func (s *platformBindingRouteStub) ReplaceCredential(_ context.Context, req *platformv1.ReplaceCredentialRequest) (*platformv1.ReplaceCredentialResponse, error) {
+func (s *platformBindingRouteStub) ReplaceCredential(_ context.Context, req *platformv2.ReplaceCredentialRequest) (*platformv2.ReplaceCredentialResponse, error) {
 	s.lastReplace = req
 	if s.credentialMutationErr != nil {
 		return nil, s.credentialMutationErr
 	}
-	return &platformv1.ReplaceCredentialResponse{Summary: s.credentialMutationSummary}, nil
+	return &platformv2.ReplaceCredentialResponse{Result: operationResultForRequest(routeSummaryToOperationResult(s.credentialMutationSummary), req.GetOperation())}, nil
 }
 
-func (s *platformBindingRouteStub) RefreshCredential(context.Context, *platformv1.RefreshCredentialRequest) (*platformv1.RefreshCredentialResponse, error) {
-	return &platformv1.RefreshCredentialResponse{}, nil
+func (s *platformBindingRouteStub) RefreshCredential(_ context.Context, req *platformv2.RefreshCredentialRequest) (*platformv2.RefreshCredentialResponse, error) {
+	return &platformv2.RefreshCredentialResponse{Result: operationResultForRequest(routeSummaryToOperationResult(s.credentialMutationSummary), req.GetOperation())}, nil
 }
 
-func (s *platformBindingRouteStub) DeleteCredential(_ context.Context, req *platformv1.DeleteCredentialRequest) (*platformv1.DeleteCredentialResponse, error) {
+func routeSummaryToOperationResult(summary *routeCredentialSummary) *platformv2.OperationResult {
+	if summary == nil {
+		return nil
+	}
+	return &platformv2.OperationResult{
+		AccountKey:       summary.PlatformAccountId,
+		CredentialStatus: summary.Status,
+		ProfileSnapshot:  routeProfileSnapshot(summary.Profiles),
+		LastValidatedAt:  summary.LastValidatedAt,
+		LastRefreshedAt:  summary.LastRefreshedAt,
+	}
+}
+
+func routeSummaryToBindingState(summary *routeCredentialSummary) *platformv2.BindingState {
+	if summary == nil {
+		return nil
+	}
+	return &platformv2.BindingState{
+		Exists:           true,
+		AccountKey:       summary.PlatformAccountId,
+		CredentialStatus: summary.Status,
+		ProfileSnapshot:  routeProfileSnapshot(summary.Profiles),
+		LastValidatedAt:  summary.LastValidatedAt,
+		LastRefreshedAt:  summary.LastRefreshedAt,
+	}
+}
+
+func routeProfileSnapshot(profiles []*routeProfileSummary) *platformv2.ProfileSnapshot {
+	items := make([]*platformv2.ProfileSummary, 0, len(profiles))
+	for _, profile := range profiles {
+		items = append(items, &platformv2.ProfileSummary{
+			ProfileRef: fmt.Sprintf("mihomo:%d", profile.Id),
+			AccountKey: profile.PlatformAccountId,
+			GameBiz:    profile.GameBiz,
+			Region:     profile.Region,
+			PlayerId:   profile.PlayerId,
+			Nickname:   profile.Nickname,
+			Level:      profile.Level,
+			IsDefault:  profile.IsDefault,
+		})
+	}
+	return &platformv2.ProfileSnapshot{Profiles: items, Complete: true, Revision: 1, ObservedRevision: 1}
+}
+
+func (s *platformBindingRouteStub) DeleteCredential(_ context.Context, req *platformv2.DeleteCredentialRequest) (*platformv2.DeleteCredentialResponse, error) {
 	s.deleteRequests = append(s.deleteRequests, req)
 	if s.deleteErr != nil {
 		return nil, s.deleteErr
 	}
-	return &platformv1.DeleteCredentialResponse{Success: true}, nil
+	return &platformv2.DeleteCredentialResponse{Result: operationResultForRequest(&platformv2.OperationResult{
+		State: platformv2.OperationState_OPERATION_STATE_SUCCEEDED,
+	}, req.GetOperation())}, nil
 }
 
-func (s *platformBindingRouteStub) InvalidateConsumerGrant(context.Context, *platformv1.InvalidateConsumerGrantRequest) (*platformv1.InvalidateConsumerGrantResponse, error) {
-	return &platformv1.InvalidateConsumerGrantResponse{Success: true}, nil
+func (s *platformBindingRouteStub) ApplyAuthorizationFence(_ context.Context, req *platformv2.ApplyAuthorizationFenceRequest) (*platformv2.ApplyAuthorizationFenceResponse, error) {
+	return &platformv2.ApplyAuthorizationFenceResponse{Result: operationResultForRequest(&platformv2.OperationResult{
+		State: platformv2.OperationState_OPERATION_STATE_SUCCEEDED,
+	}, req.GetOperation())}, nil
 }
 
-func (s *platformBindingRouteStub) ConfirmPrimaryProfile(ctx context.Context, req *platformv1.ConfirmPrimaryProfileRequest) (*platformv1.ConfirmPrimaryProfileResponse, error) {
-	md, _ := metadata.FromIncomingContext(ctx)
-	s.lastConfirmAuthorization = append([]string(nil), md.Get("authorization")...)
-	s.lastConfirmPrimaryProfile = req
-	if s.confirmPrimaryProfileErr != nil {
-		return nil, s.confirmPrimaryProfileErr
+func operationResultForRequest(result *platformv2.OperationResult, operation *platformv2.OperationRef) *platformv2.OperationResult {
+	if result == nil {
+		return nil
 	}
-	return &platformv1.ConfirmPrimaryProfileResponse{}, nil
+	copy := *result
+	if copy.Operation == nil {
+		copy.Operation = operation
+	}
+	if copy.State == platformv2.OperationState_OPERATION_STATE_UNSPECIFIED {
+		copy.State = platformv2.OperationState_OPERATION_STATE_SUCCEEDED
+	}
+	return &copy
 }
 
 func startPlatformBindingRouteServer(t *testing.T, stub *platformBindingRouteStub) string {
@@ -85,7 +152,7 @@ func startPlatformBindingRouteServer(t *testing.T, stub *platformBindingRouteStu
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	server := grpc.NewServer()
-	platformv1.RegisterPlatformServiceServer(server, stub)
+	platformv2.RegisterPlatformControlServiceServer(server, stub)
 	serveErrCh := make(chan error, 1)
 	go func() {
 		serveErrCh <- server.Serve(listener)

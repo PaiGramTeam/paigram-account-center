@@ -7,10 +7,12 @@ import (
 )
 
 var ErrCredentialAlreadyBound = errors.New("credential already exists for binding")
+var ErrCredentialGenerationConflict = errors.New("credential generation conflict")
 
 type Credential struct {
-	BindingID         uint64
-	PlatformAccountID string
+	BindingRef        string
+	AccountKey        string
+	Generation        uint64
 	Platform          string
 	AccountID         string
 	Region            string
@@ -20,12 +22,17 @@ type Credential struct {
 	LastValidatedAt   *time.Time
 	LastRefreshedAt   *time.Time
 	ExpiresAt         *time.Time
+	ProfileSnapshotComplete bool
+	ProfileRevision         uint64
+	ProfileObservedRevision uint64
 }
 
 type CredentialRepository interface {
 	Create(ctx context.Context, credential *Credential) error
 	Save(ctx context.Context, credential *Credential) error
-	GetByBindingID(ctx context.Context, bindingID uint64) (*Credential, error)
-	GetByPlatformAccountID(ctx context.Context, platformAccountID string) (*Credential, error)
-	DeleteByPlatformAccountID(ctx context.Context, platformAccountID string) error
+	AdvanceGeneration(ctx context.Context, bindingRef, accountKey string, expected, target uint64) (*Credential, error)
+	SetProfileSnapshotState(ctx context.Context, bindingRef string, complete bool, revision, observedRevision uint64) error
+	GetByBindingRef(ctx context.Context, bindingRef string) (*Credential, error)
+	GetByAccountKey(ctx context.Context, accountKey string) (*Credential, error)
+	DeleteByAccountKey(ctx context.Context, accountKey string) error
 }

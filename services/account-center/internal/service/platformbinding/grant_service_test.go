@@ -322,6 +322,54 @@ func TestGrantServiceUpsertGrantReactivationIncrementsTicketVersion(t *testing.T
 	assert.Equal(t, uint64(5), grant.TicketVersion)
 }
 
+func TestGrantServiceUpsertActionContractionPropagatesMinimumTicketVersion(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	invalidator := &capturingGrantInvalidator{}
+	service := NewGrantService(db, invalidator)
+	binding := seedGrantServiceBinding(t, db, "cn:grant-action-contraction")
+	seedConsumerGrant(t, db, model.ConsumerGrant{
+		BindingID: binding.ID, Consumer: ConsumerPaiGramBot, Status: model.ConsumerGrantStatusActive,
+		TicketVersion: 3, GrantedAt: time.Now().UTC(),
+	}, "mihomo.status.read", "mihomo.profile.read")
+	ctx := context.WithValue(context.Background(), grantInvalidatorContextKey{}, "action-contraction")
+
+	grant, created, err := service.UpsertGrant(UpsertGrantInput{
+		Context: ctx, BindingID: binding.ID, Consumer: ConsumerPaiGramBot,
+		Actions: []string{"mihomo.status.read"}, GrantedBy: sql.NullInt64{Int64: int64(binding.OwnerUserID), Valid: true},
+	})
+
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Equal(t, uint64(4), grant.TicketVersion)
+	require.True(t, grant.LastInvalidatedAt.Valid)
+	require.Equal(t, 1, invalidator.calls)
+	require.Equal(t, ctx, invalidator.ctx)
+	require.Equal(t, uint64(4), invalidator.input.MinimumGrantVersion)
+	require.Equal(t, ConsumerPaiGramBot, invalidator.input.Consumer)
+}
+
+func TestGrantServiceUpsertRetriesPendingActionInvalidation(t *testing.T) {
+	db := setupPlatformBindingTestDB(t)
+	binding := seedGrantServiceBinding(t, db, "cn:grant-action-retry")
+	seedConsumerGrant(t, db, model.ConsumerGrant{
+		BindingID: binding.ID, Consumer: ConsumerPaiGramBot, Status: model.ConsumerGrantStatusActive,
+		TicketVersion: 4, GrantedAt: time.Now().UTC(), LastInvalidatedAt: sql.NullTime{},
+	}, "mihomo.status.read")
+	invalidator := &capturingGrantInvalidator{}
+	service := NewGrantService(db, invalidator)
+
+	grant, created, err := service.UpsertGrant(UpsertGrantInput{
+		BindingID: binding.ID, Consumer: ConsumerPaiGramBot, Actions: []string{"mihomo.status.read"},
+		GrantedBy: sql.NullInt64{Int64: int64(binding.OwnerUserID), Valid: true},
+	})
+
+	require.NoError(t, err)
+	require.False(t, created)
+	require.Equal(t, 1, invalidator.calls)
+	require.Equal(t, uint64(4), invalidator.input.MinimumGrantVersion)
+	require.True(t, grant.LastInvalidatedAt.Valid)
+}
+
 func TestGrantServiceRevokeGrantInvalidatorFailureLeavesRetryableRevocation(t *testing.T) {
 	db := setupPlatformBindingTestDB(t)
 	invalidationErr := errors.New("platform down")
@@ -620,8 +668,8 @@ func (s *serviceGroupPlatformServiceStub) IssueBindingScopedTicket(string, strin
 	return "ticket", time.Now().UTC(), nil
 }
 
-func (s *serviceGroupPlatformServiceStub) ConfirmBindingPrimaryProfile(context.Context, string, string, *model.PlatformAccountBinding, string) error {
-	return nil
+func (s *serviceGroupPlatformServiceStub) IssueBindingScopedOperationTicket(string, string, *model.PlatformAccountBinding, string, []string) (string, time.Time, error) {
+	return "ticket", time.Now().UTC(), nil
 }
 
 func (s *serviceGroupPlatformServiceStub) GetBindingRuntimeSummary(context.Context, string, string, *model.PlatformAccountBinding, []string) (map[string]any, error) {

@@ -43,6 +43,8 @@ const (
 // User models the core user entity.
 type User struct {
 	ID               uint64         `gorm:"primaryKey"`
+	UserRef          string         `gorm:"size:64;not null;uniqueIndex:uk_users_ref"`
+	OwnerEpoch       uint64         `gorm:"not null;default:1"`
 	PrimaryLoginType LoginType      `gorm:"size:32;not null;index"`
 	Status           UserStatus     `gorm:"size:32;not null;default:'pending';index"`
 	PrimaryRoleID    sql.NullInt64  `gorm:"type:bigint;index"`
@@ -55,6 +57,16 @@ type User struct {
 	Credentials []UserCredential `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Emails      []UserEmail      `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	Sessions    []UserSession    `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
+}
+
+func (user *User) BeforeCreate(_ *gorm.DB) error {
+	if user.UserRef == "" {
+		user.UserRef = "usr_" + uuid.NewString()
+	}
+	if user.OwnerEpoch == 0 {
+		user.OwnerEpoch = 1
+	}
+	return nil
 }
 
 // UserProfile stores display information for a user.

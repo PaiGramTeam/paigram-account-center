@@ -484,6 +484,7 @@ func putConsumerGrant(c *gin.Context, grantService grantService, bindingID, acto
 	grantedBy := sql.NullInt64{Int64: int64(actorUserID), Valid: true}
 	if *req.Enabled {
 		grant, _, err := grantService.UpsertGrant(serviceplatformbinding.UpsertGrantInput{
+			Context:   c.Request.Context(),
 			BindingID: bindingID,
 			Consumer:  consumer,
 			Actions:   req.Actions,
@@ -537,6 +538,7 @@ func putConsumerGrantForOwner(c *gin.Context, grantService grantService, ownerUs
 	grantedBy := sql.NullInt64{Int64: int64(ownerUserID), Valid: true}
 	if *req.Enabled {
 		grant, _, err := grantService.UpsertGrantForOwner(ownerUserID, serviceplatformbinding.UpsertGrantInput{
+			Context:   c.Request.Context(),
 			BindingID: bindingID,
 			Consumer:  consumer,
 			Actions:   req.Actions,

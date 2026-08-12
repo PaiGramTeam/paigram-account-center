@@ -11,24 +11,26 @@ type ProfileIdentity struct {
 }
 
 type Profile struct {
-	ID                uint64
-	BindingID         uint64
-	PlatformAccountID string
-	GameBiz           string
-	Region            string
-	PlayerID          string
-	Nickname          string
-	Level             int
-	IsDefault         bool
-	DiscoveredAt      time.Time
+	ID           uint64
+	BindingRef   string
+	AccountKey   string
+	ProfileRef   string
+	GameBiz      string
+	Region       string
+	PlayerID     string
+	Nickname     string
+	Level        int
+	IsDefault    bool
+	DiscoveredAt time.Time
 }
 
 type ProfileRepository interface {
 	Save(ctx context.Context, profile *Profile) error
-	SetDefaultByBindingAndPlayerID(ctx context.Context, bindingID uint64, platformAccountID string, playerID string) error
-	ListByBindingID(ctx context.Context, bindingID uint64) ([]*Profile, error)
-	ListByPlatformAccountID(ctx context.Context, platformAccountID string) ([]*Profile, error)
-	DeleteMissingByBindingID(ctx context.Context, bindingID uint64, keep []ProfileIdentity) error
-	DeleteByPlatformAccountID(ctx context.Context, platformAccountID string) error
-	DeleteMissingByPlatformAccountID(ctx context.Context, platformAccountID string, keep []ProfileIdentity) error
+	SetDefaultByBindingAndPlayerID(ctx context.Context, bindingRef string, accountKey string, playerID string) error
+	GetByProfileRef(ctx context.Context, bindingRef string, profileRef string) (*Profile, error)
+	ListByBindingRef(ctx context.Context, bindingRef string) ([]*Profile, error)
+	ListByAccountKey(ctx context.Context, accountKey string) ([]*Profile, error)
+	DeleteMissingByBindingRef(ctx context.Context, bindingRef string, keep []ProfileIdentity) error
+	DeleteByAccountKey(ctx context.Context, accountKey string) error
+	DeleteMissingByAccountKey(ctx context.Context, accountKey string, keep []ProfileIdentity) error
 }

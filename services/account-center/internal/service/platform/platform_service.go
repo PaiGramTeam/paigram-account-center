@@ -8,13 +8,15 @@ import (
 	"fmt"
 	"time"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 
 	"paigram/internal/config"
@@ -51,7 +53,7 @@ type PlatformSchemaView struct {
 }
 
 type platformSummaryProxy interface {
-	GetCredentialSummary(ctx context.Context, endpoint, ticket, platformAccountID string) (map[string]any, error)
+	GetCredentialSummary(ctx context.Context, endpoint, ticket, bindingRef, accountKey string) (map[string]any, error)
 }
 
 // PlatformService provides platform registry lookups.
@@ -63,28 +65,26 @@ type PlatformService struct {
 	healthChecker       platformHealthChecker
 }
 
-func buildPlatformServiceTicketClaims(actorType, actorID string, ownerUserID, bindingID uint64, platform, platformAccountID string, scopes []string) ServiceTicketClaims {
+func buildPlatformServiceTicketClaims(actorType, actorID, bindingRef, platform, accountKey string, scopes []string) ServiceTicketClaims {
 	return ServiceTicketClaims{
-		ActorType:         actorType,
-		ActorID:           actorID,
-		OwnerUserID:       ownerUserID,
-		UserID:            ownerUserID,
-		Platform:          platform,
-		BindingID:         bindingID,
-		PlatformAccountID: platformAccountID,
-		Scopes:            scopes,
+		ActorType:  actorType,
+		ActorID:    actorID,
+		Platform:   platform,
+		BindingRef: bindingRef,
+		AccountKey: accountKey,
+		Scopes:     scopes,
 	}
 }
 
-func buildBindingScopedTicketClaims(actorType, actorID string, ownerUserID, bindingID uint64, platform, platformServiceKey, platformAccountID string, scopes []string) ServiceTicketClaims {
-	claims := buildPlatformServiceTicketClaims(actorType, actorID, ownerUserID, bindingID, platform, platformAccountID, scopes)
+func buildBindingScopedTicketClaims(actorType, actorID, bindingRef, platform, platformServiceKey, accountKey string, scopes []string) ServiceTicketClaims {
+	claims := buildPlatformServiceTicketClaims(actorType, actorID, bindingRef, platform, accountKey, scopes)
 	claims.PlatformServiceKey = platformServiceKey
 	return claims
 }
 
 func isSupportedInternalActorType(actorType string) bool {
 	switch actorType {
-	case "user", "admin", "consumer":
+	case "user", "admin", "consumer", "system":
 		return true
 	default:
 		return false
@@ -180,10 +180,21 @@ func (s *PlatformService) GetPlatformSchemaView(platformKey string) (*PlatformSc
 }
 
 func (s *PlatformService) IssueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, scopes []string) (string, time.Time, error) {
+	return s.issueBindingScopedTicket(actorType, actorID, binding, "", scopes)
+}
+
+func (s *PlatformService) IssueBindingScopedOperationTicket(actorType, actorID string, binding *model.PlatformAccountBinding, operationID string, scopes []string) (string, time.Time, error) {
+	if operationID == "" {
+		return "", time.Time{}, ErrInvalidTicketConfig
+	}
+	return s.issueBindingScopedTicket(actorType, actorID, binding, operationID, scopes)
+}
+
+func (s *PlatformService) issueBindingScopedTicket(actorType, actorID string, binding *model.PlatformAccountBinding, operationID string, scopes []string) (string, time.Time, error) {
 	if s.ticketSigner == nil {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
-	if binding == nil || actorType == "" || actorID == "" || !isSupportedInternalActorType(actorType) {
+	if binding == nil || binding.BindingRef == "" || binding.PlatformServiceKey == "" || binding.OwnerUserID == 0 || len(scopes) != 1 || scopes[0] == "" || actorType == "" || actorID == "" || !isSupportedInternalActorType(actorType) {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
 
@@ -195,16 +206,24 @@ func (s *PlatformService) IssueBindingScopedTicket(actorType, actorID string, bi
 		return "", time.Time{}, err
 	}
 
-	claims := buildBindingScopedTicketClaims(actorType, actorID, binding.OwnerUserID, binding.ID, binding.Platform, binding.PlatformServiceKey, nullableBindingExternalAccountKey(binding.ExternalAccountKey), scopes)
+	claims := buildBindingScopedTicketClaims(actorType, actorID, binding.BindingRef, binding.Platform, binding.PlatformServiceKey, nullableBindingExternalAccountKey(binding.ExternalAccountKey), scopes)
+	var owner model.User
+	if err := s.db.Select("user_ref", "owner_epoch").First(&owner, binding.OwnerUserID).Error; err != nil {
+		return "", time.Time{}, err
+	}
+	claims.OwnerUserRef = owner.UserRef
+	claims.OwnerEpoch = owner.OwnerEpoch
+	claims.CredentialGeneration = binding.Generation
+	claims.OperationID = operationID
 	claims.AllowedActions = scopes
-	return s.ticketSigner.Issue(ticketTypeForActor(actorType), ticketSubject(actorType, actorID, binding.OwnerUserID), platformRow.ServiceAudience, claims)
+	return s.ticketSigner.Issue(ticketTypeForActor(actorType), ticketSubject(actorType, actorID, owner.UserRef), platformRow.ServiceAudience, claims)
 }
 
 func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input platformbinding.GrantInvalidationInput) error {
 	if s.ticketSigner == nil {
 		return ErrInvalidTicketConfig
 	}
-	if input.BindingID == 0 || input.Platform == "" || input.PlatformServiceKey == "" || input.Consumer == "" || input.MinimumGrantVersion == 0 {
+	if input.BindingRef == "" || input.Platform == "" || input.PlatformServiceKey == "" || input.Consumer == "" || input.MinimumGrantVersion == 0 {
 		return ErrInvalidTicketConfig
 	}
 
@@ -226,9 +245,36 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 		return ErrInvalidTicketConfig
 	}
 
-	claims := buildBindingScopedTicketClaims(actorType, actorID, input.OwnerUserID, input.BindingID, input.Platform, input.PlatformServiceKey, "", []string{platformaction.MihomoConsumerGrantInvalidate})
+	operationFingerprint := operationid.AuthorizationFenceFingerprint(
+		platformv2.OperationKind_OPERATION_KIND_APPLY_AUTHORIZATION_FENCE.String(),
+		input.BindingRef,
+		input.Consumer,
+		input.Generation,
+		input.MinimumGrantVersion,
+		0,
+		0,
+		0,
+	)
+	operationID := operationid.DeterministicID(operationFingerprint)
+	operation := &platformv2.OperationRef{
+		OperationId:        operationID,
+		Kind:               platformv2.OperationKind_OPERATION_KIND_APPLY_AUTHORIZATION_FENCE,
+		BindingRef:         input.BindingRef,
+		PreGeneration:      input.Generation,
+		TargetGeneration:   input.Generation,
+		RequestFingerprint: operationFingerprint,
+	}
+	var owner model.User
+	if err := s.db.Select("user_ref", "owner_epoch").First(&owner, input.OwnerUserID).Error; err != nil {
+		return err
+	}
+	claims := buildBindingScopedTicketClaims(actorType, actorID, input.BindingRef, input.Platform, input.PlatformServiceKey, "", []string{platformaction.MihomoAuthorizationFenceApply})
+	claims.OwnerUserRef = owner.UserRef
+	claims.OwnerEpoch = owner.OwnerEpoch
+	claims.CredentialGeneration = input.Generation
+	claims.OperationID = operationID
 	claims.AllowedActions = claims.Scopes
-	signed, _, err := s.ticketSigner.Issue(serviceticket.TypeControl, ticketSubject(actorType, actorID, input.OwnerUserID), platformRow.ServiceAudience, claims)
+	signed, _, err := s.ticketSigner.Issue(serviceticket.TypeControl, ticketSubject(actorType, actorID, owner.UserRef), platformRow.ServiceAudience, claims)
 	if err != nil {
 		return err
 	}
@@ -256,9 +302,9 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 	defer cancel()
 	callCtx = clientauth.WithServiceTicket(callCtx, signed)
 
-	resp, err := platformv1.NewPlatformServiceClient(conn).InvalidateConsumerGrant(callCtx, &platformv1.InvalidateConsumerGrantRequest{
-		BindingId:           input.BindingID,
-		Consumer:            input.Consumer,
+	resp, err := platformv2.NewPlatformControlServiceClient(conn).ApplyAuthorizationFence(callCtx, &platformv2.ApplyAuthorizationFenceRequest{
+		Operation:           operation,
+		ConsumerPrincipal:   input.Consumer,
 		MinimumGrantVersion: input.MinimumGrantVersion,
 	})
 	if err != nil && isPlatformUnavailableRPCError(err) {
@@ -267,7 +313,7 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 	if err != nil {
 		return err
 	}
-	if resp == nil || !resp.GetSuccess() {
+	if resp == nil || resp.GetResult().GetState() != platformv2.OperationState_OPERATION_STATE_SUCCEEDED || !proto.Equal(resp.GetResult().GetOperation(), operation) {
 		return ErrConsumerGrantInvalidationRejected
 	}
 	return nil
@@ -280,14 +326,14 @@ func ticketTypeForActor(actorType string) string {
 	return serviceticket.TypeControl
 }
 
-func ticketSubject(actorType, actorID string, ownerUserID uint64) string {
+func ticketSubject(actorType, actorID, ownerUserRef string) string {
 	if actorType == "consumer" {
 		return "consumer:" + actorID
 	}
 	if actorType == "system" {
 		return "system:account-center"
 	}
-	return fmt.Sprintf("user:%d", ownerUserID)
+	return "user:" + ownerUserRef
 }
 
 func (s *PlatformService) getEnabledPlatformService(platformKey, serviceKey string) (*model.PlatformService, error) {
@@ -344,58 +390,7 @@ func (s *PlatformService) GetBindingRuntimeSummary(ctx context.Context, actorTyp
 	}
 
 	platformAccountID := nullableBindingExternalAccountKey(binding.ExternalAccountKey)
-	return s.genericSummaryProxy.GetCredentialSummary(ctx, platformRow.Endpoint, ticket, platformAccountID)
-}
-
-func (s *PlatformService) ConfirmBindingPrimaryProfile(ctx context.Context, actorType, actorID string, binding *model.PlatformAccountBinding, playerID string) error {
-	if binding == nil || playerID == "" || !binding.ExternalAccountKey.Valid || binding.ExternalAccountKey.String == "" {
-		return gorm.ErrRecordNotFound
-	}
-	if binding.Platform != "mihomo" {
-		return ErrPlatformServiceUnavailable
-	}
-
-	platformRow, err := s.GetEnabledPlatform(binding.Platform)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrPlatformServiceUnavailable
-		}
-		return err
-	}
-
-	ticket, _, err := s.IssueBindingScopedTicket(actorType, actorID, binding, []string{platformaction.MihomoProfileWrite})
-	if err != nil {
-		return err
-	}
-
-	dial := s.dial
-	if dial == nil {
-		dial = func(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-
-			return grpc.DialContext(ctx, endpoint,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithBlock(),
-			)
-		}
-	}
-
-	conn, err := dial(ctx, platformRow.Endpoint)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	callCtx = clientauth.WithServiceTicket(callCtx, ticket)
-
-	_, err = platformv1.NewPlatformServiceClient(conn).ConfirmPrimaryProfile(callCtx, &platformv1.ConfirmPrimaryProfileRequest{
-		PlatformAccountId: nullableBindingExternalAccountKey(binding.ExternalAccountKey),
-		PlayerId:          playerID,
-	})
-	return err
+	return s.genericSummaryProxy.GetCredentialSummary(ctx, platformRow.Endpoint, ticket, binding.BindingRef, platformAccountID)
 }
 
 func nullableBindingExternalAccountKey(value sql.NullString) string {

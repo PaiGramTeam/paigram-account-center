@@ -2,6 +2,8 @@
 
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
+    user_ref VARCHAR(64) NOT NULL DEFAULT ('usr_' || gen_random_uuid()::text),
+    owner_epoch BIGINT NOT NULL DEFAULT 1 CHECK (owner_epoch >= 1),
     primary_login_type VARCHAR(32) NOT NULL DEFAULT 'email',
     status VARCHAR(32) NOT NULL DEFAULT 'pending',
     primary_role_id BIGINT,
@@ -13,6 +15,7 @@ CREATE TABLE users (
 CREATE INDEX idx_users_status ON users (status);
 CREATE INDEX idx_users_primary_role_id ON users (primary_role_id);
 CREATE UNIQUE INDEX idx_users_primary_role_assignment ON users (id, primary_role_id);
+CREATE UNIQUE INDEX uk_users_ref ON users (user_ref);
 CREATE INDEX idx_users_last_login_at ON users (last_login_at);
 CREATE INDEX idx_users_deleted_at ON users (deleted_at);
 
@@ -471,6 +474,8 @@ CREATE INDEX idx_bots_deleted_at ON bots (deleted_at);
 
 CREATE TABLE bot_identities (
     id BIGSERIAL PRIMARY KEY,
+    entry_identity_ref VARCHAR(64) NOT NULL DEFAULT ('entry_' || gen_random_uuid()::text),
+    entry_epoch BIGINT NOT NULL DEFAULT 1 CHECK (entry_epoch >= 1),
     user_id BIGINT NOT NULL,
     bot_id VARCHAR(64) NOT NULL,
     external_user_id VARCHAR(191) NOT NULL,
@@ -485,10 +490,12 @@ CREATE TABLE bot_identities (
     CONSTRAINT fk_bot_identities_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX idx_bot_identities_user_id ON bot_identities (user_id);
+CREATE UNIQUE INDEX uk_bot_identities_ref ON bot_identities (entry_identity_ref);
 CREATE INDEX idx_bot_identities_deleted_at ON bot_identities (deleted_at);
 
 CREATE TABLE service_credentials (
     client_id VARCHAR(96) PRIMARY KEY,
+    consumer_epoch BIGINT NOT NULL DEFAULT 1 CHECK (consumer_epoch >= 1),
     bot_id VARCHAR(64) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     secret_hash VARCHAR(255) NOT NULL,
@@ -528,6 +535,8 @@ CREATE TABLE platform_services (
 
 CREATE TABLE platform_account_bindings (
     id BIGSERIAL PRIMARY KEY,
+    binding_ref VARCHAR(64) NOT NULL,
+    generation BIGINT NOT NULL DEFAULT 0,
     owner_user_id BIGINT NOT NULL,
     platform VARCHAR(64) NOT NULL,
     external_account_key VARCHAR(191),
@@ -539,14 +548,20 @@ CREATE TABLE platform_account_bindings (
     primary_profile_id BIGINT,
     last_validated_at TIMESTAMPTZ,
     last_synced_at TIMESTAMPTZ,
+    profile_revision BIGINT NOT NULL DEFAULT 0,
+    profile_observed_revision BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ,
     active_external_account_marker SMALLINT GENERATED ALWAYS AS (
         CASE WHEN deleted_at IS NULL AND external_account_key IS NOT NULL THEN 1 ELSE NULL END
     ) STORED,
+    CONSTRAINT chk_platform_account_bindings_ref_nonempty CHECK (binding_ref <> ''),
+    CONSTRAINT chk_platform_account_bindings_generation_nonnegative CHECK (generation >= 0),
+    CONSTRAINT chk_platform_account_bindings_profile_observation CHECK (profile_observed_revision <= profile_revision),
     CONSTRAINT fk_platform_account_bindings_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX uk_platform_account_bindings_ref ON platform_account_bindings (binding_ref);
 CREATE UNIQUE INDEX uk_platform_account_bindings_active_external_account
     ON platform_account_bindings (platform, external_account_key, active_external_account_marker);
 CREATE INDEX idx_platform_account_bindings_owner ON platform_account_bindings (owner_user_id);
@@ -559,6 +574,7 @@ CREATE TABLE platform_account_profiles (
     id BIGSERIAL PRIMARY KEY,
     binding_id BIGINT NOT NULL,
     platform_profile_key VARCHAR(191) NOT NULL,
+    profile_ref VARCHAR(64) NOT NULL,
     game_biz VARCHAR(64) NOT NULL,
     region VARCHAR(64) NOT NULL,
     player_uid VARCHAR(64) NOT NULL,
@@ -569,10 +585,12 @@ CREATE TABLE platform_account_profiles (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     primary_profile_marker SMALLINT GENERATED ALWAYS AS (CASE WHEN is_primary THEN 1 ELSE NULL END) STORED,
+    CONSTRAINT chk_platform_account_profiles_ref_nonempty CHECK (profile_ref <> ''),
     CONSTRAINT uk_platform_account_profiles_binding_key UNIQUE (binding_id, platform_profile_key),
     CONSTRAINT uk_platform_account_profiles_binding_row UNIQUE (binding_id, id),
     CONSTRAINT fk_platform_account_profiles_binding FOREIGN KEY (binding_id) REFERENCES platform_account_bindings (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX uk_platform_account_profiles_ref ON platform_account_profiles (profile_ref);
 CREATE UNIQUE INDEX uk_platform_account_profiles_primary_per_binding
     ON platform_account_profiles (binding_id, primary_profile_marker);
 CREATE INDEX idx_platform_account_profiles_binding_id ON platform_account_profiles (binding_id);

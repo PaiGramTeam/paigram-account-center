@@ -3,7 +3,8 @@ package server
 import (
 	"time"
 
-	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	mihomov2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/mihomo/v2"
+	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"google.golang.org/grpc"
@@ -20,10 +21,11 @@ type serviceInfoProvider interface {
 
 func NewGRPCServer(
 	bc *conf.Bootstrap,
-	genericSvc *service.GenericPlatformService,
+	controlSvc *service.PlatformControlService,
+	runtimeSvc *service.MihomoRuntimeService,
 ) *kratosgrpc.Server {
-	if genericSvc == nil {
-		panic("generic platform service is required")
+	if controlSvc == nil || runtimeSvc == nil {
+		panic("v2 control and runtime services are required")
 	}
 	grpcConf := bc.GetServer().GetGrpc()
 
@@ -31,11 +33,12 @@ func NewGRPCServer(
 		kratosgrpc.Network(grpcConf.GetNetwork()),
 		kratosgrpc.Address(grpcConf.GetAddr()),
 		kratosgrpc.Timeout(time.Duration(grpcConf.GetTimeoutSeconds())*time.Second),
-		kratosgrpc.Middleware(recovery.Recovery(), genericSvc.ServiceTicketMiddleware()),
+		kratosgrpc.Middleware(recovery.Recovery(), controlSvc.ServiceTicketMiddleware()),
 	)
 	registerHealthServer(srv)
 
-	platformv1.RegisterPlatformServiceServer(srv, genericSvc)
+	platformv2.RegisterPlatformControlServiceServer(srv, controlSvc)
+	mihomov2.RegisterMihomoRuntimeServiceServer(srv, runtimeSvc)
 
 	return srv
 }

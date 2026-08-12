@@ -41,6 +41,7 @@ type CreateAndBindInput struct {
 }
 
 type UpsertGrantInput struct {
+	Context   context.Context
 	BindingID uint64
 	Consumer  string
 	Actions   []string
@@ -58,6 +59,7 @@ type RevokeGrantInput struct {
 
 type ProfileProjectionInput struct {
 	PlatformProfileKey string
+	ProfileRef         string
 	GameBiz            string
 	Region             string
 	PlayerUID          string
@@ -68,9 +70,11 @@ type ProfileProjectionInput struct {
 }
 
 type SyncProfilesInput struct {
-	BindingID uint64
-	Profiles  []ProfileProjectionInput
-	SyncedAt  time.Time
+	BindingID        uint64
+	Profiles         []ProfileProjectionInput
+	SyncedAt         time.Time
+	Revision         uint64
+	ObservedRevision uint64
 }
 
 type PutCredentialInput struct {
@@ -83,10 +87,14 @@ type PutCredentialInput struct {
 }
 
 type RuntimeSummary struct {
-	PlatformAccountID string           `json:"platform_account_id"`
-	Status            string           `json:"status"`
-	LastValidatedAt   any              `json:"last_validated_at"`
-	LastRefreshedAt   any              `json:"last_refreshed_at"`
-	Devices           []map[string]any `json:"devices"`
-	Profiles          []map[string]any `json:"profiles"`
+	PlatformAccountID       string           `json:"platform_account_id"`
+	Generation              uint64           `json:"generation"`
+	Status                  string           `json:"status"`
+	LastValidatedAt         any              `json:"last_validated_at"`
+	LastRefreshedAt         any              `json:"last_refreshed_at"`
+	Devices                 []map[string]any `json:"devices"`
+	Profiles                []map[string]any `json:"profiles"`
+	ProfileSnapshotComplete bool             `json:"profile_snapshot_complete"`
+	ProfileRevision         uint64           `json:"profile_revision"`
+	ProfileObservedRevision uint64           `json:"profile_observed_revision"`
 }

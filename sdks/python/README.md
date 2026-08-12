@@ -6,7 +6,7 @@ PaiGram 使用的异步 Python SDK。它负责：
 - 查询 PaiGram 用户及其可访问的平台绑定；
 - 为指定绑定签发短期 service ticket；
 - 使用 service ticket 查询凭据状态、校验凭据、读取角色与主角色；
-- 获取短期 AuthKey，并为平台同步设备信息。
+- 获取短期 AuthKey，并按稳定设备引用读取设备状态。
 
 SDK 不提供写入原始平台凭据的接口。凭据录入与所有权管理属于 Account Center 的第一方前端和服务端流程。
 
@@ -19,14 +19,10 @@ async with PaiGramAccountClient(
     client_id="telegram-service",
     client_secret="...",
     platform_endpoints={
-        "mihomo": PlatformEndpoint(target="mihomo.example.com:443"),
+        "platform-mihomo-service": PlatformEndpoint(target="mihomo.example.com:443"),
     },
 ) as client:
     bindings = await client.list_bindings("telegram:10001")
-    summary = await client.get_credential_summary(
-        external_user_id="telegram:10001",
-        binding=bindings[0],
-    )
     status = await client.get_credential_status(
         external_user_id="telegram:10001",
         binding=bindings[0],
@@ -38,7 +34,7 @@ async with PaiGramAccountClient(
     authkey = await client.get_auth_key(
         external_user_id="telegram:10001",
         binding=bindings[0],
-        player_id=profiles[0].player_id,
+        profile_ref=profiles[0].profile_ref,
     )
 ```
 

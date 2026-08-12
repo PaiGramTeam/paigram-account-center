@@ -24,7 +24,8 @@ func TestTicketGrantReadKeepsVersionAndActionsInOneSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	var ownerUserID uint64
-	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT owner_user_id FROM platform_account_bindings WHERE id = $1`, bindingID).Scan(&ownerUserID))
+	var bindingRef string
+	require.NoError(t, stack.SQLDB.QueryRowContext(ctx, `SELECT owner_user_id, binding_ref FROM platform_account_bindings WHERE id = $1`, bindingID).Scan(&ownerUserID, &bindingRef))
 	bot := model.Bot{ID: "snapshot-bot", DisplayName: "Snapshot Bot", Type: "OTHER", Status: "ACTIVE", OwnerUserID: ownerUserID}
 	require.NoError(t, stack.DB.Create(&bot).Error)
 	identity := model.BotIdentity{UserID: ownerUserID, BotID: bot.ID, ExternalUserID: "snapshot-user", LinkedAt: time.Now().UTC()}
@@ -53,12 +54,12 @@ func TestTicketGrantReadKeepsVersionAndActionsInOneSnapshot(t *testing.T) {
 	}
 	result := make(chan readResult, 1)
 	go func() {
-		_, _, grant, err := group.BindingAccessService.GetGrantedBindingForConsumer(
+		_, _, grant, err := group.BindingAccessService.GetGrantedBindingByRefForConsumer(
 			bot.ID,
 			"paigram-bot",
 			identity.ExternalUserID,
-			bindingID,
-			0,
+			bindingRef,
+			"",
 		)
 		result <- readResult{grant: grant, err: err}
 	}()
@@ -93,7 +94,7 @@ func TestTicketGrantReadKeepsVersionAndActionsInOneSnapshot(t *testing.T) {
 	require.Equal(t, uint64(1), first.grant.TicketVersion)
 	require.Equal(t, []string{"mihomo.status.read"}, botaccess.GrantActions(*first.grant))
 
-	_, _, latest, err := group.BindingAccessService.GetGrantedBindingForConsumer(bot.ID, "paigram-bot", identity.ExternalUserID, bindingID, 0)
+	_, _, latest, err := group.BindingAccessService.GetGrantedBindingByRefForConsumer(bot.ID, "paigram-bot", identity.ExternalUserID, bindingRef, "")
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), latest.TicketVersion)
 	require.Equal(t, []string{"mihomo.profile.read"}, botaccess.GrantActions(*latest))

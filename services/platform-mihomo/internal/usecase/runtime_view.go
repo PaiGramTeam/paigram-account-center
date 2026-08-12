@@ -13,14 +13,15 @@ const (
 )
 
 type ProfileSummary struct {
-	ID                uint64
-	PlatformAccountID string
-	GameBiz           string
-	Region            string
-	PlayerID          string
-	Nickname          string
-	Level             int32
-	IsDefault         bool
+	ID         uint64
+	AccountKey string
+	ProfileRef string
+	GameBiz    string
+	Region     string
+	PlayerID   string
+	Nickname   string
+	Level      int32
+	IsDefault  bool
 }
 
 func credentialStatusFromStorage(status string) CredentialStatus {
@@ -37,13 +38,14 @@ func toProfileSummary(profile *biz.Profile) *ProfileSummary {
 		return nil
 	}
 	return &ProfileSummary{
-		ID:                profile.ID,
-		PlatformAccountID: profile.PlatformAccountID,
-		GameBiz:           profile.GameBiz,
-		Region:            profile.Region,
-		PlayerID:          profile.PlayerID,
-		Nickname:          profile.Nickname,
-		Level:             int32(profile.Level),
-		IsDefault:         profile.IsDefault,
+		ID:         profile.ID,
+		AccountKey: profile.AccountKey,
+		ProfileRef: profile.ProfileRef,
+		GameBiz:    profile.GameBiz,
+		Region:     profile.Region,
+		PlayerID:   profile.PlayerID,
+		Nickname:   profile.Nickname,
+		Level:      int32(profile.Level),
+		IsDefault:  profile.IsDefault,
 	}
 }

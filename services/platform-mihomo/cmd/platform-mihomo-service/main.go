@@ -60,6 +60,8 @@ func main() {
 	artifactRepo := data.NewArtifactRepo(database, redisClient, bc.GetData().GetRedis().GetPrefix())
 	managementRepo := data.NewManagementRepo(database, redisClient, bc.GetData().GetRedis().GetPrefix())
 	grantInvalidationRepo := data.NewGrantInvalidationRepo(database)
+	operationRepo := data.NewOperationRepo(database)
+	authorizationFenceRepo := data.NewAuthorizationFenceRepo(database)
 	client, err := newMihomoUpstreamClient(bc.GetUpstream())
 	if err != nil {
 		log.Fatal(err)
@@ -68,17 +70,28 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	ticketVerifier.WithGrantVersionLookup(grantInvalidationRepo)
+	ticketVerifier.WithGrantVersionLookup(grantInvalidationRepo).
+		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(database))
 
 	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()), artifactRepo)
 	statusUC := usecase.NewStatusUsecase(credentialRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
 	profileUC := usecase.NewProfileUsecase(profileRepo)
 	authkeyUC := usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, client, []byte(bc.GetSecurity().GetCredentialEncryptionKey()))
 	managementUC := usecase.NewManagementUsecase(credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC)
-	genericSvc := service.NewGenericPlatformService(ticketVerifier, bindUC, statusUC, managementUC, grantInvalidationRepo).
-		WithConsumerUsecases(profileUC, authkeyUC)
+	operationUC := usecase.NewOperationUsecase(operationRepo)
+	controlSvc := service.NewPlatformControlService(
+		ticketVerifier,
+		operationUC,
+		bindUC,
+		statusUC,
+		managementUC,
+		credentialRepo,
+		authorizationFenceRepo,
+		grantInvalidationRepo,
+	)
+	runtimeSvc := service.NewMihomoRuntimeService(ticketVerifier, statusUC, profileUC, authkeyUC, managementUC, deviceRepo)
 
-	grpcSrv := server.NewGRPCServer(&bc, genericSvc)
+	grpcSrv := server.NewGRPCServer(&bc, controlSvc, runtimeSvc)
 	app := kratos.New(
 		kratos.Name("platform-mihomo-service"),
 		kratos.Server(grpcSrv),

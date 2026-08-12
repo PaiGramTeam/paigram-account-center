@@ -129,18 +129,19 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, accounts.Bindings, 1)
-	assert.Equal(t, ref.ID, accounts.Bindings[0].Id)
+	assert.Equal(t, ref.BindingRef, accounts.Bindings[0].BindingRef)
+	assert.Equal(t, "hoyo-account-001", accounts.Bindings[0].AccountKey)
 	assert.Equal(t, "platform-hoyoverse-service", accounts.Bindings[0].PlatformServiceKey)
 
 	ticketResp, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId:  "tg-123",
-		BindingId:       ref.ID,
-		RequestedScopes: []string{"daily.sign"},
+		BindingRef:      ref.BindingRef,
+		RequestedAction: "daily.sign",
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, ticketResp.Ticket)
 	assert.Equal(t, "hoyoverse.runtime", ticketResp.Audience)
-	assert.Equal(t, ref.ID, ticketResp.Binding.Id)
+	assert.Equal(t, ref.BindingRef, ticketResp.Binding.BindingRef)
 
 	parsedClaims := &botaccess.ServiceTicketClaims{}
 	parsedToken, err := jwt.ParseWithClaims(ticketResp.Ticket, parsedClaims, func(token *jwt.Token) (any, error) {
@@ -155,8 +156,9 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	assert.Equal(t, bot.ID, parsedClaims.ActorID)
 	assert.Equal(t, bot.ID, parsedClaims.Consumer)
 	assert.Equal(t, bot.ID, parsedClaims.BotID)
-	assert.Equal(t, identityUser.ID, parsedClaims.UserID)
-	assert.Equal(t, ref.ID, parsedClaims.BindingID)
+	assert.Equal(t, identityUser.UserRef, parsedClaims.OwnerUserRef)
+	assert.Equal(t, ref.BindingRef, parsedClaims.BindingRef)
+	assert.Equal(t, "hoyo-account-001", parsedClaims.AccountKey)
 	assert.Equal(t, []string{"daily.sign"}, parsedClaims.AllowedActions)
 	assert.Equal(t, "consumer:"+bot.ID, parsedClaims.Subject)
 	assert.ElementsMatch(t, []string{"hoyoverse.runtime"}, []string(parsedClaims.Audience))
@@ -167,9 +169,10 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	assert.Equal(t, "consumer", event.ActorType)
 	assert.Equal(t, "success", event.Result)
 	assert.Equal(t, "binding", event.TargetType)
+	assert.Equal(t, ref.BindingRef, event.TargetID)
 }
 
-func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
+func TestBotAccessServiceRejectsRequestedActionOutsideGrantedSet(t *testing.T) {
 	db := testutil.OpenPostgreSQLTestDB(t, "bot_access_grpc_scope_reject",
 		&model.User{},
 		&model.UserEmail{},
@@ -202,8 +205,8 @@ func TestBotAccessServiceRejectsRequestedScopesOutsideGrantedSet(t *testing.T) {
 
 	_, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId:  "tg-123",
-		BindingId:       ref.ID,
-		RequestedScopes: []string{"daily.sign", "notes.write"},
+		BindingRef:      ref.BindingRef,
+		RequestedAction: "notes.write",
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -242,8 +245,8 @@ func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) 
 
 	_, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId:  "tg-123",
-		BindingId:       ref.ID,
-		RequestedScopes: []string{"daily.sign"},
+		BindingRef:      ref.BindingRef,
+		RequestedAction: "daily.sign",
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -296,8 +299,8 @@ func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
 
 	_, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
 		ExternalUserId:  "tg-123",
-		BindingId:       ref.ID,
-		RequestedScopes: []string{"daily.sign"},
+		BindingRef:      ref.BindingRef,
+		RequestedAction: "daily.sign",
 	})
 
 	require.Error(t, err)
@@ -322,7 +325,7 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 	defer conn.Close()
 	// The authenticated client ID identifies both the bot identity and grant
 	// consumer in this test. Seed the second identity but omit its grant so
-	// GetGrantedBindingForConsumer hits
+	// GetGrantedBindingByRefForConsumer hits
 	// ErrConsumerGrantNotFound instead of ErrBotIdentityNotFound (which would
 	// map to NotFound).
 	require.NoError(t, db.Create(&model.Bot{
@@ -345,8 +348,9 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 	accessClient := pb.NewBotAccessServiceClient(conn)
 
 	_, err := accessClient.IssueServiceTicket(ctx, &pb.IssueServiceTicketRequest{
-		ExternalUserId: "tg-123",
-		BindingId:      ref.ID,
+		ExternalUserId:  "tg-123",
+		BindingRef:      ref.BindingRef,
+		RequestedAction: "daily.sign",
 	})
 
 	require.Error(t, err)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"paigram/internal/model"
 )
@@ -30,12 +31,15 @@ func (s *ProfileProjectionService) SyncProfiles(input SyncProfilesInput) ([]mode
 	profiles := make([]model.PlatformAccountProfile, 0, len(input.Profiles))
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var binding model.PlatformAccountBinding
-		if err := tx.Select("id").First(&binding, input.BindingID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "profile_revision", "profile_observed_revision").First(&binding, input.BindingID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrBindingNotFound
 			}
 
 			return err
+		}
+		if input.ObservedRevision < binding.ProfileObservedRevision || input.Revision < binding.ProfileRevision {
+			return nil
 		}
 
 		if err := tx.Model(&model.PlatformAccountProfile{}).Where("binding_id = ?", input.BindingID).Update("is_primary", false).Error; err != nil {
@@ -60,9 +64,13 @@ func (s *ProfileProjectionService) SyncProfiles(input SyncProfilesInput) ([]mode
 				profile = model.PlatformAccountProfile{
 					BindingID:          input.BindingID,
 					PlatformProfileKey: item.PlatformProfileKey,
+					ProfileRef:         item.ProfileRef,
 				}
 			}
 
+			if item.ProfileRef != "" {
+				profile.ProfileRef = item.ProfileRef
+			}
 			profile.GameBiz = item.GameBiz
 			profile.Region = item.Region
 			profile.PlayerUID = item.PlayerUID

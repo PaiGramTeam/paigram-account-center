@@ -15,6 +15,14 @@ type TicketService struct {
 	signer *serviceticket.Signer
 }
 
+type DelegationAuthorization struct {
+	OwnerUserRef     string
+	EntryIdentityRef string
+	OwnerEpoch       uint64
+	ConsumerEpoch    uint64
+	EntryEpoch       uint64
+}
+
 func NewTicketService(authCfg config.AuthConfig) (*TicketService, error) {
 	signer, err := serviceticket.NewSigner(serviceticket.Config{
 		Issuer:        authCfg.ServiceTicketIssuer,
@@ -28,33 +36,42 @@ func NewTicketService(authCfg config.AuthConfig) (*TicketService, error) {
 	return &TicketService{signer: signer}, nil
 }
 
-func (s *TicketService) Issue(botID, consumer string, binding *model.PlatformAccountBinding, scopes []string, audience string, profileID, grantVersion uint64) (string, time.Time, error) {
+func (s *TicketService) Issue(botID, consumer string, binding *model.PlatformAccountBinding, action string, audience string, profileRef string, grantVersion uint64, authorization DelegationAuthorization) (string, time.Time, error) {
 	if binding == nil || binding.Status != model.PlatformAccountBindingStatusActive {
 		return "", time.Time{}, ErrInactiveBinding
 	}
-	if consumer == "" || audience == "" {
+	if consumer == "" || audience == "" || binding.BindingRef == "" || !binding.ExternalAccountKey.Valid || binding.ExternalAccountKey.String == "" ||
+		authorization.OwnerUserRef == "" || authorization.EntryIdentityRef == "" || authorization.OwnerEpoch == 0 || authorization.ConsumerEpoch == 0 || authorization.EntryEpoch == 0 || binding.Generation == 0 {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
 	if grantVersion == 0 {
 		return "", time.Time{}, ErrInvalidTicketConfig
 	}
+	if action == "" {
+		return "", time.Time{}, ErrInvalidTicketConfig
+	}
 
 	claims := ServiceTicketClaims{
-		ActorType:          "consumer",
-		ActorID:            consumer,
-		Consumer:           consumer,
-		ClientID:           consumer,
-		OwnerUserID:        binding.OwnerUserID,
-		BotID:              botID,
-		UserID:             binding.OwnerUserID,
-		Platform:           binding.Platform,
-		PlatformServiceKey: binding.PlatformServiceKey,
-		BindingID:          binding.ID,
-		ProfileID:          profileID,
-		GrantVersion:       grantVersion,
-		PlatformAccountID:  nullableBindingExternalAccountKey(binding.ExternalAccountKey),
-		Scopes:             scopes,
-		AllowedActions:     scopes,
+		ActorType:            "consumer",
+		ActorID:              consumer,
+		Consumer:             consumer,
+		ConsumerPrincipal:    consumer,
+		ClientID:             consumer,
+		OwnerUserRef:         authorization.OwnerUserRef,
+		EntryIdentityRef:     authorization.EntryIdentityRef,
+		BotID:                botID,
+		Platform:             binding.Platform,
+		PlatformServiceKey:   binding.PlatformServiceKey,
+		BindingRef:           binding.BindingRef,
+		ProfileRef:           profileRef,
+		GrantVersion:         grantVersion,
+		OwnerEpoch:           authorization.OwnerEpoch,
+		ConsumerEpoch:        authorization.ConsumerEpoch,
+		EntryEpoch:           authorization.EntryEpoch,
+		CredentialGeneration: binding.Generation,
+		AccountKey:           nullableBindingExternalAccountKey(binding.ExternalAccountKey),
+		Scopes:               []string{action},
+		AllowedActions:       []string{action},
 	}
 
 	return s.signer.Issue(serviceticket.TypeDelegation, "consumer:"+consumer, audience, claims)
