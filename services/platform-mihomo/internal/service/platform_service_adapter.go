@@ -240,29 +240,9 @@ func (s *GenericPlatformService) RefreshCredential(ctx context.Context, req *pla
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 
-	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
+	_, _, platformAccountID, err := s.authorizeExistingCredentialMutation(ctx, req.GetPlatformAccountId(), usecase.ActionCredentialRefresh)
 	if err != nil {
 		return nil, err
-	}
-	if err := requireControlTicket(claims); err != nil {
-		return nil, err
-	}
-	guard, err := scopedGuard(claims, usecase.ActionCredentialRefresh)
-	if err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	platformAccountID := req.GetPlatformAccountId()
-	if platformAccountID == "" {
-		platformAccountID = claims.PlatformAccountID
-	}
-	if platformAccountID == "" {
-		return nil, status.Error(codes.InvalidArgument, "platform_account_id is required")
-	}
-	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	if err := guard.RequireBindingWide(); err != nil {
-		return nil, mapUsecaseError(err)
 	}
 
 	output, err := s.statusUC.RefreshCredential(ctx, platformAccountID)
@@ -277,29 +257,9 @@ func (s *GenericPlatformService) DeleteCredential(ctx context.Context, req *plat
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
 
-	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
+	_, guard, platformAccountID, err := s.authorizeExistingCredentialMutation(ctx, req.GetPlatformAccountId(), usecase.ActionCredentialDelete)
 	if err != nil {
 		return nil, err
-	}
-	if err := requireControlTicket(claims); err != nil {
-		return nil, err
-	}
-	guard, err := scopedGuard(claims, usecase.ActionCredentialDelete)
-	if err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	platformAccountID := req.GetPlatformAccountId()
-	if platformAccountID == "" {
-		platformAccountID = claims.PlatformAccountID
-	}
-	if platformAccountID == "" {
-		return nil, status.Error(codes.InvalidArgument, "platform_account_id is required")
-	}
-	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
-		return nil, mapUsecaseError(err)
-	}
-	if err := guard.RequireBindingWide(); err != nil {
-		return nil, mapUsecaseError(err)
 	}
 	if err := s.managementUC.DeleteCredentialWithScope(ctx, guard, platformAccountID); err != nil {
 		return nil, mapUsecaseError(err)

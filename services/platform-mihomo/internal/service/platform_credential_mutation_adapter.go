@@ -40,19 +40,16 @@ func (s *GenericPlatformService) ReplaceCredential(ctx context.Context, req *pla
 		return nil, status.Error(codes.InvalidArgument, "request and platform_account_id are required")
 	}
 
-	claims, guard, err := s.authorizeCredentialMutation(ctx, usecase.ActionCredentialUpdate)
+	claims, guard, platformAccountID, err := s.authorizeExistingCredentialMutation(ctx, req.GetPlatformAccountId(), usecase.ActionCredentialUpdate)
 	if err != nil {
 		return nil, err
-	}
-	if err := guard.RequirePlatformAccountID(req.GetPlatformAccountId()); err != nil {
-		return nil, mapUsecaseError(err)
 	}
 	bindInput, err := credentialBindInput(claims, req.GetCredentialPayloadJson())
 	if err != nil {
 		return nil, err
 	}
 	summary, err := s.managementUC.UpdateCredentialWithScope(ctx, guard, usecase.UpdateCredentialInput{
-		PlatformAccountID:   req.GetPlatformAccountId(),
+		PlatformAccountID:   platformAccountID,
 		BindCredentialInput: bindInput,
 	})
 	if err != nil {
@@ -77,6 +74,24 @@ func (s *GenericPlatformService) authorizeCredentialMutation(ctx context.Context
 		return nil, usecase.ScopeGuard{}, mapUsecaseError(err)
 	}
 	return claims, guard, nil
+}
+
+func (s *GenericPlatformService) authorizeExistingCredentialMutation(ctx context.Context, requestedPlatformAccountID, action string) (*biz.ServiceTicketClaims, usecase.ScopeGuard, string, error) {
+	claims, guard, err := s.authorizeCredentialMutation(ctx, action)
+	if err != nil {
+		return nil, usecase.ScopeGuard{}, "", err
+	}
+	platformAccountID := requestedPlatformAccountID
+	if platformAccountID == "" {
+		platformAccountID = claims.PlatformAccountID
+	}
+	if platformAccountID == "" {
+		return nil, usecase.ScopeGuard{}, "", status.Error(codes.InvalidArgument, "platform_account_id is required")
+	}
+	if err := guard.RequirePlatformAccountID(platformAccountID); err != nil {
+		return nil, usecase.ScopeGuard{}, "", mapUsecaseError(err)
+	}
+	return claims, guard, platformAccountID, nil
 }
 
 func credentialBindInput(claims *biz.ServiceTicketClaims, payloadJSON string) (usecase.BindCredentialInput, error) {
