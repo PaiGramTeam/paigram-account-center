@@ -34,13 +34,13 @@ type SecurityOverview struct {
 
 // UpdatePasswordInput describes a self-service password change.
 type UpdatePasswordInput struct {
-	UserID               uint64
-	OldPassword          string
-	NewPassword          string
-	RevokeOtherSessions  bool
-	CurrentAccessToken   string
-	ClientIP             string
-	UserAgent            string
+	UserID              uint64
+	OldPassword         string
+	NewPassword         string
+	RevokeOtherSessions bool
+	CurrentAccessToken  string
+	ClientIP            string
+	UserAgent           string
 }
 
 // SetupTwoFactorInput describes a 2FA setup request.

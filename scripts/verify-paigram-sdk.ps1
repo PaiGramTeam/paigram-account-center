@@ -46,7 +46,7 @@ try {
             uv sync --python 3.10 --frozen --no-dev
         } -FailureMessage "PaiGram and SDK environment synchronization failed"
         Invoke-Checked -Command {
-            uv run --python 3.10 --frozen --no-sync python -c "from paigram_account_sdk import PaiGramAccountClient, PlatformEndpoint; assert PaiGramAccountClient and PlatformEndpoint"
+            uv run --python 3.10 --frozen --no-sync python -c "from paigram_account_sdk import PaiGramAccountClient; assert PaiGramAccountClient"
         } -FailureMessage "PaiGram project environment could not import the SDK"
     }
     finally {

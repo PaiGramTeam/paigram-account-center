@@ -70,9 +70,10 @@ func NewSecurityHandler(service SecurityReaderWriter) *SecurityHandler {
 //
 // Responses:
 //
-//   200: meSecurityOverviewResponse
-//   401: meErrorResponse
-//   500: meErrorResponse
+//	200: meSecurityOverviewResponse
+//	401: meErrorResponse
+//	500: meErrorResponse
+//
 // GetOverview returns the current-user security summary.
 func (h *SecurityHandler) GetOverview(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
@@ -105,11 +106,12 @@ func (h *SecurityHandler) GetOverview(c *gin.Context) {
 //
 // Responses:
 //
-//   200: meMessageResponse
-//   400: meErrorResponse
-//   401: meErrorResponse
-//   404: meErrorResponse
-//   500: meErrorResponse
+//	200: meMessageResponse
+//	400: meErrorResponse
+//	401: meErrorResponse
+//	404: meErrorResponse
+//	500: meErrorResponse
+//
 // UpdatePassword changes the current-user password.
 func (h *SecurityHandler) UpdatePassword(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
@@ -148,12 +150,13 @@ func (h *SecurityHandler) UpdatePassword(c *gin.Context) {
 //
 // Responses:
 //
-//   200: meTwoFactorSetupResponse
-//   400: meErrorResponse
-//   401: meErrorResponse
-//   404: meErrorResponse
-//   409: meErrorResponse
-//   500: meErrorResponse
+//	200: meTwoFactorSetupResponse
+//	400: meErrorResponse
+//	401: meErrorResponse
+//	404: meErrorResponse
+//	409: meErrorResponse
+//	500: meErrorResponse
+//
 // SetupTwoFactor prepares 2FA setup for the current user.
 func (h *SecurityHandler) SetupTwoFactor(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
@@ -192,10 +195,11 @@ func (h *SecurityHandler) SetupTwoFactor(c *gin.Context) {
 //
 // Responses:
 //
-//   200: meMessageResponse
-//   400: meErrorResponse
-//   401: meErrorResponse
-//   500: meErrorResponse
+//	200: meMessageResponse
+//	400: meErrorResponse
+//	401: meErrorResponse
+//	500: meErrorResponse
+//
 // ConfirmTwoFactor activates a prepared 2FA setup.
 func (h *SecurityHandler) ConfirmTwoFactor(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
@@ -234,11 +238,12 @@ func (h *SecurityHandler) ConfirmTwoFactor(c *gin.Context) {
 //
 // Responses:
 //
-//   200: meMessageResponse
-//   400: meErrorResponse
-//   401: meErrorResponse
-//   404: meErrorResponse
-//   500: meErrorResponse
+//	200: meMessageResponse
+//	400: meErrorResponse
+//	401: meErrorResponse
+//	404: meErrorResponse
+//	500: meErrorResponse
+//
 // DisableTwoFactor disables 2FA for the current user.
 func (h *SecurityHandler) DisableTwoFactor(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
@@ -277,11 +282,12 @@ func (h *SecurityHandler) DisableTwoFactor(c *gin.Context) {
 //
 // Responses:
 //
-//   200: meBackupCodesResponse
-//   400: meErrorResponse
-//   401: meErrorResponse
-//   404: meErrorResponse
-//   500: meErrorResponse
+//	200: meBackupCodesResponse
+//	400: meErrorResponse
+//	401: meErrorResponse
+//	404: meErrorResponse
+//	500: meErrorResponse
+//
 // RegenerateBackupCodes rotates stored 2FA backup codes.
 func (h *SecurityHandler) RegenerateBackupCodes(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)

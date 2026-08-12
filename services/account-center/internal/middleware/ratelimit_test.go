@@ -214,12 +214,6 @@ func TestEmailKeyFunc(t *testing.T) {
 	})
 }
 
-func TestNewRedisStore(t *testing.T) {
-	// This test would require an actual Redis connection
-	// Skip for now as it's an integration test
-	t.Skip("Requires Redis connection")
-}
-
 func TestRateLimitConfig_InvalidRate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

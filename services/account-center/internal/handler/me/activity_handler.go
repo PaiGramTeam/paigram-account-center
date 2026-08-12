@@ -40,9 +40,10 @@ func NewActivityHandler(service ActivityReader) *ActivityHandler {
 //
 // Responses:
 //
-//   200: meActivityLogsResponse
-//   401: meErrorResponse
-//   500: meErrorResponse
+//	200: meActivityLogsResponse
+//	401: meErrorResponse
+//	500: meErrorResponse
+//
 // ListLogs returns current-user activity logs.
 func (h *ActivityHandler) ListLogs(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)

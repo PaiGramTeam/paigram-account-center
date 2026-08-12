@@ -1,0 +1,947 @@
+[
+  {
+    "kind": "column",
+    "name": "public.account_profiles.account_key",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.discovered_at",
+    "detail": "position=11;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.game_biz",
+    "detail": "position=5;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.id",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('account_profiles_id_seq'::regclass);collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.is_default",
+    "detail": "position=10;type=boolean;not_null=t;identity=;generated=;default=false;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.level",
+    "detail": "position=9;type=integer;not_null=t;identity=;generated=;default=0;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.nickname",
+    "detail": "position=8;type=character varying(255);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.player_id",
+    "detail": "position=7;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.profile_ref",
+    "detail": "position=4;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.region",
+    "detail": "position=6;type=character varying(32);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.account_profiles.updated_at",
+    "detail": "position=12;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.account_key",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.artifact_type",
+    "detail": "position=4;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.artifact_value",
+    "detail": "position=5;type=text;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.created_at",
+    "detail": "position=12;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.expires_at",
+    "detail": "position=7;type=timestamp with time zone;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.intent_id",
+    "detail": "position=1;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.lease_expires_at",
+    "detail": "position=11;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.lease_token",
+    "detail": "position=10;type=character varying(64);not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.ready_after",
+    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.scope_key",
+    "detail": "position=6;type=character varying(128);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.state",
+    "detail": "position=8;type=character varying(16);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.artifact_revocation_intents.updated_at",
+    "detail": "position=13;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.consumer_principal",
+    "detail": "position=3;type=character varying(128);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.created_at",
+    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.id",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('authorization_fences_id_seq'::regclass);collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.minimum_consumer_epoch",
+    "detail": "position=6;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.minimum_entry_epoch",
+    "detail": "position=7;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.minimum_grant_version",
+    "detail": "position=4;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.minimum_owner_epoch",
+    "detail": "position=5;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.authorization_fences.updated_at",
+    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.consumer",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.created_at",
+    "detail": "position=6;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.id",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('consumer_grant_invalidations_id_seq'::regclass);collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.invalidated_at",
+    "detail": "position=5;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.minimum_grant_version",
+    "detail": "position=4;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grant_invalidations.updated_at",
+    "detail": "position=7;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.account_id",
+    "detail": "position=6;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.account_key",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.created_at",
+    "detail": "position=17;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.credential_blob",
+    "detail": "position=8;type=text;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.credential_version",
+    "detail": "position=9;type=character varying(32);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.expires_at",
+    "detail": "position=13;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.generation",
+    "detail": "position=4;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.id",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('credential_records_id_seq'::regclass);collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.last_refreshed_at",
+    "detail": "position=12;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.last_validated_at",
+    "detail": "position=11;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.platform",
+    "detail": "position=5;type=character varying(32);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.profile_observed_revision",
+    "detail": "position=16;type=bigint;not_null=t;identity=;generated=;default=0;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.profile_revision",
+    "detail": "position=15;type=bigint;not_null=t;identity=;generated=;default=0;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.profile_snapshot_complete",
+    "detail": "position=14;type=boolean;not_null=t;identity=;generated=;default=false;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.region",
+    "detail": "position=7;type=character varying(32);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.status",
+    "detail": "position=10;type=character varying(32);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.credential_records.updated_at",
+    "detail": "position=18;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.account_key",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.created_at",
+    "detail": "position=10;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.device_fp",
+    "detail": "position=6;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.device_id",
+    "detail": "position=5;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.device_name",
+    "detail": "position=7;type=character varying(128);not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.device_ref",
+    "detail": "position=4;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.id",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('device_records_id_seq'::regclass);collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.is_valid",
+    "detail": "position=8;type=boolean;not_null=t;identity=;generated=;default=true;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.last_seen_at",
+    "detail": "position=9;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.device_records.updated_at",
+    "detail": "position=11;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.account_key",
+    "detail": "position=11;type=character varying(64);not_null=t;identity=;generated=;default=''::character varying;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.binding_ref",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.created_at",
+    "detail": "position=14;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.credential_status",
+    "detail": "position=12;type=character varying(32);not_null=t;identity=;generated=;default=''::character varying;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.execution_token",
+    "detail": "position=7;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.kind",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.lease_expires_at",
+    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.operation_id",
+    "detail": "position=1;type=character varying(128);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.pre_generation",
+    "detail": "position=4;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.reason_code",
+    "detail": "position=10;type=character varying(128);not_null=t;identity=;generated=;default=''::character varying;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.request_fingerprint",
+    "detail": "position=6;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.snapshot_json",
+    "detail": "position=13;type=jsonb;not_null=t;identity=;generated=;default='{}'::jsonb;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.state",
+    "detail": "position=9;type=character varying(32);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.target_generation",
+    "detail": "position=5;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.platform_operations.updated_at",
+    "detail": "position=15;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.account_key",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.artifact_type",
+    "detail": "position=4;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.artifact_value",
+    "detail": "position=5;type=text;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.binding_ref",
+    "detail": "position=2;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.created_at",
+    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.expires_at",
+    "detail": "position=7;type=timestamp with time zone;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.id",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('runtime_artifacts_id_seq'::regclass);collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.revocation_pending",
+    "detail": "position=8;type=boolean;not_null=t;identity=;generated=;default=false;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.scope_key",
+    "detail": "position=6;type=character varying(128);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.runtime_artifacts.updated_at",
+    "detail": "position=10;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.schema_migrations.dirty",
+    "detail": "position=2;type=boolean;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.schema_migrations.version",
+    "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "constraint",
+    "name": "public.account_profiles.account_profiles_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.account_profiles.fk_profile_binding_account",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (binding_ref, account_key) REFERENCES credential_records(binding_ref, account_key) ON DELETE CASCADE"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.account_profiles.uniq_profile_binding_player_region",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, player_id, region)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.account_profiles.uniq_profile_ref",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (profile_ref)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.artifact_revocation_intents.artifact_revocation_intents_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (intent_id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.artifact_revocation_intents.artifact_revocation_intents_state_check",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (state::text = ANY (ARRAY['provisional'::character varying, 'ready'::character varying]::text[]))"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.artifact_revocation_intents.ck_artifact_revocation_lease",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (lease_token IS NULL AND lease_expires_at IS NULL OR lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.artifact_revocation_intents.uniq_artifact_revocation_payload",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, artifact_type, scope_key, artifact_value)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.authorization_fences.authorization_fences_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.authorization_fences.uniq_authorization_fence",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, consumer_principal)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.consumer_grant_invalidations.consumer_grant_invalidations_minimum_grant_version_check",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (minimum_grant_version \u003e= 1)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.consumer_grant_invalidations.consumer_grant_invalidations_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.consumer_grant_invalidations.uk_consumer_grant_invalidations_binding_consumer",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, consumer)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.credential_records_generation_check",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (generation \u003e= 1)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.credential_records_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.uniq_account_key",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (account_key)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.uniq_credential_binding_account",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, account_key)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.uniq_credential_binding_ref",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.uniq_platform_account",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (platform, account_id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.valid_credential_account_key",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (account_key::text \u003c\u003e ''::text)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.valid_credential_binding_ref",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (binding_ref::text \u003c\u003e ''::text)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.credential_records.valid_profile_observation",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (profile_observed_revision \u003c= profile_revision)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.device_records.device_records_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.device_records.fk_device_binding_account",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (binding_ref, account_key) REFERENCES credential_records(binding_ref, account_key) ON DELETE CASCADE"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.device_records.uniq_device_record_binding",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, device_id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.device_records.uniq_device_ref",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (device_ref)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.platform_operations.platform_operations_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (operation_id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.platform_operations.valid_operation_execution_token",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (execution_token::text \u003c\u003e ''::text)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.platform_operations.valid_operation_generation",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK ((kind::text = ANY (ARRAY['OPERATION_KIND_APPLY_AUTHORIZATION_FENCE'::character varying, 'OPERATION_KIND_SET_PRIMARY_PROFILE'::character varying]::text[])) AND target_generation = pre_generation OR (kind::text \u003c\u003e ALL (ARRAY['OPERATION_KIND_APPLY_AUTHORIZATION_FENCE'::character varying, 'OPERATION_KIND_SET_PRIMARY_PROFILE'::character varying]::text[])) AND target_generation = (pre_generation + 1))"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.platform_operations.valid_operation_request_fingerprint",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (request_fingerprint::text \u003c\u003e ''::text)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.platform_operations.valid_operation_state",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (state::text = ANY (ARRAY['pending'::character varying, 'succeeded'::character varying, 'failed'::character varying, 'not_received'::character varying, 'failed_input_required'::character varying]::text[]))"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.runtime_artifacts.fk_artifact_binding_account",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (binding_ref, account_key) REFERENCES credential_records(binding_ref, account_key) ON DELETE CASCADE"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.runtime_artifacts.runtime_artifacts_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.runtime_artifacts.uniq_runtime_artifact_binding",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_ref, artifact_type, scope_key)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.schema_migrations.schema_migrations_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (version)"
+  },
+  {
+    "kind": "index",
+    "name": "public.account_profiles.account_profiles_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX account_profiles_pkey ON public.account_profiles USING btree (id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.account_profiles.idx_profile_account_key",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_profile_account_key ON public.account_profiles USING btree (account_key)"
+  },
+  {
+    "kind": "index",
+    "name": "public.account_profiles.idx_profile_binding_ref",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_profile_binding_ref ON public.account_profiles USING btree (binding_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.account_profiles.uniq_default_profile_per_binding",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_default_profile_per_binding ON public.account_profiles USING btree (binding_ref) WHERE is_default"
+  },
+  {
+    "kind": "index",
+    "name": "public.account_profiles.uniq_profile_binding_player_region",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_profile_binding_player_region ON public.account_profiles USING btree (binding_ref, player_id, region)"
+  },
+  {
+    "kind": "index",
+    "name": "public.account_profiles.uniq_profile_ref",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_profile_ref ON public.account_profiles USING btree (profile_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.artifact_revocation_intents.artifact_revocation_intents_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX artifact_revocation_intents_pkey ON public.artifact_revocation_intents USING btree (intent_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.artifact_revocation_intents.idx_artifact_revocation_binding",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_artifact_revocation_binding ON public.artifact_revocation_intents USING btree (binding_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.artifact_revocation_intents.idx_artifact_revocation_expiry",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_artifact_revocation_expiry ON public.artifact_revocation_intents USING btree (expires_at)"
+  },
+  {
+    "kind": "index",
+    "name": "public.artifact_revocation_intents.idx_artifact_revocation_lease",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_artifact_revocation_lease ON public.artifact_revocation_intents USING btree (lease_expires_at)"
+  },
+  {
+    "kind": "index",
+    "name": "public.artifact_revocation_intents.idx_artifact_revocation_ready",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_artifact_revocation_ready ON public.artifact_revocation_intents USING btree (state, ready_after)"
+  },
+  {
+    "kind": "index",
+    "name": "public.artifact_revocation_intents.uniq_artifact_revocation_payload",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_artifact_revocation_payload ON public.artifact_revocation_intents USING btree (binding_ref, artifact_type, scope_key, artifact_value)"
+  },
+  {
+    "kind": "index",
+    "name": "public.authorization_fences.authorization_fences_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX authorization_fences_pkey ON public.authorization_fences USING btree (id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.authorization_fences.uniq_authorization_fence",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_authorization_fence ON public.authorization_fences USING btree (binding_ref, consumer_principal)"
+  },
+  {
+    "kind": "index",
+    "name": "public.consumer_grant_invalidations.consumer_grant_invalidations_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX consumer_grant_invalidations_pkey ON public.consumer_grant_invalidations USING btree (id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.consumer_grant_invalidations.uk_consumer_grant_invalidations_binding_consumer",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_consumer_grant_invalidations_binding_consumer ON public.consumer_grant_invalidations USING btree (binding_ref, consumer)"
+  },
+  {
+    "kind": "index",
+    "name": "public.credential_records.credential_records_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX credential_records_pkey ON public.credential_records USING btree (id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.credential_records.uniq_account_key",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_account_key ON public.credential_records USING btree (account_key)"
+  },
+  {
+    "kind": "index",
+    "name": "public.credential_records.uniq_credential_binding_account",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_credential_binding_account ON public.credential_records USING btree (binding_ref, account_key)"
+  },
+  {
+    "kind": "index",
+    "name": "public.credential_records.uniq_credential_binding_ref",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_credential_binding_ref ON public.credential_records USING btree (binding_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.credential_records.uniq_platform_account",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_platform_account ON public.credential_records USING btree (platform, account_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.device_records.device_records_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX device_records_pkey ON public.device_records USING btree (id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.device_records.idx_device_account_key",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_device_account_key ON public.device_records USING btree (account_key)"
+  },
+  {
+    "kind": "index",
+    "name": "public.device_records.idx_device_binding_ref",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_device_binding_ref ON public.device_records USING btree (binding_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.device_records.idx_device_device_id",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_device_device_id ON public.device_records USING btree (device_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.device_records.uniq_device_record_binding",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_device_record_binding ON public.device_records USING btree (binding_ref, device_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.device_records.uniq_device_ref",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_device_ref ON public.device_records USING btree (device_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.platform_operations.idx_operation_binding_ref",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_operation_binding_ref ON public.platform_operations USING btree (binding_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.platform_operations.platform_operations_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX platform_operations_pkey ON public.platform_operations USING btree (operation_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.runtime_artifacts.idx_runtime_account_key",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_runtime_account_key ON public.runtime_artifacts USING btree (account_key)"
+  },
+  {
+    "kind": "index",
+    "name": "public.runtime_artifacts.idx_runtime_artifact_type",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_runtime_artifact_type ON public.runtime_artifacts USING btree (artifact_type)"
+  },
+  {
+    "kind": "index",
+    "name": "public.runtime_artifacts.idx_runtime_binding_ref",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_runtime_binding_ref ON public.runtime_artifacts USING btree (binding_ref)"
+  },
+  {
+    "kind": "index",
+    "name": "public.runtime_artifacts.idx_runtime_expires_at",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_runtime_expires_at ON public.runtime_artifacts USING btree (expires_at)"
+  },
+  {
+    "kind": "index",
+    "name": "public.runtime_artifacts.runtime_artifacts_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX runtime_artifacts_pkey ON public.runtime_artifacts USING btree (id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.runtime_artifacts.uniq_runtime_artifact_binding",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_runtime_artifact_binding ON public.runtime_artifacts USING btree (binding_ref, artifact_type, scope_key)"
+  },
+  {
+    "kind": "index",
+    "name": "public.schema_migrations.schema_migrations_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX schema_migrations_pkey ON public.schema_migrations USING btree (version)"
+  },
+  {
+    "kind": "relation",
+    "name": "public.account_profiles",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.account_profiles_id_seq",
+    "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.artifact_revocation_intents",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.authorization_fences",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.authorization_fences_id_seq",
+    "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.consumer_grant_invalidations",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.consumer_grant_invalidations_id_seq",
+    "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.credential_records",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.credential_records_id_seq",
+    "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.device_records",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.device_records_id_seq",
+    "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.platform_operations",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.runtime_artifacts",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.runtime_artifacts_id_seq",
+    "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.schema_migrations",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "sequence",
+    "name": "public.account_profiles_id_seq",
+    "detail": "type=bigint;start=1;min=1;max=9223372036854775807;increment=1;cycle=f;cache=1"
+  },
+  {
+    "kind": "sequence",
+    "name": "public.authorization_fences_id_seq",
+    "detail": "type=bigint;start=1;min=1;max=9223372036854775807;increment=1;cycle=f;cache=1"
+  },
+  {
+    "kind": "sequence",
+    "name": "public.consumer_grant_invalidations_id_seq",
+    "detail": "type=bigint;start=1;min=1;max=9223372036854775807;increment=1;cycle=f;cache=1"
+  },
+  {
+    "kind": "sequence",
+    "name": "public.credential_records_id_seq",
+    "detail": "type=bigint;start=1;min=1;max=9223372036854775807;increment=1;cycle=f;cache=1"
+  },
+  {
+    "kind": "sequence",
+    "name": "public.device_records_id_seq",
+    "detail": "type=bigint;start=1;min=1;max=9223372036854775807;increment=1;cycle=f;cache=1"
+  },
+  {
+    "kind": "sequence",
+    "name": "public.runtime_artifacts_id_seq",
+    "detail": "type=bigint;start=1;min=1;max=9223372036854775807;increment=1;cycle=f;cache=1"
+  }
+]

@@ -44,10 +44,10 @@ func NewSessionHandler(service SessionReaderWriter) *SessionHandler {
 //   - application/json
 //
 // Parameters:
-//   + name: page
+//   - name: page
 //     in: query
 //     type: integer
-//   + name: page_size
+//   - name: page_size
 //     in: query
 //     type: integer
 //
@@ -56,9 +56,10 @@ func NewSessionHandler(service SessionReaderWriter) *SessionHandler {
 //
 // Responses:
 //
-//   200: meSessionsResponse
-//   401: meErrorResponse
-//   500: meErrorResponse
+//	200: meSessionsResponse
+//	401: meErrorResponse
+//	500: meErrorResponse
+//
 // ListSessions returns the current user's active sessions.
 func (h *SessionHandler) ListSessions(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
@@ -96,11 +97,12 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 //
 // Responses:
 //
-//   204:
-//   400: meErrorResponse
-//   401: meErrorResponse
-//   404: meErrorResponse
-//   500: meErrorResponse
+//	204:
+//	400: meErrorResponse
+//	401: meErrorResponse
+//	404: meErrorResponse
+//	500: meErrorResponse
+//
 // RevokeSession revokes one of the current user's sessions.
 func (h *SessionHandler) RevokeSession(c *gin.Context) {
 	userID, ok := middleware.GetUserID(c)
