@@ -140,7 +140,7 @@ func (s *OrchestrationService) deliverNonSensitiveCredentialOperation(ctx contex
 		var summary *RuntimeSummary
 		summary, err = s.gateway.RefreshCredential(ctx, endpoint, ticket, intent.OperationID, binding)
 		if err == nil {
-			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, 0, summary)
+			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, 0, "", summary)
 			return err
 		}
 	case "OPERATION_KIND_DELETE_CREDENTIAL":
@@ -150,7 +150,7 @@ func (s *OrchestrationService) deliverNonSensitiveCredentialOperation(ctx contex
 		operationBinding := bindingAtProfileRevision(binding, intent.ProfileRevision)
 		summary, err = s.gateway.SetPrimaryProfile(ctx, endpoint, ticket, intent.OperationID, operationBinding, intent.ProfileRef)
 		if err == nil {
-			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, intent.ProfileRevision, summary)
+			_, err = s.applyAuthoritativeSummary(ctx, intent.OperationID, intent.Kind, binding, intent.TargetGeneration, intent.ProfileRevision, intent.ProfileRef, summary)
 			return err
 		}
 	}
@@ -222,7 +222,7 @@ func isNonSensitiveCredentialOperation(kind string) bool {
 }
 
 func (s *OrchestrationService) applyResolvedCredentialOperation(ctx context.Context, intent *model.PlatformOperationIntent, binding *model.PlatformAccountBinding, summary *RuntimeSummary, endpoint string) error {
-	if !validOperationSummary(intent.Kind, intent.TargetGeneration, intent.ProfileRevision, summary) {
+	if !validOperationSummary(intent.Kind, intent.TargetGeneration, intent.ProfileRevision, intent.ProfileRef, summary) {
 		_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "terminal_generation_mismatch")
 		return ErrBindingGenerationConflict
 	}

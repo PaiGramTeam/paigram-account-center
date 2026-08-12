@@ -307,7 +307,7 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 	if err != nil {
 		return nil, s.handleNonSensitiveCredentialDeliveryError(ctx, binding, reference, err)
 	}
-	return s.applyAuthoritativeSummary(ctx, operationID, reference.Kind, binding, reference.TargetGeneration, 0, summary)
+	return s.applyAuthoritativeSummary(ctx, operationID, reference.Kind, binding, reference.TargetGeneration, 0, "", summary)
 }
 
 func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model.PlatformAccountBinding, actorType, actorID string) error {

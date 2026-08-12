@@ -227,6 +227,7 @@ func TestReconcilePrimaryReplayUsesIntentProfileRevision(t *testing.T) {
 		primarySummary: &RuntimeSummary{
 			PlatformAccountID: "account-101", Generation: 4, Status: "active",
 			ProfileSnapshotComplete: true, ProfileRevision: 8, ProfileObservedRevision: 8,
+			Profiles: []map[string]any{{"profile_ref": "profile-stable", "is_default": true}},
 		},
 	}
 	platformService := &fakeOrchestrationPlatformService{platform: &model.PlatformService{Endpoint: "127.0.0.1:9000"}, ticket: "service-ticket"}
