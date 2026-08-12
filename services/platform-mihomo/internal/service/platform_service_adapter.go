@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -13,7 +14,7 @@ import (
 	"platform-mihomo-service/internal/usecase"
 )
 
-const consumerGrantInvalidateScope = "mihomo.consumer_grant.invalidate"
+const consumerGrantInvalidateScope = platformaction.MihomoConsumerGrantInvalidate
 
 type grantInvalidationStore interface {
 	Upsert(ctx context.Context, bindingID uint64, consumer string, minimumVersion uint64) error
@@ -222,6 +223,11 @@ func (s *GenericPlatformService) authorizePlatformAccount(ctx context.Context, p
 	claims, err := serviceTicketClaims(ctx, s.ticketVerifier)
 	if err != nil {
 		return usecase.ScopeGuard{}, err
+	}
+	if platformaction.IsMihomoControlAction(action) {
+		if err := requireControlTicket(claims); err != nil {
+			return usecase.ScopeGuard{}, err
+		}
 	}
 	guard, err := scopedGuardForPlatformAccount(claims, platformAccountID, action)
 	if err != nil {

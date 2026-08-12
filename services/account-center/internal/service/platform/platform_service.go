@@ -9,6 +9,7 @@ import (
 	"time"
 
 	platformv1 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v1"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -243,7 +244,7 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 		return ErrInvalidTicketConfig
 	}
 
-	claims := buildBindingScopedTicketClaims(actorType, actorID, input.OwnerUserID, input.BindingID, input.Platform, input.PlatformServiceKey, "", []string{"mihomo.consumer_grant.invalidate"})
+	claims := buildBindingScopedTicketClaims(actorType, actorID, input.OwnerUserID, input.BindingID, input.Platform, input.PlatformServiceKey, "", []string{platformaction.MihomoConsumerGrantInvalidate})
 	claims.AllowedActions = claims.Scopes
 	signed, _, err := s.ticketSigner.Issue(serviceticket.TypeControl, ticketSubject(actorType, actorID, input.OwnerUserID), platformRow.ServiceAudience, claims)
 	if err != nil {
@@ -412,7 +413,7 @@ func (s *PlatformService) ConfirmBindingPrimaryProfile(ctx context.Context, acto
 		return err
 	}
 
-	ticket, _, err := s.IssueBindingScopedTicket(actorType, actorID, binding, []string{"mihomo.profile.write"})
+	ticket, _, err := s.IssueBindingScopedTicket(actorType, actorID, binding, []string{platformaction.MihomoProfileWrite})
 	if err != nil {
 		return err
 	}

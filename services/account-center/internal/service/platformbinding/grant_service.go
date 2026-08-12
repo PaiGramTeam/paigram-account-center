@@ -10,29 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"gorm.io/gorm"
 
 	"paigram/internal/model"
 	serviceaudit "paigram/internal/service/audit"
 )
 
-var defaultConsumerActions = []string{
-	"mihomo.authkey.issue",
-	"mihomo.credential.read_meta",
-	"mihomo.credential.validate",
-	"mihomo.device.update",
-	"mihomo.profile.read",
-	"mihomo.status.read",
-}
-
-var delegatableActions = map[string]struct{}{
-	"mihomo.authkey.issue":        {},
-	"mihomo.credential.read_meta": {},
-	"mihomo.credential.validate":  {},
-	"mihomo.device.update":        {},
-	"mihomo.profile.read":         {},
-	"mihomo.status.read":          {},
-}
+var defaultConsumerActions = platformaction.MihomoDelegationActions()
 
 type GrantService struct {
 	db          *gorm.DB
@@ -129,7 +114,7 @@ func normalizeGrantActions(actions []string) ([]string, error) {
 	seen := make(map[string]struct{}, len(actions))
 	for _, action := range actions {
 		action = strings.TrimSpace(action)
-		if _, allowed := delegatableActions[action]; !allowed {
+		if !platformaction.IsMihomoDelegationAction(action) {
 			return nil, ErrGrantActionNotAllowed
 		}
 		if _, exists := seen[action]; exists {

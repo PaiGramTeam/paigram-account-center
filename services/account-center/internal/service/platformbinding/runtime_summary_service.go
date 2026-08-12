@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
+
 	"paigram/internal/model"
 )
 
@@ -49,7 +51,7 @@ func (s *RuntimeSummaryService) GetRuntimeSummary(ctx context.Context, ownerUser
 		return nil, ErrBindingRuntimeSummaryNotReady
 	}
 
-	summary, err := s.platformService.GetBindingRuntimeSummary(ctx, "user", "binding-runtime-summary", binding, []string{"mihomo.credential.read_meta"})
+	summary, err := s.platformService.GetBindingRuntimeSummary(ctx, "user", "binding-runtime-summary", binding, []string{platformaction.MihomoCredentialRead})
 	if err != nil {
 		return nil, normalizeRuntimeSummaryError(err)
 	}
@@ -66,7 +68,7 @@ func (s *RuntimeSummaryService) GetRuntimeSummaryAsAdmin(ctx context.Context, bi
 		return nil, ErrBindingRuntimeSummaryNotReady
 	}
 
-	summary, err := s.platformService.GetBindingRuntimeSummary(ctx, "admin", "binding-runtime-summary-admin", binding, []string{"mihomo.credential.read_meta"})
+	summary, err := s.platformService.GetBindingRuntimeSummary(ctx, "admin", "binding-runtime-summary-admin", binding, []string{platformaction.MihomoCredentialRead})
 	if err != nil {
 		return nil, normalizeRuntimeSummaryError(err)
 	}
@@ -83,7 +85,7 @@ func (s *RuntimeSummaryService) RepairProjection(ctx context.Context, bindingID 
 		return nil, ErrBindingRuntimeSummaryNotReady
 	}
 
-	summary, err := s.platformService.GetBindingRuntimeSummary(ctx, "consumer", "platform-binding-reconcile", binding, []string{"mihomo.credential.read_meta"})
+	summary, err := s.platformService.GetBindingRuntimeSummary(ctx, "consumer", "platform-binding-reconcile", binding, []string{platformaction.MihomoCredentialRead})
 	if err != nil {
 		return nil, normalizeRuntimeSummaryError(err)
 	}

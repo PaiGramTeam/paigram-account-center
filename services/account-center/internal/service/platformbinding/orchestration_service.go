@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 	"gorm.io/gorm"
 	"paigram/internal/model"
 	serviceaudit "paigram/internal/service/audit"
@@ -293,7 +294,7 @@ func (s *OrchestrationService) refreshBinding(ctx context.Context, binding *mode
 		return nil, err
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, binding, []string{"mihomo.credential.refresh"})
+	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, binding, []string{platformaction.MihomoCredentialRefresh})
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +341,7 @@ func (s *OrchestrationService) deleteBinding(ctx context.Context, binding *model
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, binding, []string{"mihomo.credential.delete"})
+	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, binding, []string{platformaction.MihomoCredentialDelete})
 	if err != nil {
 		return s.markDeleteFailed(binding.ID, err, "credential_delete_failed")
 	}
@@ -378,9 +379,9 @@ func (s *OrchestrationService) putCredential(ctx context.Context, binding *model
 	}
 
 	hasResolvedAccount := binding.ExternalAccountKey.Valid && binding.ExternalAccountKey.String != ""
-	scopes := []string{"mihomo.credential.bind"}
+	scopes := []string{platformaction.MihomoCredentialBind}
 	if hasResolvedAccount {
-		scopes = []string{"mihomo.credential.update"}
+		scopes = []string{platformaction.MihomoCredentialUpdate}
 	}
 
 	ticket, _, err := s.platformService.IssueBindingScopedTicket(input.ActorType, input.ActorID, binding, scopes)
@@ -442,7 +443,7 @@ func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, b
 		resolvedBinding = &clone
 	}
 
-	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, resolvedBinding, []string{"mihomo.credential.delete"})
+	ticket, _, err := s.platformService.IssueBindingScopedTicket(actorType, actorID, resolvedBinding, []string{platformaction.MihomoCredentialDelete})
 	if err != nil {
 		return err
 	}

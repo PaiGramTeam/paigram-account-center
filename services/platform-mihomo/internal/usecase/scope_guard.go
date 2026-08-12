@@ -1,23 +1,27 @@
 package usecase
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
+)
 
 var ErrActionScopeDenied = errors.New("action is outside ticket scope")
 var ErrBindingScopeDenied = errors.New("binding is outside ticket scope")
 var ErrProfileScopeDenied = errors.New("profile is outside ticket scope")
 
 const (
-	ActionStatusRead         = "mihomo.status.read"
-	ActionCredentialValidate = "mihomo.credential.validate"
-	ActionProfileRead        = "mihomo.profile.read"
-	ActionProfileWrite       = "mihomo.profile.write"
-	ActionAuthKeyIssue       = "mihomo.authkey.issue"
-	ActionCredentialBind     = "mihomo.credential.bind"
-	ActionDeviceUpdate       = "mihomo.device.update"
-	ActionCredentialRead     = "mihomo.credential.read_meta"
-	ActionCredentialUpdate   = "mihomo.credential.update"
-	ActionCredentialRefresh  = "mihomo.credential.refresh"
-	ActionCredentialDelete   = "mihomo.credential.delete"
+	ActionStatusRead         = platformaction.MihomoStatusRead
+	ActionCredentialValidate = platformaction.MihomoCredentialValidate
+	ActionProfileRead        = platformaction.MihomoProfileRead
+	ActionProfileWrite       = platformaction.MihomoProfileWrite
+	ActionAuthKeyIssue       = platformaction.MihomoAuthKeyIssue
+	ActionCredentialBind     = platformaction.MihomoCredentialBind
+	ActionDeviceUpdate       = platformaction.MihomoDeviceUpdate
+	ActionCredentialRead     = platformaction.MihomoCredentialRead
+	ActionCredentialUpdate   = platformaction.MihomoCredentialUpdate
+	ActionCredentialRefresh  = platformaction.MihomoCredentialRefresh
+	ActionCredentialDelete   = platformaction.MihomoCredentialDelete
 )
 
 type ScopeGuard struct {
