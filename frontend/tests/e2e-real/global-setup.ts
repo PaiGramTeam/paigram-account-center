@@ -214,6 +214,13 @@ async function cleanupSystem(
       errors.push(error)
     }
   }
+  for (const path of [stateFile, `${stateFile}.tmp`]) {
+    try {
+      await rm(path, { force: true })
+    } catch (error) {
+      errors.push(error)
+    }
+  }
   return errors.length === 0 ? undefined : new AggregateError(errors, 'Real-system cleanup failed')
 }
 
