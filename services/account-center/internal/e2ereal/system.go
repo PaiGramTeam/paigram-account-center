@@ -4,6 +4,8 @@ package e2ereal
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -19,12 +21,12 @@ import (
 	"paigram/integration/testenv"
 )
 
-const (
-	adminEmail    = "admin@paigram.local"
-	adminPassword = "AdminPass123!"
-	userEmail     = "browser.user@example.test"
-	userPassword  = "BrowserPass123!"
-)
+const adminName = "Browser Administrator"
+
+type fixtureIdentity struct {
+	email    string
+	password string
+}
 
 type Config struct {
 	RepositoryRoot string
@@ -46,12 +48,30 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	_ = os.Remove(cfg.StateFile)
+	if err := os.Remove(cfg.StateFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove stale fixture state: %w", err)
+	}
 	temporaryDirectory, err := os.MkdirTemp("", "paigram-e2e-real-")
 	if err != nil {
 		return fmt.Errorf("create fixture directory: %w", err)
 	}
-	defer os.RemoveAll(temporaryDirectory)
+	defer func() {
+		if err := os.RemoveAll(temporaryDirectory); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("remove fixture directory: %w", err))
+		}
+	}()
+	adminIdentity, err := newFixtureIdentity("browser.admin")
+	if err != nil {
+		return err
+	}
+	userIdentity, err := newFixtureIdentity("browser.user")
+	if err != nil {
+		return err
+	}
+	adminPasswordFile := filepath.Join(temporaryDirectory, "admin-password")
+	if err := writeFile(adminPasswordFile, []byte(adminIdentity.password)); err != nil {
+		return fmt.Errorf("write administrator password: %w", err)
+	}
 
 	accountRoot := filepath.Join(cfg.RepositoryRoot, "services", "account-center")
 	platformRoot := filepath.Join(cfg.RepositoryRoot, "services", "platform-mihomo")
@@ -102,6 +122,13 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if err != nil {
 		return err
 	}
+	var accountProcess *childProcess
+	defer func() {
+		cancel()
+		processExitCtx, processExitCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer processExitCancel()
+		runErr = errors.Join(runErr, waitForProcessExit(processExitCtx, accountProcess), waitForProcessExit(processExitCtx, platformProcess))
+	}()
 	startupCtx, startupCancel := context.WithTimeout(runCtx, 3*time.Minute)
 	defer startupCancel()
 	if err := waitTCP(startupCtx, "127.0.0.1:19000", platformProcess); err != nil {
@@ -125,10 +152,10 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if err := writeAccountConfig(accountConfig, cfg.RepositoryRoot, stack.BaselineDSN, stack.RedisAddr, frontendURL, material); err != nil {
 		return err
 	}
-	accountProcess, err := startProcess(runCtx, "Account", accountBinary, accountWorkdir, []string{"serve"}, []string{
-		"ADMIN_EMAIL=" + adminEmail,
-		"ADMIN_PASSWORD=" + adminPassword,
-		"ADMIN_NAME=Browser Administrator",
+	accountProcess, err = startProcess(runCtx, "Account", accountBinary, accountWorkdir, []string{"serve"}, []string{
+		"ADMIN_EMAIL=" + adminIdentity.email,
+		"ADMIN_PASSWORD_FILE=" + adminPasswordFile,
+		"ADMIN_NAME=" + adminName,
 	})
 	if err != nil {
 		return err
@@ -140,22 +167,38 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 		return err
 	}
 	state := State{
-		FrontendURL: frontendURL, AdminEmail: adminEmail, AdminPassword: adminPassword,
-		UserEmail: userEmail, UserPassword: userPassword,
+		FrontendURL: frontendURL, AdminEmail: adminIdentity.email, AdminPassword: adminIdentity.password,
+		UserEmail: userIdentity.email, UserPassword: userIdentity.password,
 	}
 	if err := writeState(cfg.StateFile, state); err != nil {
 		return err
 	}
-	defer os.Remove(cfg.StateFile)
+	defer func() {
+		if err := os.Remove(cfg.StateFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+			runErr = errors.Join(runErr, fmt.Errorf("remove fixture state: %w", err))
+		}
+	}()
 
 	select {
 	case <-runCtx.Done():
 		return nil
-	case err := <-platformProcess.done:
-		return fmt.Errorf("Platform process stopped: %w", normalizeProcessError(err))
-	case err := <-accountProcess.done:
-		return fmt.Errorf("Account process stopped: %w", normalizeProcessError(err))
+	case <-platformProcess.done:
+		return fmt.Errorf("Platform process stopped: %w", normalizeProcessError(platformProcess.err))
+	case <-accountProcess.done:
+		return fmt.Errorf("Account process stopped: %w", normalizeProcessError(accountProcess.err))
 	}
+}
+
+func newFixtureIdentity(localPrefix string) (fixtureIdentity, error) {
+	raw := make([]byte, 18)
+	if _, err := rand.Read(raw); err != nil {
+		return fixtureIdentity{}, fmt.Errorf("generate fixture identity: %w", err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(raw)
+	return fixtureIdentity{
+		email:    fmt.Sprintf("%s.%s@example.test", localPrefix, strings.ToLower(token[:12])),
+		password: "E2E-" + token + "-aA1!",
+	}, nil
 }
 
 func startFrontend(ctx context.Context, image string) (testcontainers.Container, string, error) {

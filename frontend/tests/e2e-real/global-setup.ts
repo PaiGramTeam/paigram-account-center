@@ -45,14 +45,14 @@ export default async function globalSetup(_config: FullConfig): Promise<() => Pr
     systemProcess.once('exit', () => logStream.end())
     await waitForSystem(systemProcess)
   } catch (error) {
-    if (systemProcess) await stopSystem(systemProcess)
-    if (imageBuilt) removeImage(containerCLI, image)
+    const cleanupError = await cleanupSystem(systemProcess, imageBuilt, containerCLI, image)
+    if (cleanupError) throw new AggregateError([error, cleanupError], 'Real-system startup and cleanup failed')
     throw error
   }
 
   return async () => {
-    if (systemProcess) await stopSystem(systemProcess)
-    removeImage(containerCLI, image)
+    const cleanupError = await cleanupSystem(systemProcess, true, containerCLI, image)
+    if (cleanupError) throw cleanupError
   }
 }
 
@@ -142,18 +142,49 @@ async function waitForSystem(systemProcess: ChildProcessWithoutNullStreams): Pro
 }
 
 async function stopSystem(systemProcess: ChildProcessWithoutNullStreams): Promise<void> {
-  if (systemProcess.exitCode !== null) return
+  if (systemProcess.exitCode !== null) {
+    if (systemProcess.exitCode !== 0) throw new Error(`Real-system fixture exited with code ${systemProcess.exitCode}`)
+    return
+  }
   systemProcess.stdin.end('shutdown\n')
   const exited = new Promise<void>((resolve) => systemProcess.once('exit', () => resolve()))
   await Promise.race([exited, delay(60_000)])
   if (systemProcess.exitCode === null) {
     systemProcess.kill()
     await Promise.race([exited, delay(10_000)])
+    throw new Error('Real-system fixture did not stop gracefully')
   }
+  if (systemProcess.exitCode !== 0) throw new Error(`Real-system fixture exited with code ${systemProcess.exitCode}`)
 }
 
 function removeImage(containerCLI: string, image: string): void {
-  spawnSync(containerCLI, ['image', 'rm', '--force', image], { cwd: repositoryRoot, stdio: 'ignore' })
+  const result = spawnSync(containerCLI, ['image', 'rm', '--force', image], { cwd: repositoryRoot, stdio: 'ignore' })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(`${containerCLI} image removal exited with code ${result.status}`)
+}
+
+async function cleanupSystem(
+  systemProcess: ChildProcessWithoutNullStreams | undefined,
+  imageBuilt: boolean,
+  containerCLI: string,
+  image: string
+): Promise<AggregateError | undefined> {
+  const errors: unknown[] = []
+  if (systemProcess) {
+    try {
+      await stopSystem(systemProcess)
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (imageBuilt) {
+    try {
+      removeImage(containerCLI, image)
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors.length === 0 ? undefined : new AggregateError(errors, 'Real-system cleanup failed')
 }
 
 function runChecked(command: string, args: string[], environment?: NodeJS.ProcessEnv): void {

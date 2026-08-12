@@ -17,7 +17,8 @@ import (
 
 type childProcess struct {
 	name string
-	done chan error
+	done chan struct{}
+	err  error
 }
 
 func buildBinary(ctx context.Context, moduleRoot, outputPath, packagePath string) error {
@@ -47,8 +48,11 @@ func startProcess(ctx context.Context, name, executable, workdir string, args []
 	if err := command.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", name, err)
 	}
-	process := &childProcess{name: name, done: make(chan error, 1)}
-	go func() { process.done <- command.Wait() }()
+	process := &childProcess{name: name, done: make(chan struct{})}
+	go func() {
+		process.err = command.Wait()
+		close(process.done)
+	}()
 	return process, nil
 }
 
@@ -95,12 +99,25 @@ func waitFor(ctx context.Context, process *childProcess, probe func(context.Cont
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case processErr := <-process.done:
+		case <-process.done:
+			processErr := process.err
 			if processErr == nil {
 				processErr = errors.New("process exited unexpectedly")
 			}
 			return fmt.Errorf("%s stopped before readiness: %w", process.name, processErr)
 		case <-ticker.C:
 		}
+	}
+}
+
+func waitForProcessExit(ctx context.Context, process *childProcess) error {
+	if process == nil {
+		return nil
+	}
+	select {
+	case <-process.done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("wait for %s to stop: %w", process.name, ctx.Err())
 	}
 }
