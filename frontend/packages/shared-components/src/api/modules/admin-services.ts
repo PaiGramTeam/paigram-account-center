@@ -22,6 +22,7 @@ export interface PlatformServiceInput {
 export interface ServiceCredentialInput {
   client_id: string
   bot_id: string
+  entry_issuer?: string
   display_name: string
   description: string
   audiences: string[]

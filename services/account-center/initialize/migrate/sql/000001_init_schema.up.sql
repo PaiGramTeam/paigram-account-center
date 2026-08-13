@@ -458,6 +458,7 @@ CREATE TRIGGER admin_guard_prevent_downgrade
 
 CREATE TABLE bots (
     id VARCHAR(64) PRIMARY KEY,
+    entry_issuer VARCHAR(191) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     description TEXT,
     type VARCHAR(32) NOT NULL DEFAULT 'OTHER',
@@ -469,6 +470,7 @@ CREATE TABLE bots (
     CONSTRAINT fk_bots_owner FOREIGN KEY (owner_user_id) REFERENCES users (id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 CREATE INDEX idx_bots_owner ON bots (owner_user_id);
+CREATE UNIQUE INDEX uk_bots_entry_issuer ON bots (entry_issuer);
 CREATE INDEX idx_bots_status ON bots (status);
 CREATE INDEX idx_bots_deleted_at ON bots (deleted_at);
 
@@ -478,19 +480,20 @@ CREATE TABLE bot_identities (
     entry_epoch BIGINT NOT NULL DEFAULT 1 CHECK (entry_epoch >= 1),
     user_id BIGINT NOT NULL,
     bot_id VARCHAR(64) NOT NULL,
+    issuer VARCHAR(191) NOT NULL,
     external_user_id VARCHAR(191) NOT NULL,
     external_username VARCHAR(255),
     linked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ,
-    CONSTRAINT uk_bot_identities_bot_external UNIQUE (bot_id, external_user_id),
-    CONSTRAINT uk_bot_identities_user_bot UNIQUE (user_id, bot_id),
     CONSTRAINT fk_bot_identities_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_bot_identities_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX idx_bot_identities_user_id ON bot_identities (user_id);
 CREATE UNIQUE INDEX uk_bot_identities_ref ON bot_identities (entry_identity_ref);
+CREATE UNIQUE INDEX uk_bot_identities_issuer_subject_active ON bot_identities (issuer, external_user_id) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX uk_bot_identities_user_issuer_active ON bot_identities (user_id, issuer) WHERE deleted_at IS NULL;
 CREATE INDEX idx_bot_identities_deleted_at ON bot_identities (deleted_at);
 
 CREATE TABLE service_credentials (
@@ -515,6 +518,47 @@ CREATE INDEX idx_service_credentials_status ON service_credentials (status);
 CREATE INDEX idx_service_credentials_owner ON service_credentials (owner_user_id);
 CREATE INDEX idx_service_credentials_bot ON service_credentials (bot_id);
 CREATE INDEX idx_service_credentials_deleted_at ON service_credentials (deleted_at);
+
+CREATE TABLE entry_identity_link_challenges (
+    challenge_hash CHAR(64) PRIMARY KEY,
+    consumer VARCHAR(96) NOT NULL,
+    bot_id VARCHAR(64) NOT NULL,
+    issuer VARCHAR(191) NOT NULL,
+    external_subject VARCHAR(191) NOT NULL,
+    external_username VARCHAR(255),
+    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    expires_at TIMESTAMPTZ NOT NULL,
+    approved_user_id BIGINT,
+    consumed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_entry_identity_link_challenges_status CHECK (status IN ('pending', 'approved', 'cancelled', 'expired', 'conflict')),
+    CONSTRAINT fk_entry_identity_link_challenges_consumer FOREIGN KEY (consumer) REFERENCES service_credentials (client_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_entry_identity_link_challenges_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_entry_identity_link_challenges_user FOREIGN KEY (approved_user_id) REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE INDEX idx_entry_identity_link_challenges_consumer ON entry_identity_link_challenges (consumer);
+CREATE INDEX idx_entry_identity_link_challenges_bot ON entry_identity_link_challenges (bot_id);
+CREATE INDEX idx_entry_identity_link_challenges_status_expiry ON entry_identity_link_challenges (status, expires_at);
+CREATE INDEX idx_entry_identity_link_challenges_user ON entry_identity_link_challenges (approved_user_id);
+
+CREATE TABLE entry_identity_unlink_operations (
+    operation_id VARCHAR(64) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    bot_id VARCHAR(64) NOT NULL,
+    entry_identity_ref VARCHAR(64) NOT NULL,
+    minimum_entry_epoch BIGINT NOT NULL CHECK (minimum_entry_epoch >= 1),
+    state VARCHAR(32) NOT NULL DEFAULT 'PROPAGATION_PENDING',
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_entry_identity_unlink_operations_state CHECK (state IN ('PROPAGATION_PENDING', 'UNLINKED')),
+    CONSTRAINT fk_entry_identity_unlink_operations_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_entry_identity_unlink_operations_bot FOREIGN KEY (bot_id) REFERENCES bots (id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_entry_identity_unlink_operations_identity FOREIGN KEY (entry_identity_ref) REFERENCES bot_identities (entry_identity_ref) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE INDEX idx_entry_identity_unlink_operations_user_bot ON entry_identity_unlink_operations (user_id, bot_id);
+CREATE INDEX idx_entry_identity_unlink_operations_state ON entry_identity_unlink_operations (state);
 
 CREATE TABLE platform_services (
     id BIGSERIAL PRIMARY KEY,
@@ -686,6 +730,7 @@ CREATE TABLE consumer_grants (
     consumer VARCHAR(64) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
     ticket_version BIGINT NOT NULL DEFAULT 1,
+    pending_entry_epoch BIGINT NOT NULL DEFAULT 0 CHECK (pending_entry_epoch >= 0),
     granted_by BIGINT,
     granted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     revoked_at TIMESTAMPTZ,
@@ -708,6 +753,16 @@ CREATE TABLE consumer_grant_actions (
     CONSTRAINT fk_consumer_grant_actions_grant FOREIGN KEY (grant_id) REFERENCES consumer_grants (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX idx_consumer_grant_actions_action ON consumer_grant_actions (action);
+
+CREATE TABLE entry_identity_unlink_targets (
+    operation_id VARCHAR(64) NOT NULL,
+    grant_id BIGINT NOT NULL,
+    confirmed_at TIMESTAMPTZ,
+    PRIMARY KEY (operation_id, grant_id),
+    CONSTRAINT fk_entry_identity_unlink_targets_operation FOREIGN KEY (operation_id) REFERENCES entry_identity_unlink_operations (operation_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_entry_identity_unlink_targets_grant FOREIGN KEY (grant_id) REFERENCES consumer_grants (id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX idx_entry_identity_unlink_targets_grant ON entry_identity_unlink_targets (grant_id);
 
 CREATE FUNCTION validate_consumer_grant_actions(target_grant_id BIGINT) RETURNS VOID AS $$
 DECLARE

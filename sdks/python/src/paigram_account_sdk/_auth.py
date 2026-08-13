@@ -19,6 +19,8 @@ from .errors import (
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_SCOPES = ("bot.access.read", "bot.access.issue_ticket")
+
 
 @dataclass(frozen=True, slots=True)
 class _AccessToken:
@@ -38,23 +40,24 @@ class _ClientCredentialsTokenProvider:
         self._client_id = client_id
         self._client_secret = client_secret
         self._timeout = timeout
-        self._cached: _AccessToken | None = None
+        self._cached: dict[tuple[str, ...], _AccessToken] = {}
         self._lock = asyncio.Lock()
 
-    async def get(self, request_id: str) -> str:
-        cached = self._cached
+    async def get(self, request_id: str, scopes: tuple[str, ...] = _DEFAULT_SCOPES) -> str:
+        normalized_scopes = tuple(dict.fromkeys(scopes))
+        cached = self._cached.get(normalized_scopes)
         if cached is not None and cached.expires_at > time.monotonic():
             return cached.value
 
         async with self._lock:
-            cached = self._cached
+            cached = self._cached.get(normalized_scopes)
             if cached is not None and cached.expires_at > time.monotonic():
                 return cached.value
-            issued = await self._issue(request_id)
-            self._cached = issued
+            issued = await self._issue(request_id, normalized_scopes)
+            self._cached[normalized_scopes] = issued
             return issued.value
 
-    async def _issue(self, request_id: str) -> _AccessToken:
+    async def _issue(self, request_id: str, scopes: tuple[str, ...]) -> _AccessToken:
         try:
             response = await self._http_client.post(
                 "/api/v1/oauth/token",
@@ -63,7 +66,7 @@ class _ClientCredentialsTokenProvider:
                     "client_id": self._client_id,
                     "client_secret": self._client_secret,
                     "audience": "account-center",
-                    "scope": "bot.access.read bot.access.issue_ticket",
+                    "scope": " ".join(scopes),
                 },
                 headers={"x-request-id": request_id},
                 timeout=self._timeout,

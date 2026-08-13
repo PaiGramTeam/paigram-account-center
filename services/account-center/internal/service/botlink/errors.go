@@ -1,5 +1,4 @@
-// Package botlink owns bot_identities CRUD with audit-log side effects.
-// Spec: docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.2
+// Package botlink owns bot identity persistence and audit side effects.
 package botlink
 
 import "errors"
@@ -16,4 +15,11 @@ var (
 
 	// ErrBotIdentityNotFound: Unlink target row does not exist.
 	ErrBotIdentityNotFound = errors.New("botlink: bot identity not found")
+
+	// ErrEntryIssuerMismatch rejects callers that present a namespace other
+	// than the one registered for the logical bot.
+	ErrEntryIssuerMismatch = errors.New("botlink: entry issuer does not match registered bot")
+
+	// ErrUnlinkPending prevents a fresh link from overtaking revocation.
+	ErrUnlinkPending = errors.New("botlink: identity unlink is still pending")
 )

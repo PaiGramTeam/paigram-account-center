@@ -28,6 +28,7 @@ import (
 	serviceBotRoute "paigram/internal/service/botroute"
 	serviceCasbin "paigram/internal/service/casbin"
 	serviceCredentials "paigram/internal/service/credentials"
+	serviceEntryIdentity "paigram/internal/service/entryidentity"
 	serviceGeolocation "paigram/internal/service/geolocation"
 	serviceLoginRisk "paigram/internal/service/loginrisk"
 	serviceMe "paigram/internal/service/me"
@@ -79,7 +80,7 @@ var ApiGroupApp = new(ApiGroup)
 // become non-functional 500s. Deployments that don't use Telegram OIDC
 // can leave the config block unset; they only need to validate it
 // through config.Validate when they DO opt in. See spec §5.5.
-func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, platformControlCfg config.PlatformControlConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer) error {
+func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, frontendCfg config.FrontendConfig, platformControlCfg config.PlatformControlConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer) error {
 	if db == nil {
 		return errors.New("initialize api groups: db is nil")
 	}
@@ -93,10 +94,10 @@ func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.A
 	if err != nil {
 		return err
 	}
-	return InitializeApiGroupsWithTransport(db, cache, authCfg, securityCfg, telegramOIDCCfg, ticketSigner, controlDialer)
+	return InitializeApiGroupsWithTransport(db, cache, authCfg, frontendCfg, securityCfg, telegramOIDCCfg, ticketSigner, controlDialer)
 }
 
-func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) error {
+func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, frontendCfg config.FrontendConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) error {
 	if db == nil {
 		return errors.New("initialize api groups: db is nil")
 	}
@@ -160,8 +161,12 @@ func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, aut
 	// /auth/telegram/* paths.
 	logger := logging.Logger()
 	botlinkSvc := serviceBotLink.NewService(db, logger)
+	entryIdentitySvc := serviceEntryIdentity.NewService(db, logger, serviceEntryIdentity.Config{
+		FrontendBaseURL:  frontendCfg.BaseURL,
+		GrantInvalidator: &service.ServiceGroupApp.PlatformServiceGroup.PlatformService,
+	})
 	sessionSvc := serviceSession.NewService(db, logger)
-	ApiGroupApp.MeIdentitiesApiGroup = *handlerMeIdentities.NewApiGroup(botlinkSvc, logger)
+	ApiGroupApp.MeIdentitiesApiGroup = *handlerMeIdentities.NewApiGroup(botlinkSvc, logger, entryIdentitySvc)
 	if telegramOIDCCfg.ClientID != "" || telegramOIDCCfg.ClientSecret != "" || telegramOIDCCfg.RedirectURI != "" {
 		oidcClient := serviceTelegramOIDC.NewClient(serviceTelegramOIDC.Config{
 			ClientID:     telegramOIDCCfg.ClientID,

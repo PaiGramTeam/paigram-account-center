@@ -132,7 +132,7 @@ func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncac
 	v1 := runtime.V1
 
 	// Initialize handler groups with dependencies (also seeds loginrisk + geolocation subgroups).
-	if err := handler.InitializeApiGroupsWithTransport(db, cache, authCfg, cfg.Security, cfg.TelegramOIDC, ticketSigner, controlDialer); err != nil {
+	if err := handler.InitializeApiGroupsWithTransport(db, cache, authCfg, cfg.Frontend, cfg.Security, cfg.TelegramOIDC, ticketSigner, controlDialer); err != nil {
 		return nil, fmt.Errorf("initialize api groups: %w", err)
 	}
 	handler.ApiGroupApp.AuthApiGroup = *authhandler.NewApiGroup(

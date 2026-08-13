@@ -34,6 +34,11 @@ class BotAccessServiceStub:
         Args:
             channel: A grpc.Channel.
         """
+        self.StartEntryIdentityLink = channel.unary_unary(
+                '/paigram.v1.BotAccessService/StartEntryIdentityLink',
+                request_serializer=account_dot_v1_dot_bot__access__pb2.StartEntryIdentityLinkRequest.SerializeToString,
+                response_deserializer=account_dot_v1_dot_bot__access__pb2.StartEntryIdentityLinkResponse.FromString,
+                _registered_method=True)
         self.ResolveBotUser = channel.unary_unary(
                 '/paigram.v1.BotAccessService/ResolveBotUser',
                 request_serializer=account_dot_v1_dot_bot__access__pb2.ResolveBotUserRequest.SerializeToString,
@@ -58,6 +63,12 @@ class BotAccessServiceStub:
 
 class BotAccessServiceServicer:
     """Missing associated documentation comment in .proto file."""
+
+    def StartEntryIdentityLink(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def ResolveBotUser(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -86,6 +97,11 @@ class BotAccessServiceServicer:
 
 def add_BotAccessServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'StartEntryIdentityLink': grpc.unary_unary_rpc_method_handler(
+                    servicer.StartEntryIdentityLink,
+                    request_deserializer=account_dot_v1_dot_bot__access__pb2.StartEntryIdentityLinkRequest.FromString,
+                    response_serializer=account_dot_v1_dot_bot__access__pb2.StartEntryIdentityLinkResponse.SerializeToString,
+            ),
             'ResolveBotUser': grpc.unary_unary_rpc_method_handler(
                     servicer.ResolveBotUser,
                     request_deserializer=account_dot_v1_dot_bot__access__pb2.ResolveBotUserRequest.FromString,
@@ -116,6 +132,33 @@ def add_BotAccessServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class BotAccessService:
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def StartEntryIdentityLink(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/paigram.v1.BotAccessService/StartEntryIdentityLink',
+            account_dot_v1_dot_bot__access__pb2.StartEntryIdentityLinkRequest.SerializeToString,
+            account_dot_v1_dot_bot__access__pb2.StartEntryIdentityLinkResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def ResolveBotUser(request,

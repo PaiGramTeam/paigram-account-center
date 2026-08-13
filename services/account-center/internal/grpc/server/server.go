@@ -26,6 +26,7 @@ import (
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/botroute"
 	"paigram/internal/service/credentials"
+	"paigram/internal/service/entryidentity"
 	"paigram/internal/serviceticket"
 )
 
@@ -111,7 +112,11 @@ func NewGRPCServerWithTicketSignerAndReadiness(port int, db *gorm.DB, redisClien
 	if err != nil {
 		return nil, fmt.Errorf("init bot access services: %w", err)
 	}
-	accountv1.RegisterBotAccessServiceServer(server, grpcservice.NewBotAccessService(&botAccessGroup.BindingAccessService, &botAccessGroup.TicketService, db))
+	entryIdentityLinks := entryidentity.NewService(db, zap.L(), entryidentity.Config{FrontendBaseURL: cfg.Frontend.BaseURL})
+	accountv1.RegisterBotAccessServiceServer(server,
+		grpcservice.NewBotAccessService(&botAccessGroup.BindingAccessService, &botAccessGroup.TicketService, db).
+			WithEntryIdentityLinks(entryIdentityLinks),
+	)
 
 	botRouteService := botroute.NewService(db, zap.L())
 	pb.RegisterBotRouteServiceServer(server, grpcservice.NewBotRouteService(botRouteService))

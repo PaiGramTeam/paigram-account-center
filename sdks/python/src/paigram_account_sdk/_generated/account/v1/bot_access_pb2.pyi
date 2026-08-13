@@ -21,6 +21,30 @@ PLATFORM_ACCOUNT_STATUS_ACTIVE: PlatformAccountStatus
 PLATFORM_ACCOUNT_STATUS_INACTIVE: PlatformAccountStatus
 PLATFORM_ACCOUNT_STATUS_REVOKED: PlatformAccountStatus
 
+class StartEntryIdentityLinkRequest(_message.Message):
+    __slots__ = ("external_subject", "external_username")
+    EXTERNAL_SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    EXTERNAL_USERNAME_FIELD_NUMBER: _ClassVar[int]
+    external_subject: str
+    external_username: str
+    def __init__(self, external_subject: _Optional[str] = ..., external_username: _Optional[str] = ...) -> None: ...
+
+class StartEntryIdentityLinkResponse(_message.Message):
+    __slots__ = ("approval_url", "issuer", "masked_subject", "bot_id", "bot_display_name", "expires_at")
+    APPROVAL_URL_FIELD_NUMBER: _ClassVar[int]
+    ISSUER_FIELD_NUMBER: _ClassVar[int]
+    MASKED_SUBJECT_FIELD_NUMBER: _ClassVar[int]
+    BOT_ID_FIELD_NUMBER: _ClassVar[int]
+    BOT_DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
+    EXPIRES_AT_FIELD_NUMBER: _ClassVar[int]
+    approval_url: str
+    issuer: str
+    masked_subject: str
+    bot_id: str
+    bot_display_name: str
+    expires_at: _timestamp_pb2.Timestamp
+    def __init__(self, approval_url: _Optional[str] = ..., issuer: _Optional[str] = ..., masked_subject: _Optional[str] = ..., bot_id: _Optional[str] = ..., bot_display_name: _Optional[str] = ..., expires_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
 class PlatformAccountBinding(_message.Message):
     __slots__ = ("binding_ref", "platform", "platform_service_key", "account_key", "display_name", "status", "generation", "created_at", "updated_at")
     BINDING_REF_FIELD_NUMBER: _ClassVar[int]

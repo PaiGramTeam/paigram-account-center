@@ -4,11 +4,13 @@ PaiGram 使用的异步 Python SDK。它负责：
 
 - 使用 OAuth 2.0 client credentials 向 Account Center 获取机器令牌；
 - 查询 PaiGram 用户及其可访问的平台绑定；
+- 为当前外部用户创建短期、单次的 Web 身份关联批准链接；
 - 为指定绑定签发短期 service ticket；
 - 使用 service ticket 查询凭据状态、校验凭据、读取角色与主角色；
 - 获取短期 AuthKey，并按稳定设备引用读取设备状态。
 
 SDK 不提供写入原始平台凭据的接口。凭据录入与所有权管理属于 Account Center 的第一方前端和服务端流程。
+身份关联 URL 的 fragment 包含一次性 bearer challenge；只能私发给对应外部用户，不得写入日志、分析事件或群聊消息。
 
 ```python
 from paigram_account_sdk import PaiGramAccountClient
@@ -20,6 +22,11 @@ async with PaiGramAccountClient(
     client_id="telegram-service",
     client_secret="...",
 ) as client:
+    link = await client.start_entry_identity_link(
+        "telegram:10001",
+        external_username="traveler",
+    )
+    # Send link.approval_url only to this external user in a private message.
     bindings = await client.list_bindings("telegram:10001")
     status = await client.get_credential_status(
         external_user_id="telegram:10001",

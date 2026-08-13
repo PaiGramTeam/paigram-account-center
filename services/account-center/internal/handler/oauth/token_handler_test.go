@@ -50,6 +50,7 @@ func newTokenHandlerFixture(t *testing.T) *tokenHandlerFixture {
 	require.NoError(t, db.Exec(`DROP TABLE IF EXISTS bots`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE bots (
 		id TEXT PRIMARY KEY,
+		entry_issuer TEXT NOT NULL,
 		display_name TEXT NOT NULL,
 		description TEXT,
 		type TEXT NOT NULL,
@@ -59,6 +60,7 @@ func newTokenHandlerFixture(t *testing.T) *tokenHandlerFixture {
 		updated_at DATETIME,
 		deleted_at DATETIME
 	)`).Error)
+	require.NoError(t, db.Exec(`CREATE UNIQUE INDEX uk_test_bots_entry_issuer ON bots(entry_issuer)`).Error)
 	require.NoError(t, db.Exec(`CREATE TABLE service_credentials (
 		client_id TEXT PRIMARY KEY,
 		consumer_epoch INTEGER NOT NULL DEFAULT 1,

@@ -51,18 +51,33 @@ func newTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 
-	// bot_identities has the same two whole-table UNIQUE constraints as the
-	// production schema. Both
-	// production UNIQUE keys cover ALL rows (no `WHERE deleted_at IS NULL`
-	// partial-index filter).
-	// We mirror that so the test harness reproduces the soft-delete
-	// collision behavior exercised by the revive path in UpsertLink.
-	//
 	// CREATE TABLE/INDEX use IF NOT EXISTS so the harness is safe under
 	// `go test -count=N` reruns. SQLite's cache=shared DSN keeps the
 	// named in-memory DB alive across `gorm.Open` calls within the same
 	// process, so the second iteration would otherwise fail with "table
 	// bot_identities already exists".
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS users (
+			id         INTEGER PRIMARY KEY,
+			deleted_at DATETIME
+		)`).Error)
+	for _, userID := range []uint64{1, 2, 42, 43} {
+		require.NoError(t, db.Exec(`INSERT OR IGNORE INTO users (id) VALUES (?)`, userID).Error)
+	}
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS bots (
+			id           TEXT PRIMARY KEY,
+			entry_issuer TEXT NOT NULL,
+			status       TEXT NOT NULL,
+			deleted_at   DATETIME
+		)`).Error)
+	for _, botID := range []string{"paigrambot", "deltabot", "b"} {
+		require.NoError(t, db.Exec(
+			`INSERT OR IGNORE INTO bots (id, entry_issuer, status) VALUES (?, ?, 'ACTIVE')`,
+			botID, model.DefaultEntryIssuer(botID),
+		).Error)
+	}
+
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS bot_identities (
 			id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,6 +85,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 			entry_epoch        INTEGER NOT NULL DEFAULT 1,
 			user_id           INTEGER NOT NULL,
 			bot_id            TEXT    NOT NULL,
+			issuer            TEXT    NOT NULL DEFAULT 'urn:paigram:entry:paigrambot',
 			external_user_id  TEXT    NOT NULL,
 			external_username TEXT,
 			linked_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -81,11 +97,22 @@ func newTestDB(t *testing.T) *gorm.DB {
 		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_ref ON bot_identities(entry_identity_ref)`,
 	).Error)
 	require.NoError(t, db.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_bot ON bot_identities(user_id, bot_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_issuer_active ON bot_identities(user_id, issuer) WHERE deleted_at IS NULL`,
 	).Error)
 	require.NoError(t, db.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_bot_external ON bot_identities(bot_id, external_user_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_issuer_subject_active ON bot_identities(issuer, external_user_id) WHERE deleted_at IS NULL`,
 	).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_unlink_operations (
+		operation_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, bot_id TEXT NOT NULL, entry_identity_ref TEXT NOT NULL,
+		minimum_entry_epoch INTEGER NOT NULL, state TEXT NOT NULL, completed_at DATETIME,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS consumer_grants (
+		id INTEGER PRIMARY KEY, pending_entry_epoch INTEGER NOT NULL DEFAULT 0
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_unlink_targets (
+		operation_id TEXT NOT NULL, grant_id INTEGER NOT NULL, confirmed_at DATETIME, PRIMARY KEY (operation_id, grant_id)
+	)`).Error)
 
 	// audit_logs — mirrors initialize/migrate/sql/000001_init_schema.up.sql
 	// table audit_logs. Service only writes user_id, action, ip,
@@ -132,6 +159,44 @@ func TestUpsertLink_NewRow(t *testing.T) {
 	assert.Equal(t, "paigrambot", details["bot_id"])
 	assert.Equal(t, "987654321", details["external_user_id"])
 	assert.Equal(t, "hutao", details["external_username"])
+}
+
+func TestUpsertLinkUsesRegisteredIssuerAndRejectsCallerDrift(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, db.Exec(`UPDATE bots SET entry_issuer = ? WHERE id = ?`, "urn:paigram:entry:telegram", "paigrambot").Error)
+	svc := botlink.NewService(db, zap.NewNop())
+
+	row, err := svc.UpsertLink(context.Background(), botlink.UpsertLinkInput{
+		BotID: "paigrambot", UserID: 42, ExternalUserID: "987654321",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "urn:paigram:entry:telegram", row.Issuer)
+
+	_, err = svc.UpsertLink(context.Background(), botlink.UpsertLinkInput{
+		BotID: "paigrambot", Issuer: model.DefaultEntryIssuer("paigrambot"), UserID: 43, ExternalUserID: "other",
+	})
+	assert.ErrorIs(t, err, botlink.ErrEntryIssuerMismatch)
+}
+
+func TestUpsertLinkRejectsPendingUnlinkUntilOperationCompletes(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, db.Create(&model.EntryIdentityUnlinkOperation{
+		OperationID: "00000000-0000-4000-8000-000000000031", UserID: 42, BotID: "paigrambot",
+		EntryIdentityRef: "entry-old", MinimumEntryEpoch: 2, State: model.EntryIdentityUnlinkPending,
+	}).Error)
+	require.NoError(t, db.Exec(`INSERT INTO consumer_grants (id, pending_entry_epoch) VALUES (1, 2)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO entry_identity_unlink_targets (operation_id, grant_id) VALUES (?, ?)`,
+		"00000000-0000-4000-8000-000000000031", 1).Error)
+	service := botlink.NewService(db, zap.NewNop())
+	input := botlink.UpsertLinkInput{BotID: "paigrambot", UserID: 42, ExternalUserID: "new-subject"}
+
+	_, err := service.UpsertLink(context.Background(), input)
+	assert.ErrorIs(t, err, botlink.ErrUnlinkPending)
+	require.NoError(t, db.Model(&model.EntryIdentityUnlinkOperation{}).
+		Where("operation_id = ?", "00000000-0000-4000-8000-000000000031").
+		Update("state", model.EntryIdentityUnlinkComplete).Error)
+	_, err = service.UpsertLink(context.Background(), input)
+	require.NoError(t, err)
 }
 
 func TestUpsertLink_SameUserSameTelegram_Idempotent(t *testing.T) {
@@ -256,18 +321,12 @@ func TestUnlink_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, botlink.ErrBotIdentityNotFound)
 }
 
-// TestUpsertLink_AfterUnlink_RevivesIdempotently exercises the
-// soft-delete revive path: a user unlinks, then UpsertLinks the same
-// (bot_id, external_user_id) triple. The row's deleted_at must clear,
-// no new telegram_link_created audit must fire (spec §5.2 — revive is
-// treated as idempotent same-triple re-link), and the original
-// created + revoked audit pair must remain intact.
-func TestUpsertLink_AfterUnlink_RevivesIdempotently(t *testing.T) {
+func TestUpsertLinkAfterUnlinkCreatesNewIdentityAndPreservesTombstone(t *testing.T) {
 	db := newTestDB(t)
 	svc := botlink.NewService(db, zap.NewNop())
 	ctx := context.Background()
 
-	_, err := svc.UpsertLink(ctx, botlink.UpsertLinkInput{
+	first, err := svc.UpsertLink(ctx, botlink.UpsertLinkInput{
 		BotID: "b", UserID: 1, ExternalUserID: "e",
 	})
 	require.NoError(t, err)
@@ -277,22 +336,43 @@ func TestUpsertLink_AfterUnlink_RevivesIdempotently(t *testing.T) {
 	row, err := svc.UpsertLink(ctx, botlink.UpsertLinkInput{
 		BotID: "b", UserID: 1, ExternalUserID: "e",
 	})
-	require.NoError(t, err, "re-link of same triple after unlink must succeed (revive)")
+	require.NoError(t, err)
 	require.NotNil(t, row)
-	assert.False(t, row.DeletedAt.Valid, "revived row must have deleted_at cleared")
+	assert.NotEqual(t, first.EntryIdentityRef, row.EntryIdentityRef)
+	assert.False(t, row.DeletedAt.Valid)
 
-	// Audit log accounting: 1 created (original UpsertLink), 1 revoked
-	// (Unlink), and 0 new audits on revive.
 	var created, revoked int64
 	db.Model(&model.AuditLog{}).Where("action = ?", "telegram_link_created").Count(&created)
 	db.Model(&model.AuditLog{}).Where("action = ?", "telegram_link_revoked").Count(&revoked)
-	assert.Equal(t, int64(1), created, "revive must NOT fire a new telegram_link_created audit")
-	assert.Equal(t, int64(1), revoked, "Unlink's revoke audit must remain")
+	assert.Equal(t, int64(2), created)
+	assert.Equal(t, int64(1), revoked)
 
-	// Exactly 1 row in the table (the revived row).
 	var cnt int64
-	db.Model(&model.BotIdentity{}).Count(&cnt)
-	assert.Equal(t, int64(1), cnt)
+	db.Unscoped().Model(&model.BotIdentity{}).Count(&cnt)
+	assert.Equal(t, int64(2), cnt)
+}
+
+func TestUpsertLinkAfterAnotherUserUnlinksPreservesHistoricalRow(t *testing.T) {
+	db := newTestDB(t)
+	service := botlink.NewService(db, zap.NewNop())
+	ctx := context.Background()
+	_, err := service.UpsertLink(ctx, botlink.UpsertLinkInput{
+		BotID: "b", UserID: 1, ExternalUserID: "external-user",
+	})
+	require.NoError(t, err)
+	require.NoError(t, service.Unlink(ctx, 1, "b", "", ""))
+
+	linked, err := service.UpsertLink(ctx, botlink.UpsertLinkInput{
+		BotID: "b", UserID: 2, ExternalUserID: "external-user",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), linked.UserID)
+	var history []model.BotIdentity
+	require.NoError(t, db.Unscoped().Where("external_user_id = ?", "external-user").Order("id ASC").Find(&history).Error)
+	require.Len(t, history, 2)
+	assert.True(t, history[0].DeletedAt.Valid)
+	assert.False(t, history[1].DeletedAt.Valid)
 }
 
 // TestUpsertLink_ConcurrentSameTriple_IdempotentSuccess exercises the

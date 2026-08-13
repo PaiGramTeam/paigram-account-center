@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -32,6 +34,7 @@ func NewService(db *gorm.DB) *Service {
 type CreateInput struct {
 	ClientID    string
 	BotID       string
+	EntryIssuer string
 	DisplayName string
 	OwnerUserID uint64
 	Description string
@@ -44,6 +47,7 @@ type CreateInput struct {
 type CredentialView struct {
 	ClientID    string    `json:"client_id"`
 	BotID       string    `json:"bot_id"`
+	EntryIssuer string    `json:"entry_issuer"`
 	DisplayName string    `json:"display_name"`
 	Status      string    `json:"status"`
 	OwnerUserID uint64    `json:"owner_user_id"`
@@ -75,6 +79,14 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 	botID := strings.TrimSpace(input.BotID)
 	if botID == "" {
 		botID = clientID
+	}
+	requestedIssuer := strings.TrimSpace(input.EntryIssuer)
+	entryIssuer := requestedIssuer
+	if entryIssuer == "" {
+		entryIssuer = model.DefaultEntryIssuer(botID)
+	}
+	if !validEntryIssuer(entryIssuer) {
+		return nil, ErrInvalidEntryIssuer
 	}
 
 	audiencesJSON, err := encodeStringList(input.Audiences)
@@ -109,6 +121,7 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		bot := model.Bot{
 			ID:          botID,
+			EntryIssuer: entryIssuer,
 			DisplayName: botID,
 			Description: "Logical service principal registered with its first OAuth credential",
 			Type:        "SERVICE",
@@ -120,10 +133,20 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 		}
 		var registered model.Bot
 		if err := tx.First(&registered, "id = ?", botID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrBotIssuerConflict
+			}
 			return err
 		}
+		if requestedIssuer != "" && registered.EntryIssuer != requestedIssuer {
+			return ErrBotIssuerConflict
+		}
+		row.Bot = registered
 		return tx.Create(row).Error
 	}); err != nil {
+		if errors.Is(err, ErrBotIssuerConflict) {
+			return nil, err
+		}
 		if dberror.IsUniqueViolation(err) {
 			return nil, ErrCredentialConflict
 		}
@@ -146,7 +169,7 @@ func (s *Service) Create(input CreateInput) (*CreateResult, error) {
 // deletes filtered out by GORM.
 func (s *Service) List() ([]CredentialView, error) {
 	var rows []model.ServiceCredential
-	if err := s.db.Order("client_id ASC").Find(&rows).Error; err != nil {
+	if err := s.db.Preload("Bot").Order("client_id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	views := make([]CredentialView, 0, len(rows))
@@ -242,6 +265,9 @@ func (s *Service) RotateSecret(clientID string) (*CreateResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := s.db.First(&row.Bot, "id = ?", row.BotID).Error; err != nil {
+		return nil, err
+	}
 	view, err := newCredentialView(&row)
 	if err != nil {
 		return nil, err
@@ -331,6 +357,7 @@ func newCredentialView(row *model.ServiceCredential) (*CredentialView, error) {
 	return &CredentialView{
 		ClientID:    row.ClientID,
 		BotID:       row.BotID,
+		EntryIssuer: row.Bot.EntryIssuer,
 		DisplayName: row.DisplayName,
 		Status:      row.Status,
 		OwnerUserID: row.OwnerUserID,
@@ -340,4 +367,12 @@ func newCredentialView(row *model.ServiceCredential) (*CredentialView, error) {
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
 	}, nil
+}
+
+func validEntryIssuer(value string) bool {
+	if value == "" || utf8.RuneCountInString(value) > 191 {
+		return false
+	}
+	parsed, err := url.Parse(value)
+	return err == nil && parsed.IsAbs() && parsed.RawQuery == "" && parsed.Fragment == ""
 }

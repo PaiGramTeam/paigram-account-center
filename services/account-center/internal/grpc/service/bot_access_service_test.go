@@ -30,6 +30,7 @@ import (
 	"paigram/internal/model"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/credentials"
+	"paigram/internal/service/entryidentity"
 	internalticket "paigram/internal/serviceticket"
 	"paigram/internal/testutil"
 )
@@ -491,7 +492,8 @@ func newBotAccessBufconnClient(t *testing.T, db *gorm.DB, signingKey []byte, tic
 	}
 	group, err := botaccess.NewServiceGroup(db, authConfig)
 	require.NoError(t, err)
-	pb.RegisterBotAccessServiceServer(grpcServer, grpcservice.NewBotAccessService(&group.BindingAccessService, &group.TicketService, db))
+	pb.RegisterBotAccessServiceServer(grpcServer, grpcservice.NewBotAccessService(&group.BindingAccessService, &group.TicketService, db).
+		WithEntryIdentityLinks(entryidentity.NewService(db, nil, entryidentity.Config{FrontendBaseURL: "https://account.example.test"})))
 
 	serveErrCh := make(chan error, 1)
 	go func() {

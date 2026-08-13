@@ -443,7 +443,7 @@ func TestGrantInvalidationCompletionDoesNotConfirmNewerPendingVersion(t *testing
 	stale := current
 	stale.TicketVersion = 2
 
-	err := service.completeGrantInvalidation(&stale, 2, time.Now().UTC())
+	err := service.completeGrantInvalidation(&stale, 2, 0, time.Now().UTC())
 	require.ErrorIs(t, err, ErrGrantPropagationPending)
 	var stored model.ConsumerGrant
 	require.NoError(t, db.First(&stored, current.ID).Error)

@@ -25,7 +25,8 @@ export const request = createRequest({
   onUnauthorized: () => {
     const userStore = useUserStore()
     userStore.reset()
-    void router.push('/login')
+    const redirect = router.currentRoute.value.path
+    void router.push({ path: '/login', query: redirect === '/login' ? undefined : { redirect } })
   },
 })
 

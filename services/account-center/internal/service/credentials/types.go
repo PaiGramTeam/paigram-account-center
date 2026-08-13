@@ -13,6 +13,8 @@ var (
 	ErrInsufficientScope   = errors.New("insufficient scope")
 	ErrEmptyClientID       = errors.New("client_id must not be empty")
 	ErrCredentialConflict  = errors.New("service credential already exists")
+	ErrInvalidEntryIssuer  = errors.New("invalid entry identity issuer")
+	ErrBotIssuerConflict   = errors.New("logical bot entry identity issuer conflicts with registry")
 	// ErrInvalidStatus is returned when SetStatus receives a value
 	// outside {active, disabled}. Distinct from ErrCredentialNotFound
 	// so callers can map it to 400 rather than 404.

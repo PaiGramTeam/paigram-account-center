@@ -19,6 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	BotAccessService_StartEntryIdentityLink_FullMethodName  = "/paigram.v1.BotAccessService/StartEntryIdentityLink"
 	BotAccessService_ResolveBotUser_FullMethodName          = "/paigram.v1.BotAccessService/ResolveBotUser"
 	BotAccessService_ListAccessibleBindings_FullMethodName  = "/paigram.v1.BotAccessService/ListAccessibleBindings"
 	BotAccessService_GetPlatformRuntimeRoute_FullMethodName = "/paigram.v1.BotAccessService/GetPlatformRuntimeRoute"
@@ -29,6 +30,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BotAccessServiceClient interface {
+	StartEntryIdentityLink(ctx context.Context, in *StartEntryIdentityLinkRequest, opts ...grpc.CallOption) (*StartEntryIdentityLinkResponse, error)
 	ResolveBotUser(ctx context.Context, in *ResolveBotUserRequest, opts ...grpc.CallOption) (*ResolveBotUserResponse, error)
 	ListAccessibleBindings(ctx context.Context, in *ListAccessibleBindingsRequest, opts ...grpc.CallOption) (*ListAccessibleBindingsResponse, error)
 	GetPlatformRuntimeRoute(ctx context.Context, in *GetPlatformRuntimeRouteRequest, opts ...grpc.CallOption) (*GetPlatformRuntimeRouteResponse, error)
@@ -41,6 +43,16 @@ type botAccessServiceClient struct {
 
 func NewBotAccessServiceClient(cc grpc.ClientConnInterface) BotAccessServiceClient {
 	return &botAccessServiceClient{cc}
+}
+
+func (c *botAccessServiceClient) StartEntryIdentityLink(ctx context.Context, in *StartEntryIdentityLinkRequest, opts ...grpc.CallOption) (*StartEntryIdentityLinkResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartEntryIdentityLinkResponse)
+	err := c.cc.Invoke(ctx, BotAccessService_StartEntryIdentityLink_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *botAccessServiceClient) ResolveBotUser(ctx context.Context, in *ResolveBotUserRequest, opts ...grpc.CallOption) (*ResolveBotUserResponse, error) {
@@ -87,6 +99,7 @@ func (c *botAccessServiceClient) IssueServiceTicket(ctx context.Context, in *Iss
 // All implementations must embed UnimplementedBotAccessServiceServer
 // for forward compatibility.
 type BotAccessServiceServer interface {
+	StartEntryIdentityLink(context.Context, *StartEntryIdentityLinkRequest) (*StartEntryIdentityLinkResponse, error)
 	ResolveBotUser(context.Context, *ResolveBotUserRequest) (*ResolveBotUserResponse, error)
 	ListAccessibleBindings(context.Context, *ListAccessibleBindingsRequest) (*ListAccessibleBindingsResponse, error)
 	GetPlatformRuntimeRoute(context.Context, *GetPlatformRuntimeRouteRequest) (*GetPlatformRuntimeRouteResponse, error)
@@ -101,6 +114,9 @@ type BotAccessServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedBotAccessServiceServer struct{}
 
+func (UnimplementedBotAccessServiceServer) StartEntryIdentityLink(context.Context, *StartEntryIdentityLinkRequest) (*StartEntryIdentityLinkResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartEntryIdentityLink not implemented")
+}
 func (UnimplementedBotAccessServiceServer) ResolveBotUser(context.Context, *ResolveBotUserRequest) (*ResolveBotUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveBotUser not implemented")
 }
@@ -132,6 +148,24 @@ func RegisterBotAccessServiceServer(s grpc.ServiceRegistrar, srv BotAccessServic
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&BotAccessService_ServiceDesc, srv)
+}
+
+func _BotAccessService_StartEntryIdentityLink_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartEntryIdentityLinkRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotAccessServiceServer).StartEntryIdentityLink(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotAccessService_StartEntryIdentityLink_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotAccessServiceServer).StartEntryIdentityLink(ctx, req.(*StartEntryIdentityLinkRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _BotAccessService_ResolveBotUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -213,6 +247,10 @@ var BotAccessService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "paigram.v1.BotAccessService",
 	HandlerType: (*BotAccessServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "StartEntryIdentityLink",
+			Handler:    _BotAccessService_StartEntryIdentityLink_Handler,
+		},
 		{
 			MethodName: "ResolveBotUser",
 			Handler:    _BotAccessService_ResolveBotUser_Handler,

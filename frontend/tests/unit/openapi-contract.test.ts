@@ -14,5 +14,7 @@ describe('account-center OpenAPI contract', () => {
     expect(contract.paths).toHaveProperty('/api/v1/me')
     expect(contract.paths).toHaveProperty('/api/v1/admin/users')
     expect(contract.paths).toHaveProperty('/api/v1/admin/roles')
+    expect(contract.paths).toHaveProperty('/api/v1/me/entry-identity-links/approve')
+    expect(contract.paths).toHaveProperty('/api/v1/me/bot-identities/{botId}/unlink-status')
   })
 })

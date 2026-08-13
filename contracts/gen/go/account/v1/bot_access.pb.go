@@ -74,6 +74,142 @@ func (PlatformAccountStatus) EnumDescriptor() ([]byte, []int) {
 	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{0}
 }
 
+type StartEntryIdentityLinkRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ExternalSubject  string                 `protobuf:"bytes,1,opt,name=external_subject,json=externalSubject,proto3" json:"external_subject,omitempty"`
+	ExternalUsername string                 `protobuf:"bytes,2,opt,name=external_username,json=externalUsername,proto3" json:"external_username,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *StartEntryIdentityLinkRequest) Reset() {
+	*x = StartEntryIdentityLinkRequest{}
+	mi := &file_account_v1_bot_access_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartEntryIdentityLinkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartEntryIdentityLinkRequest) ProtoMessage() {}
+
+func (x *StartEntryIdentityLinkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_account_v1_bot_access_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartEntryIdentityLinkRequest.ProtoReflect.Descriptor instead.
+func (*StartEntryIdentityLinkRequest) Descriptor() ([]byte, []int) {
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *StartEntryIdentityLinkRequest) GetExternalSubject() string {
+	if x != nil {
+		return x.ExternalSubject
+	}
+	return ""
+}
+
+func (x *StartEntryIdentityLinkRequest) GetExternalUsername() string {
+	if x != nil {
+		return x.ExternalUsername
+	}
+	return ""
+}
+
+type StartEntryIdentityLinkResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ApprovalUrl    string                 `protobuf:"bytes,1,opt,name=approval_url,json=approvalUrl,proto3" json:"approval_url,omitempty"`
+	Issuer         string                 `protobuf:"bytes,2,opt,name=issuer,proto3" json:"issuer,omitempty"`
+	MaskedSubject  string                 `protobuf:"bytes,3,opt,name=masked_subject,json=maskedSubject,proto3" json:"masked_subject,omitempty"`
+	BotId          string                 `protobuf:"bytes,4,opt,name=bot_id,json=botId,proto3" json:"bot_id,omitempty"`
+	BotDisplayName string                 `protobuf:"bytes,5,opt,name=bot_display_name,json=botDisplayName,proto3" json:"bot_display_name,omitempty"`
+	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StartEntryIdentityLinkResponse) Reset() {
+	*x = StartEntryIdentityLinkResponse{}
+	mi := &file_account_v1_bot_access_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartEntryIdentityLinkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartEntryIdentityLinkResponse) ProtoMessage() {}
+
+func (x *StartEntryIdentityLinkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_account_v1_bot_access_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartEntryIdentityLinkResponse.ProtoReflect.Descriptor instead.
+func (*StartEntryIdentityLinkResponse) Descriptor() ([]byte, []int) {
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *StartEntryIdentityLinkResponse) GetApprovalUrl() string {
+	if x != nil {
+		return x.ApprovalUrl
+	}
+	return ""
+}
+
+func (x *StartEntryIdentityLinkResponse) GetIssuer() string {
+	if x != nil {
+		return x.Issuer
+	}
+	return ""
+}
+
+func (x *StartEntryIdentityLinkResponse) GetMaskedSubject() string {
+	if x != nil {
+		return x.MaskedSubject
+	}
+	return ""
+}
+
+func (x *StartEntryIdentityLinkResponse) GetBotId() string {
+	if x != nil {
+		return x.BotId
+	}
+	return ""
+}
+
+func (x *StartEntryIdentityLinkResponse) GetBotDisplayName() string {
+	if x != nil {
+		return x.BotDisplayName
+	}
+	return ""
+}
+
+func (x *StartEntryIdentityLinkResponse) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
 type PlatformAccountBinding struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	BindingRef         string                 `protobuf:"bytes,1,opt,name=binding_ref,json=bindingRef,proto3" json:"binding_ref,omitempty"`
@@ -91,7 +227,7 @@ type PlatformAccountBinding struct {
 
 func (x *PlatformAccountBinding) Reset() {
 	*x = PlatformAccountBinding{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[0]
+	mi := &file_account_v1_bot_access_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -103,7 +239,7 @@ func (x *PlatformAccountBinding) String() string {
 func (*PlatformAccountBinding) ProtoMessage() {}
 
 func (x *PlatformAccountBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[0]
+	mi := &file_account_v1_bot_access_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -116,7 +252,7 @@ func (x *PlatformAccountBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformAccountBinding.ProtoReflect.Descriptor instead.
 func (*PlatformAccountBinding) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{0}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PlatformAccountBinding) GetBindingRef() string {
@@ -191,7 +327,7 @@ type ResolveBotUserRequest struct {
 
 func (x *ResolveBotUserRequest) Reset() {
 	*x = ResolveBotUserRequest{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[1]
+	mi := &file_account_v1_bot_access_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -203,7 +339,7 @@ func (x *ResolveBotUserRequest) String() string {
 func (*ResolveBotUserRequest) ProtoMessage() {}
 
 func (x *ResolveBotUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[1]
+	mi := &file_account_v1_bot_access_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -216,7 +352,7 @@ func (x *ResolveBotUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveBotUserRequest.ProtoReflect.Descriptor instead.
 func (*ResolveBotUserRequest) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{1}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ResolveBotUserRequest) GetExternalUserId() string {
@@ -238,7 +374,7 @@ type ResolveBotUserResponse struct {
 
 func (x *ResolveBotUserResponse) Reset() {
 	*x = ResolveBotUserResponse{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[2]
+	mi := &file_account_v1_bot_access_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -250,7 +386,7 @@ func (x *ResolveBotUserResponse) String() string {
 func (*ResolveBotUserResponse) ProtoMessage() {}
 
 func (x *ResolveBotUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[2]
+	mi := &file_account_v1_bot_access_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -263,7 +399,7 @@ func (x *ResolveBotUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveBotUserResponse.ProtoReflect.Descriptor instead.
 func (*ResolveBotUserResponse) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{2}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ResolveBotUserResponse) GetUserId() uint64 {
@@ -304,7 +440,7 @@ type ListAccessibleBindingsRequest struct {
 
 func (x *ListAccessibleBindingsRequest) Reset() {
 	*x = ListAccessibleBindingsRequest{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[3]
+	mi := &file_account_v1_bot_access_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -316,7 +452,7 @@ func (x *ListAccessibleBindingsRequest) String() string {
 func (*ListAccessibleBindingsRequest) ProtoMessage() {}
 
 func (x *ListAccessibleBindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[3]
+	mi := &file_account_v1_bot_access_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -329,7 +465,7 @@ func (x *ListAccessibleBindingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccessibleBindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListAccessibleBindingsRequest) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{3}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListAccessibleBindingsRequest) GetExternalUserId() string {
@@ -355,7 +491,7 @@ type ListAccessibleBindingsResponse struct {
 
 func (x *ListAccessibleBindingsResponse) Reset() {
 	*x = ListAccessibleBindingsResponse{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[4]
+	mi := &file_account_v1_bot_access_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -367,7 +503,7 @@ func (x *ListAccessibleBindingsResponse) String() string {
 func (*ListAccessibleBindingsResponse) ProtoMessage() {}
 
 func (x *ListAccessibleBindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[4]
+	mi := &file_account_v1_bot_access_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -380,7 +516,7 @@ func (x *ListAccessibleBindingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAccessibleBindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListAccessibleBindingsResponse) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{4}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListAccessibleBindingsResponse) GetBindings() []*PlatformAccountBinding {
@@ -399,7 +535,7 @@ type GetPlatformRuntimeRouteRequest struct {
 
 func (x *GetPlatformRuntimeRouteRequest) Reset() {
 	*x = GetPlatformRuntimeRouteRequest{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[5]
+	mi := &file_account_v1_bot_access_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -411,7 +547,7 @@ func (x *GetPlatformRuntimeRouteRequest) String() string {
 func (*GetPlatformRuntimeRouteRequest) ProtoMessage() {}
 
 func (x *GetPlatformRuntimeRouteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[5]
+	mi := &file_account_v1_bot_access_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -424,7 +560,7 @@ func (x *GetPlatformRuntimeRouteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlatformRuntimeRouteRequest.ProtoReflect.Descriptor instead.
 func (*GetPlatformRuntimeRouteRequest) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{5}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetPlatformRuntimeRouteRequest) GetPlatformServiceKey() string {
@@ -448,7 +584,7 @@ type GetPlatformRuntimeRouteResponse struct {
 
 func (x *GetPlatformRuntimeRouteResponse) Reset() {
 	*x = GetPlatformRuntimeRouteResponse{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[6]
+	mi := &file_account_v1_bot_access_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +596,7 @@ func (x *GetPlatformRuntimeRouteResponse) String() string {
 func (*GetPlatformRuntimeRouteResponse) ProtoMessage() {}
 
 func (x *GetPlatformRuntimeRouteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[6]
+	mi := &file_account_v1_bot_access_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +609,7 @@ func (x *GetPlatformRuntimeRouteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlatformRuntimeRouteResponse.ProtoReflect.Descriptor instead.
 func (*GetPlatformRuntimeRouteResponse) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{6}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetPlatformRuntimeRouteResponse) GetPlatformKey() string {
@@ -530,7 +666,7 @@ type IssueServiceTicketRequest struct {
 
 func (x *IssueServiceTicketRequest) Reset() {
 	*x = IssueServiceTicketRequest{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[7]
+	mi := &file_account_v1_bot_access_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -542,7 +678,7 @@ func (x *IssueServiceTicketRequest) String() string {
 func (*IssueServiceTicketRequest) ProtoMessage() {}
 
 func (x *IssueServiceTicketRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[7]
+	mi := &file_account_v1_bot_access_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -555,7 +691,7 @@ func (x *IssueServiceTicketRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueServiceTicketRequest.ProtoReflect.Descriptor instead.
 func (*IssueServiceTicketRequest) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{7}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *IssueServiceTicketRequest) GetExternalUserId() string {
@@ -598,7 +734,7 @@ type IssueServiceTicketResponse struct {
 
 func (x *IssueServiceTicketResponse) Reset() {
 	*x = IssueServiceTicketResponse{}
-	mi := &file_account_v1_bot_access_proto_msgTypes[8]
+	mi := &file_account_v1_bot_access_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +746,7 @@ func (x *IssueServiceTicketResponse) String() string {
 func (*IssueServiceTicketResponse) ProtoMessage() {}
 
 func (x *IssueServiceTicketResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_account_v1_bot_access_proto_msgTypes[8]
+	mi := &file_account_v1_bot_access_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +759,7 @@ func (x *IssueServiceTicketResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueServiceTicketResponse.ProtoReflect.Descriptor instead.
 func (*IssueServiceTicketResponse) Descriptor() ([]byte, []int) {
-	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{8}
+	return file_account_v1_bot_access_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *IssueServiceTicketResponse) GetTicket() string {
@@ -659,7 +795,18 @@ var File_account_v1_bot_access_proto protoreflect.FileDescriptor
 const file_account_v1_bot_access_proto_rawDesc = "" +
 	"\n" +
 	"\x1baccount/v1/bot_access.proto\x12\n" +
-	"paigram.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcb\x03\n" +
+	"paigram.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"w\n" +
+	"\x1dStartEntryIdentityLinkRequest\x12)\n" +
+	"\x10external_subject\x18\x01 \x01(\tR\x0fexternalSubject\x12+\n" +
+	"\x11external_username\x18\x02 \x01(\tR\x10externalUsername\"\xfe\x01\n" +
+	"\x1eStartEntryIdentityLinkResponse\x12!\n" +
+	"\fapproval_url\x18\x01 \x01(\tR\vapprovalUrl\x12\x16\n" +
+	"\x06issuer\x18\x02 \x01(\tR\x06issuer\x12%\n" +
+	"\x0emasked_subject\x18\x03 \x01(\tR\rmaskedSubject\x12\x15\n" +
+	"\x06bot_id\x18\x04 \x01(\tR\x05botId\x12(\n" +
+	"\x10bot_display_name\x18\x05 \x01(\tR\x0ebotDisplayName\x129\n" +
+	"\n" +
+	"expires_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\"\xcb\x03\n" +
 	"\x16PlatformAccountBinding\x12\x1f\n" +
 	"\vbinding_ref\x18\x01 \x01(\tR\n" +
 	"bindingRef\x12\x1a\n" +
@@ -715,8 +862,9 @@ const file_account_v1_bot_access_proto_rawDesc = "" +
 	"#PLATFORM_ACCOUNT_STATUS_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1ePLATFORM_ACCOUNT_STATUS_ACTIVE\x10\x01\x12$\n" +
 	" PLATFORM_ACCOUNT_STATUS_INACTIVE\x10\x02\x12#\n" +
-	"\x1fPLATFORM_ACCOUNT_STATUS_REVOKED\x10\x032\xb5\x03\n" +
-	"\x10BotAccessService\x12W\n" +
+	"\x1fPLATFORM_ACCOUNT_STATUS_REVOKED\x10\x032\xa6\x04\n" +
+	"\x10BotAccessService\x12o\n" +
+	"\x16StartEntryIdentityLink\x12).paigram.v1.StartEntryIdentityLinkRequest\x1a*.paigram.v1.StartEntryIdentityLinkResponse\x12W\n" +
 	"\x0eResolveBotUser\x12!.paigram.v1.ResolveBotUserRequest\x1a\".paigram.v1.ResolveBotUserResponse\x12o\n" +
 	"\x16ListAccessibleBindings\x12).paigram.v1.ListAccessibleBindingsRequest\x1a*.paigram.v1.ListAccessibleBindingsResponse\x12r\n" +
 	"\x17GetPlatformRuntimeRoute\x12*.paigram.v1.GetPlatformRuntimeRouteRequest\x1a+.paigram.v1.GetPlatformRuntimeRouteResponse\x12c\n" +
@@ -735,40 +883,45 @@ func file_account_v1_bot_access_proto_rawDescGZIP() []byte {
 }
 
 var file_account_v1_bot_access_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_account_v1_bot_access_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_account_v1_bot_access_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_account_v1_bot_access_proto_goTypes = []any{
 	(PlatformAccountStatus)(0),              // 0: paigram.v1.PlatformAccountStatus
-	(*PlatformAccountBinding)(nil),          // 1: paigram.v1.PlatformAccountBinding
-	(*ResolveBotUserRequest)(nil),           // 2: paigram.v1.ResolveBotUserRequest
-	(*ResolveBotUserResponse)(nil),          // 3: paigram.v1.ResolveBotUserResponse
-	(*ListAccessibleBindingsRequest)(nil),   // 4: paigram.v1.ListAccessibleBindingsRequest
-	(*ListAccessibleBindingsResponse)(nil),  // 5: paigram.v1.ListAccessibleBindingsResponse
-	(*GetPlatformRuntimeRouteRequest)(nil),  // 6: paigram.v1.GetPlatformRuntimeRouteRequest
-	(*GetPlatformRuntimeRouteResponse)(nil), // 7: paigram.v1.GetPlatformRuntimeRouteResponse
-	(*IssueServiceTicketRequest)(nil),       // 8: paigram.v1.IssueServiceTicketRequest
-	(*IssueServiceTicketResponse)(nil),      // 9: paigram.v1.IssueServiceTicketResponse
-	(*timestamppb.Timestamp)(nil),           // 10: google.protobuf.Timestamp
+	(*StartEntryIdentityLinkRequest)(nil),   // 1: paigram.v1.StartEntryIdentityLinkRequest
+	(*StartEntryIdentityLinkResponse)(nil),  // 2: paigram.v1.StartEntryIdentityLinkResponse
+	(*PlatformAccountBinding)(nil),          // 3: paigram.v1.PlatformAccountBinding
+	(*ResolveBotUserRequest)(nil),           // 4: paigram.v1.ResolveBotUserRequest
+	(*ResolveBotUserResponse)(nil),          // 5: paigram.v1.ResolveBotUserResponse
+	(*ListAccessibleBindingsRequest)(nil),   // 6: paigram.v1.ListAccessibleBindingsRequest
+	(*ListAccessibleBindingsResponse)(nil),  // 7: paigram.v1.ListAccessibleBindingsResponse
+	(*GetPlatformRuntimeRouteRequest)(nil),  // 8: paigram.v1.GetPlatformRuntimeRouteRequest
+	(*GetPlatformRuntimeRouteResponse)(nil), // 9: paigram.v1.GetPlatformRuntimeRouteResponse
+	(*IssueServiceTicketRequest)(nil),       // 10: paigram.v1.IssueServiceTicketRequest
+	(*IssueServiceTicketResponse)(nil),      // 11: paigram.v1.IssueServiceTicketResponse
+	(*timestamppb.Timestamp)(nil),           // 12: google.protobuf.Timestamp
 }
 var file_account_v1_bot_access_proto_depIdxs = []int32{
-	0,  // 0: paigram.v1.PlatformAccountBinding.status:type_name -> paigram.v1.PlatformAccountStatus
-	10, // 1: paigram.v1.PlatformAccountBinding.created_at:type_name -> google.protobuf.Timestamp
-	10, // 2: paigram.v1.PlatformAccountBinding.updated_at:type_name -> google.protobuf.Timestamp
-	1,  // 3: paigram.v1.ListAccessibleBindingsResponse.bindings:type_name -> paigram.v1.PlatformAccountBinding
-	10, // 4: paigram.v1.IssueServiceTicketResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 5: paigram.v1.IssueServiceTicketResponse.binding:type_name -> paigram.v1.PlatformAccountBinding
-	2,  // 6: paigram.v1.BotAccessService.ResolveBotUser:input_type -> paigram.v1.ResolveBotUserRequest
-	4,  // 7: paigram.v1.BotAccessService.ListAccessibleBindings:input_type -> paigram.v1.ListAccessibleBindingsRequest
-	6,  // 8: paigram.v1.BotAccessService.GetPlatformRuntimeRoute:input_type -> paigram.v1.GetPlatformRuntimeRouteRequest
-	8,  // 9: paigram.v1.BotAccessService.IssueServiceTicket:input_type -> paigram.v1.IssueServiceTicketRequest
-	3,  // 10: paigram.v1.BotAccessService.ResolveBotUser:output_type -> paigram.v1.ResolveBotUserResponse
-	5,  // 11: paigram.v1.BotAccessService.ListAccessibleBindings:output_type -> paigram.v1.ListAccessibleBindingsResponse
-	7,  // 12: paigram.v1.BotAccessService.GetPlatformRuntimeRoute:output_type -> paigram.v1.GetPlatformRuntimeRouteResponse
-	9,  // 13: paigram.v1.BotAccessService.IssueServiceTicket:output_type -> paigram.v1.IssueServiceTicketResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	12, // 0: paigram.v1.StartEntryIdentityLinkResponse.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 1: paigram.v1.PlatformAccountBinding.status:type_name -> paigram.v1.PlatformAccountStatus
+	12, // 2: paigram.v1.PlatformAccountBinding.created_at:type_name -> google.protobuf.Timestamp
+	12, // 3: paigram.v1.PlatformAccountBinding.updated_at:type_name -> google.protobuf.Timestamp
+	3,  // 4: paigram.v1.ListAccessibleBindingsResponse.bindings:type_name -> paigram.v1.PlatformAccountBinding
+	12, // 5: paigram.v1.IssueServiceTicketResponse.expires_at:type_name -> google.protobuf.Timestamp
+	3,  // 6: paigram.v1.IssueServiceTicketResponse.binding:type_name -> paigram.v1.PlatformAccountBinding
+	1,  // 7: paigram.v1.BotAccessService.StartEntryIdentityLink:input_type -> paigram.v1.StartEntryIdentityLinkRequest
+	4,  // 8: paigram.v1.BotAccessService.ResolveBotUser:input_type -> paigram.v1.ResolveBotUserRequest
+	6,  // 9: paigram.v1.BotAccessService.ListAccessibleBindings:input_type -> paigram.v1.ListAccessibleBindingsRequest
+	8,  // 10: paigram.v1.BotAccessService.GetPlatformRuntimeRoute:input_type -> paigram.v1.GetPlatformRuntimeRouteRequest
+	10, // 11: paigram.v1.BotAccessService.IssueServiceTicket:input_type -> paigram.v1.IssueServiceTicketRequest
+	2,  // 12: paigram.v1.BotAccessService.StartEntryIdentityLink:output_type -> paigram.v1.StartEntryIdentityLinkResponse
+	5,  // 13: paigram.v1.BotAccessService.ResolveBotUser:output_type -> paigram.v1.ResolveBotUserResponse
+	7,  // 14: paigram.v1.BotAccessService.ListAccessibleBindings:output_type -> paigram.v1.ListAccessibleBindingsResponse
+	9,  // 15: paigram.v1.BotAccessService.GetPlatformRuntimeRoute:output_type -> paigram.v1.GetPlatformRuntimeRouteResponse
+	11, // 16: paigram.v1.BotAccessService.IssueServiceTicket:output_type -> paigram.v1.IssueServiceTicketResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_account_v1_bot_access_proto_init() }
@@ -782,7 +935,7 @@ func file_account_v1_bot_access_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_account_v1_bot_access_proto_rawDesc), len(file_account_v1_bot_access_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

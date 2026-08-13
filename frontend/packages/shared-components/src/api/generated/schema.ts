@@ -868,6 +868,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/bot-identities/{botId}/unlink-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get-api-v1-me-bot-identities-botId-unlink-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/dashboard-summary": {
         parameters: {
             query?: never;
@@ -942,6 +958,54 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["post-api-v1-me-emails-emailId-verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/entry-identity-links/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["post-api-v1-me-entry-identity-links-approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/entry-identity-links/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["post-api-v1-me-entry-identity-links-cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/entry-identity-links/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["post-api-v1-me-entry-identity-links-preview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1419,6 +1483,7 @@ export interface components {
             bot_id: string;
             external_user_id: string;
             external_username?: string;
+            issuer: string;
             linked_at: string;
         };
         BotRouteAdminView: {
@@ -1489,6 +1554,7 @@ export interface components {
             created_at: string;
             description: string;
             display_name: string;
+            entry_issuer: string;
             /** Format: int64 */
             owner_user_id: number;
             scopes: string[] | null;
@@ -1541,6 +1607,14 @@ export interface components {
             updated_at: string;
             /** Format: date-time */
             verified_at?: string;
+        };
+        EntryIdentityChallengeView: {
+            bot_display_name: string;
+            bot_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            issuer: string;
+            masked_subject: string;
         };
         "EnvelopeStruct {}DataStruct": Record<string, never>;
         GrantPropagationPendingView: {
@@ -1929,6 +2003,13 @@ export interface components {
             expires_at: string;
             qr_code: string;
             secret: string;
+        };
+        UnlinkResult: {
+            /** Format: int64 */
+            minimum_entry_epoch: number;
+            operation_id: string;
+            propagation_pending: boolean;
+            state: string;
         };
         UpdateUserStatusResponseDataStruct: {
             message: string;
@@ -5334,6 +5415,7 @@ export interface operations {
                     client_id: string;
                     description: string;
                     display_name: string;
+                    entry_issuer: string;
                     scopes: string[] | null;
                 };
             };
@@ -11561,7 +11643,9 @@ export interface operations {
     };
     "delete-api-v1-me-bot-identities-botId": {
         parameters: {
-            query?: never;
+            query: {
+                operation_id: string;
+            };
             header?: never;
             path: {
                 botId: string;
@@ -11570,12 +11654,35 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["UnlinkResult"];
+                        message: string;
+                    };
+                };
+            };
             /** @description No Content */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
             };
             /** @description Bad Request */
             400: {
@@ -11627,6 +11734,99 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
+    "get-api-v1-me-bot-identities-botId-unlink-status": {
+        parameters: {
+            query: {
+                operation_id: string;
+            };
+            header?: never;
+            path: {
+                botId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["UnlinkResult"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12254,6 +12454,524 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
+    "post-api-v1-me-entry-identity-links-approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    challenge: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["BotIdentityDTO"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
+    "post-api-v1-me-entry-identity-links-cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    challenge: string;
+                };
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
+    "post-api-v1-me-entry-identity-links-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    challenge: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["EntryIdentityChallengeView"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

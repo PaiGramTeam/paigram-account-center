@@ -35,6 +35,7 @@ func NewCredentialsHandler(credentialsSvc credentialsService) *CredentialsHandle
 type CreateRequest struct {
 	ClientID    string   `json:"client_id"`
 	BotID       string   `json:"bot_id"`
+	EntryIssuer string   `json:"entry_issuer"`
 	DisplayName string   `json:"display_name"`
 	Description string   `json:"description"`
 	Audiences   []string `json:"audiences"`
@@ -98,6 +99,7 @@ func (h *CredentialsHandler) Create(c *gin.Context) {
 	result, err := h.credentials.Create(credentials.CreateInput{
 		ClientID:    req.ClientID,
 		BotID:       req.BotID,
+		EntryIssuer: req.EntryIssuer,
 		DisplayName: req.DisplayName,
 		OwnerUserID: actorID,
 		Description: req.Description,
@@ -153,6 +155,10 @@ func writeAdminError(c *gin.Context, err error, fallback string) {
 		response.NotFound(c, err.Error())
 	case errors.Is(err, credentials.ErrCredentialConflict):
 		response.Conflict(c, err.Error())
+	case errors.Is(err, credentials.ErrBotIssuerConflict):
+		response.Conflict(c, err.Error())
+	case errors.Is(err, credentials.ErrInvalidEntryIssuer):
+		response.BadRequest(c, err.Error())
 	default:
 		response.InternalServerError(c, fallback)
 	}

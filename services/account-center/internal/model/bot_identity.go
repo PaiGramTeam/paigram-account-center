@@ -13,9 +13,10 @@ type BotIdentity struct {
 	ID               uint64         `gorm:"primaryKey"`
 	EntryIdentityRef string         `gorm:"size:64;not null;uniqueIndex:uk_bot_identities_ref"`
 	EntryEpoch       uint64         `gorm:"not null;default:1"`
-	UserID           uint64         `gorm:"uniqueIndex:uk_bot_identities_user_bot,priority:1;not null;index"`
-	BotID            string         `gorm:"size:64;uniqueIndex:uk_bot_identities_bot_external,priority:1;uniqueIndex:uk_bot_identities_user_bot,priority:2;not null"`
-	ExternalUserID   string         `gorm:"size:191;uniqueIndex:uk_bot_identities_bot_external,priority:2;not null"`
+	UserID           uint64         `gorm:"not null;index"`
+	BotID            string         `gorm:"size:64;not null"`
+	Issuer           string         `gorm:"size:191;not null;index"`
+	ExternalUserID   string         `gorm:"size:191;not null"`
 	ExternalUsername sql.NullString `gorm:"size:255"`
 	LinkedAt         time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	CreatedAt        time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
@@ -32,6 +33,9 @@ func (identity *BotIdentity) BeforeCreate(_ *gorm.DB) error {
 	}
 	if identity.EntryEpoch == 0 {
 		identity.EntryEpoch = 1
+	}
+	if identity.Issuer == "" {
+		identity.Issuer = DefaultEntryIssuer(identity.BotID)
 	}
 	return nil
 }

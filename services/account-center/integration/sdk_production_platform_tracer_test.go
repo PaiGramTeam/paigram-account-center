@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -24,12 +25,16 @@ import (
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/tlstest"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"paigram/integration/testenv"
 	"paigram/internal/config"
 	accountgrpc "paigram/internal/grpc/server"
 	"paigram/internal/model"
 	"paigram/internal/platformtransport"
+	serviceapp "paigram/internal/service"
 	"paigram/internal/service/credentials"
 	"paigram/internal/service/platform"
 	"paigram/internal/service/platformbinding"
@@ -66,12 +71,19 @@ func TestPythonSDKCallsProductionPlatformWithAccountIssuedTicket(t *testing.T) {
 	})
 	startProductionPlatform(t, platformConfig, controlPort, runtimePort)
 
-	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
-	require.NoError(t, stack.DB.Create(&owner).Error)
+	ownerID, ownerAccessToken, _, _, _ := registerAndLogin(t, stack, "production-entry-owner@example.com", "Password123!")
+	var owner model.User
+	require.NoError(t, stack.DB.First(&owner, ownerID).Error)
 	credentialResult, err := credentials.NewService(stack.DB).Create(credentials.CreateInput{
 		ClientID: "sdk-production-tracer", BotID: "sdk-production-tracer", DisplayName: "SDK production tracer",
 		OwnerUserID: owner.ID, Audiences: []string{"account-center"},
 		Scopes: []string{"bot.access.read", "bot.access.issue_ticket"},
+	})
+	require.NoError(t, err)
+	entryCredential, err := credentials.NewService(stack.DB).Create(credentials.CreateInput{
+		ClientID: "sdk-entry-link-tracer", BotID: "sdk-entry-link-tracer", DisplayName: "SDK entry link tracer",
+		OwnerUserID: owner.ID, Audiences: []string{"account-center"},
+		Scopes: []string{"bot.access.read", "bot.access.issue_ticket", "bot.access.link_identity"},
 	})
 	require.NoError(t, err)
 	externalUserID := "telegram:production-tracer"
@@ -98,6 +110,7 @@ func TestPythonSDKCallsProductionPlatformWithAccountIssuedTicket(t *testing.T) {
 
 	accountCfg := newTestConfig(t, uniqueRedisPrefix(t.Name()+"-account-grpc"))
 	accountCfg.Auth.ServiceTicketSigningKeyFile = signingKeyFile
+	accountCfg.Frontend.BaseURL = "https://account.example.test"
 	accountCfg.PlatformControl = config.PlatformControlConfig{
 		RootCAFile: controlTLS.CAFile, CertificateFile: controlTLS.ClientCertFile,
 		PrivateKeyFile: controlTLS.ClientKeyFile, ServerName: controlTLS.ServerName, DialTimeout: 5 * time.Second,
@@ -109,6 +122,7 @@ func TestPythonSDKCallsProductionPlatformWithAccountIssuedTicket(t *testing.T) {
 	require.NoError(t, err)
 	platformService := platform.NewServiceGroup(stack.DB)
 	require.NoError(t, platformService.PlatformService.ConfigureAuth(accountCfg.Auth))
+	require.NoError(t, platformService.PlatformService.ConfigureTransport(controlDialer))
 	operationID, err := operationid.NewID()
 	require.NoError(t, err)
 	ticket, _, err := platformService.PlatformService.IssueBindingScopedOperationTicket(
@@ -139,6 +153,12 @@ func TestPythonSDKCallsProductionPlatformWithAccountIssuedTicket(t *testing.T) {
 		GrantedAt: time.Now().UTC(),
 	})
 	require.NoError(t, err)
+	_, _, err = platformbinding.NewGrantService(stack.DB).UpsertGrant(platformbinding.UpsertGrantInput{
+		Context: context.Background(), BindingID: binding.ID, Consumer: entryCredential.ClientID,
+		Actions: []string{platformaction.MihomoStatusRead}, GrantedBy: sql.NullInt64{Int64: int64(owner.ID), Valid: true},
+		GrantedAt: time.Now().UTC(),
+	})
+	require.NoError(t, err)
 
 	accountPort := reserveTCPPort(t)
 	accountCfg.GRPC = config.GRPCConfig{
@@ -161,12 +181,71 @@ func TestPythonSDKCallsProductionPlatformWithAccountIssuedTicket(t *testing.T) {
 
 	accountHTTP := httptest.NewServer(stack.Router)
 	t.Cleanup(accountHTTP.Close)
-	runPythonTLSRouteTracer(t, pythonTracerInput{
+	_ = runPythonTLSRouteTracer(t, pythonTracerInput{
 		AccountHTTPURL: accountHTTP.URL, AccountGRPCTarget: fmt.Sprintf("127.0.0.1:%d", accountPort),
 		AccountServerName: accountTLS.ServerName, AccountCAFile: accountTLS.CAFile,
 		PlatformCAFile: runtimeTLS.CAFile, ClientID: credentialResult.ClientID, ClientSecret: credentialResult.ClientSecret,
 		ExpectedAudience: "platform-mihomo-service", ExpectedActions: string(actionsJSON), ExternalUserID: externalUserID,
 	})
+	entryStartOutput := runPythonTLSRouteTracer(t, pythonTracerInput{
+		AccountHTTPURL: accountHTTP.URL, AccountGRPCTarget: fmt.Sprintf("127.0.0.1:%d", accountPort),
+		AccountServerName: accountTLS.ServerName, AccountCAFile: accountTLS.CAFile,
+		PlatformCAFile: runtimeTLS.CAFile,
+		ClientID:       entryCredential.ClientID, ClientSecret: entryCredential.ClientSecret,
+		EntrySubject: "production-entry-subject", EntryAction: "start",
+	})
+	entryChallengeToken := decodeEntryChallengeOutput(t, entryStartOutput)
+	var entryChallenge model.EntryIdentityLinkChallenge
+	require.NoError(t, stack.DB.Where("consumer = ?", entryCredential.ClientID).Take(&entryChallenge).Error)
+	require.Len(t, entryChallenge.ChallengeHash, 64)
+	require.NotContains(t, entryChallenge.ChallengeHash, "production-entry-subject")
+	traceEntryIdentityWebApproval(t, stack, ownerAccessToken, entryChallengeToken)
+	_ = runPythonTLSRouteTracer(t, pythonTracerInput{
+		AccountHTTPURL: accountHTTP.URL, AccountGRPCTarget: fmt.Sprintf("127.0.0.1:%d", accountPort),
+		AccountServerName: accountTLS.ServerName, AccountCAFile: accountTLS.CAFile,
+		PlatformCAFile: runtimeTLS.CAFile,
+		ClientID:       entryCredential.ClientID, ClientSecret: entryCredential.ClientSecret,
+		EntrySubject: "production-entry-subject", EntryAction: "resolve",
+	})
+	traceEntryIdentityConflictAndCancel(t, stack, accountHTTP.URL, accountPort, accountTLS, runtimeTLS, entryCredential)
+	oldEntryTicket := issueProductionEntryTicket(t, stack, accountCfg, accountPort, accountTLS, entryCredential, binding.BindingRef, "production-entry-subject")
+	require.NoError(t, callProductionRuntimeStatus(context.Background(), runtimeAddress, runtimeTLS, oldEntryTicket, binding.BindingRef, accountKey))
+
+	const unlinkOperationID = "00000000-0000-4000-8000-000000000021"
+	globalPlatformService := &serviceapp.ServiceGroupApp.PlatformServiceGroup.PlatformService
+	require.NoError(t, globalPlatformService.ConfigureAuth(accountCfg.Auth))
+	require.NoError(t, globalPlatformService.ConfigureTransport(func(context.Context, string) (*grpc.ClientConn, error) {
+		return nil, errors.New("entry fence unavailable")
+	}))
+	unlinkPath := fmt.Sprintf("/api/v1/me/bot-identities/%s?operation_id=%s", entryCredential.Credential.BotID, unlinkOperationID)
+	pendingResponse := performJSONRequest(t, stack.Router, http.MethodDelete, unlinkPath, nil, authHeaders(ownerAccessToken))
+	require.Equal(t, http.StatusAccepted, pendingResponse.Code, pendingResponse.Body.String())
+	pendingData := decodeResponseData(t, pendingResponse)
+	require.Equal(t, true, pendingData["propagation_pending"])
+	require.Equal(t, "PROPAGATION_PENDING", pendingData["state"])
+
+	require.NoError(t, globalPlatformService.ConfigureTransport(controlDialer))
+	confirmedResponse := performJSONRequest(t, stack.Router, http.MethodDelete, unlinkPath, nil, authHeaders(ownerAccessToken))
+	require.Equal(t, http.StatusNoContent, confirmedResponse.Code, confirmedResponse.Body.String())
+	statusPath := fmt.Sprintf("/api/v1/me/bot-identities/%s/unlink-status?operation_id=%s", entryCredential.Credential.BotID, unlinkOperationID)
+	statusResponse := performJSONRequest(t, stack.Router, http.MethodGet, statusPath, nil, authHeaders(ownerAccessToken))
+	require.Equal(t, http.StatusOK, statusResponse.Code, statusResponse.Body.String())
+	confirmed := decodeResponseData(t, statusResponse)
+	require.Equal(t, false, confirmed["propagation_pending"])
+	require.Equal(t, "UNLINKED", confirmed["state"])
+	minimumEntryEpoch, ok := confirmed["minimum_entry_epoch"].(float64)
+	require.True(t, ok)
+	platformDatabase, err := pgx.Connect(context.Background(), platformDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, platformDatabase.Close(context.Background())) })
+	var platformMinimumEntryEpoch uint64
+	require.NoError(t, platformDatabase.QueryRow(context.Background(), `
+		SELECT minimum_entry_epoch FROM authorization_fences
+		WHERE binding_ref = $1 AND consumer_principal = $2`, binding.BindingRef, entryCredential.ClientID).
+		Scan(&platformMinimumEntryEpoch))
+	require.Equal(t, uint64(minimumEntryEpoch), platformMinimumEntryEpoch)
+	revokedErr := callProductionRuntimeStatus(context.Background(), runtimeAddress, runtimeTLS, oldEntryTicket, binding.BindingRef, accountKey)
+	require.Equal(t, codes.PermissionDenied, status.Code(revokedErr))
 }
 
 type productionPlatformConfig struct {

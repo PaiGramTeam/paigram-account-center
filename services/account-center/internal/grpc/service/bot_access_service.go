@@ -20,17 +20,23 @@ import (
 	serviceaudit "paigram/internal/service/audit"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/credentials"
+	"paigram/internal/service/entryidentity"
 )
 
 const (
-	botAccessScopeRead        = "bot.access.read"
-	botAccessScopeIssueTicket = "bot.access.issue_ticket"
+	botAccessScopeRead         = "bot.access.read"
+	botAccessScopeIssueTicket  = "bot.access.issue_ticket"
+	botAccessScopeLinkIdentity = "bot.access.link_identity"
 )
 
 // Bot is the minimal identity record derived from the authenticated client ID.
 // It remains structured because audit records consume bot metadata.
 type Bot struct {
 	Id string
+}
+
+type entryIdentityLinkStarter interface {
+	Start(context.Context, entryidentity.StartInput) (*entryidentity.StartResult, error)
 }
 
 // BotAccessService exposes bot binding operations over generated gRPC bindings.
@@ -41,6 +47,7 @@ type BotAccessService struct {
 	ticketService        *botaccess.TicketService
 	db                   *gorm.DB
 	runtimeRouteLookup   func(string) (model.PlatformService, error)
+	entryIdentityLinks   entryIdentityLinkStarter
 }
 
 func NewBotAccessService(bindingAccessService *botaccess.BindingAccessService, ticketService *botaccess.TicketService, db *gorm.DB) *BotAccessService {
@@ -54,6 +61,45 @@ func NewBotAccessService(bindingAccessService *botaccess.BindingAccessService, t
 			return platform, err
 		},
 	}
+}
+
+func (s *BotAccessService) WithEntryIdentityLinks(service entryIdentityLinkStarter) *BotAccessService {
+	if s != nil {
+		s.entryIdentityLinks = service
+	}
+	return s
+}
+
+func (s *BotAccessService) StartEntryIdentityLink(ctx context.Context, req *pb.StartEntryIdentityLinkRequest) (*pb.StartEntryIdentityLinkResponse, error) {
+	caller, err := botAccessCallerFromContext(ctx, botAccessScopeLinkIdentity)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil || s.entryIdentityLinks == nil {
+		return nil, status.Error(codes.Unavailable, "entry identity linking is unavailable")
+	}
+	result, err := s.entryIdentityLinks.Start(ctx, entryidentity.StartInput{
+		Consumer: caller.consumer, BotID: caller.bot.Id,
+		ExternalSubject: req.GetExternalSubject(), ExternalUsername: req.GetExternalUsername(),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, entryidentity.ErrInvalidInput):
+			return nil, status.Error(codes.InvalidArgument, "external_subject is required and must fit the registered namespace")
+		case errors.Is(err, entryidentity.ErrPrincipalMismatch):
+			return nil, status.Error(codes.PermissionDenied, "credential is not registered for an entry identity namespace")
+		case errors.Is(err, entryidentity.ErrNamespaceUnavailable):
+			return nil, status.Error(codes.FailedPrecondition, "entry identity namespace is unavailable")
+		case errors.Is(err, entryidentity.ErrChallengeCapacity):
+			return nil, status.Error(codes.ResourceExhausted, "too many pending entry identity links")
+		default:
+			return nil, status.Error(codes.Internal, "start entry identity link")
+		}
+	}
+	return &pb.StartEntryIdentityLinkResponse{
+		ApprovalUrl: result.ApprovalURL, Issuer: result.Issuer, MaskedSubject: result.MaskedSubject,
+		BotId: result.BotID, BotDisplayName: result.BotDisplayName, ExpiresAt: timestamppb.New(result.ExpiresAt),
+	}, nil
 }
 
 func (s *BotAccessService) ResolveBotUser(ctx context.Context, req *pb.ResolveBotUserRequest) (*pb.ResolveBotUserResponse, error) {

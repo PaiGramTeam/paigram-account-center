@@ -11,6 +11,8 @@ export type PlatformSchema = components['schemas']['PlatformSchemaView']
 export type Pagination = components['schemas']['PaginationMeta']
 export type DashboardSummary = components['schemas']['DashboardSummaryView']
 export type BotIdentity = components['schemas']['BotIdentityDTO']
+export type EntryIdentityChallenge = components['schemas']['EntryIdentityChallengeView']
+export type EntryIdentityUnlinkResult = components['schemas']['UnlinkResult']
 
 export interface PlatformBindingList<T> {
   items: T[] | null
@@ -38,8 +40,32 @@ export function createPlatformAccountsApi(request: ReturnType<typeof createReque
       return request.get('/me/bot-identities')
     },
 
-    async removeBotIdentity(botId: string): Promise<void> {
-      await request.delete(`/me/bot-identities/${encodeURIComponent(botId)}`)
+    async removeBotIdentity(
+      botId: string,
+      operationId: string
+    ): Promise<{ data: EntryIdentityUnlinkResult } | undefined> {
+      return request.delete(`/me/bot-identities/${encodeURIComponent(botId)}`, {
+        params: { operation_id: operationId },
+      })
+    },
+
+    async getBotIdentityUnlinkStatus(botId: string, operationId: string): Promise<{ data: EntryIdentityUnlinkResult }> {
+      return request.get(`/me/bot-identities/${encodeURIComponent(botId)}/unlink-status`, {
+        params: { operation_id: operationId },
+        skipErrorToast: true,
+      })
+    },
+
+    async previewEntryIdentityLink(challenge: string): Promise<{ data: EntryIdentityChallenge }> {
+      return request.post('/me/entry-identity-links/preview', { challenge }, { skipErrorToast: true })
+    },
+
+    async approveEntryIdentityLink(challenge: string): Promise<{ data: BotIdentity }> {
+      return request.post('/me/entry-identity-links/approve', { challenge }, { skipErrorToast: true })
+    },
+
+    async cancelEntryIdentityLink(challenge: string): Promise<void> {
+      await request.post('/me/entry-identity-links/cancel', { challenge }, { skipErrorToast: true })
     },
 
     async listPlatforms(): Promise<{ data: PlatformDefinition[] | null }> {

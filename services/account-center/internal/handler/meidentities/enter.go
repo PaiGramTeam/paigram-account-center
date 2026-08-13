@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"paigram/internal/service/botlink"
+	"paigram/internal/service/entryidentity"
 )
 
 // ApiGroup is the per-package handler group registered by the router layer.
@@ -15,6 +16,6 @@ type ApiGroup struct {
 }
 
 // NewApiGroup wires the meidentities handler with its botlink.Service dependency.
-func NewApiGroup(svc *botlink.Service, logger *zap.Logger) *ApiGroup {
-	return &ApiGroup{Identities: NewHandler(svc, logger)}
+func NewApiGroup(svc *botlink.Service, logger *zap.Logger, linking ...*entryidentity.Service) *ApiGroup {
+	return &ApiGroup{Identities: NewHandler(svc, logger, linking...)}
 }

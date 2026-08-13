@@ -157,12 +157,12 @@
   {
     "kind": "column",
     "name": "public.bot_identities.created_at",
-    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=10;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
     "name": "public.bot_identities.deleted_at",
-    "detail": "position=11;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=12;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -177,12 +177,12 @@
   {
     "kind": "column",
     "name": "public.bot_identities.external_user_id",
-    "detail": "position=6;type=character varying(191);not_null=t;identity=;generated=;default=;collation="
+    "detail": "position=7;type=character varying(191);not_null=t;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.bot_identities.external_username",
-    "detail": "position=7;type=character varying(255);not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=8;type=character varying(255);not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -191,13 +191,18 @@
   },
   {
     "kind": "column",
+    "name": "public.bot_identities.issuer",
+    "detail": "position=6;type=character varying(191);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
     "name": "public.bot_identities.linked_at",
-    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
     "name": "public.bot_identities.updated_at",
-    "detail": "position=10;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=11;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
@@ -292,22 +297,27 @@
   {
     "kind": "column",
     "name": "public.bots.created_at",
-    "detail": "position=7;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
     "name": "public.bots.deleted_at",
-    "detail": "position=9;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=10;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.bots.description",
-    "detail": "position=3;type=text;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=4;type=text;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.bots.display_name",
-    "detail": "position=2;type=character varying(255);not_null=t;identity=;generated=;default=;collation="
+    "detail": "position=3;type=character varying(255);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.bots.entry_issuer",
+    "detail": "position=2;type=character varying(191);not_null=t;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -317,22 +327,22 @@
   {
     "kind": "column",
     "name": "public.bots.owner_user_id",
-    "detail": "position=6;type=bigint;not_null=t;identity=;generated=;default=;collation="
+    "detail": "position=7;type=bigint;not_null=t;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.bots.status",
-    "detail": "position=5;type=character varying(32);not_null=t;identity=;generated=;default='ACTIVE'::character varying;collation="
+    "detail": "position=6;type=character varying(32);not_null=t;identity=;generated=;default='ACTIVE'::character varying;collation="
   },
   {
     "kind": "column",
     "name": "public.bots.type",
-    "detail": "position=4;type=character varying(32);not_null=t;identity=;generated=;default='OTHER'::character varying;collation="
+    "detail": "position=5;type=character varying(32);not_null=t;identity=;generated=;default='OTHER'::character varying;collation="
   },
   {
     "kind": "column",
     "name": "public.bots.updated_at",
-    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
@@ -402,17 +412,17 @@
   {
     "kind": "column",
     "name": "public.consumer_grants.created_at",
-    "detail": "position=10;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=11;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
     "name": "public.consumer_grants.granted_at",
-    "detail": "position=7;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
     "name": "public.consumer_grants.granted_by",
-    "detail": "position=6;type=bigint;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=7;type=bigint;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -422,12 +432,17 @@
   {
     "kind": "column",
     "name": "public.consumer_grants.last_invalidated_at",
-    "detail": "position=9;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=10;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.consumer_grants.pending_entry_epoch",
+    "detail": "position=6;type=bigint;not_null=t;identity=;generated=;default=0;collation="
   },
   {
     "kind": "column",
     "name": "public.consumer_grants.revoked_at",
-    "detail": "position=8;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=9;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -442,7 +457,127 @@
   {
     "kind": "column",
     "name": "public.consumer_grants.updated_at",
+    "detail": "position=12;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.approved_user_id",
+    "detail": "position=9;type=bigint;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.bot_id",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.challenge_hash",
+    "detail": "position=1;type=character(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.consumed_at",
+    "detail": "position=10;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.consumer",
+    "detail": "position=2;type=character varying(96);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.created_at",
     "detail": "position=11;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.expires_at",
+    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.external_subject",
+    "detail": "position=5;type=character varying(191);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.external_username",
+    "detail": "position=6;type=character varying(255);not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.issuer",
+    "detail": "position=4;type=character varying(191);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.status",
+    "detail": "position=7;type=character varying(32);not_null=t;identity=;generated=;default='pending'::character varying;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_link_challenges.updated_at",
+    "detail": "position=12;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.bot_id",
+    "detail": "position=3;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.completed_at",
+    "detail": "position=7;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.created_at",
+    "detail": "position=8;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.entry_identity_ref",
+    "detail": "position=4;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.minimum_entry_epoch",
+    "detail": "position=5;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.operation_id",
+    "detail": "position=1;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.state",
+    "detail": "position=6;type=character varying(32);not_null=t;identity=;generated=;default='PROPAGATION_PENDING'::character varying;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.updated_at",
+    "detail": "position=9;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_operations.user_id",
+    "detail": "position=2;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_targets.confirmed_at",
+    "detail": "position=3;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_targets.grant_id",
+    "detail": "position=2;type=bigint;not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
+    "name": "public.entry_identity_unlink_targets.operation_id",
+    "detail": "position=1;type=character varying(64);not_null=t;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -1786,16 +1921,6 @@
   },
   {
     "kind": "constraint",
-    "name": "public.bot_identities.uk_bot_identities_bot_external",
-    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (bot_id, external_user_id)"
-  },
-  {
-    "kind": "constraint",
-    "name": "public.bot_identities.uk_bot_identities_user_bot",
-    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (user_id, bot_id)"
-  },
-  {
-    "kind": "constraint",
     "name": "public.bot_route_audit.bot_route_audit_pkey",
     "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
   },
@@ -1851,6 +1976,11 @@
   },
   {
     "kind": "constraint",
+    "name": "public.consumer_grants.consumer_grants_pending_entry_epoch_check",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (pending_entry_epoch \u003e= 0)"
+  },
+  {
+    "kind": "constraint",
     "name": "public.consumer_grants.consumer_grants_pkey",
     "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (id)"
   },
@@ -1873,6 +2003,76 @@
     "kind": "constraint",
     "name": "public.consumer_grants.uk_consumer_grants_binding_consumer",
     "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (binding_id, consumer)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_link_challenges.chk_entry_identity_link_challenges_status",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'cancelled'::character varying, 'expired'::character varying, 'conflict'::character varying]::text[]))"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_link_challenges.entry_identity_link_challenges_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (challenge_hash)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_link_challenges.fk_entry_identity_link_challenges_bot",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (bot_id) REFERENCES bots(id) ON UPDATE CASCADE ON DELETE RESTRICT"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_link_challenges.fk_entry_identity_link_challenges_consumer",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (consumer) REFERENCES service_credentials(client_id) ON UPDATE CASCADE ON DELETE RESTRICT"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_link_challenges.fk_entry_identity_link_challenges_user",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (approved_user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_operations.chk_entry_identity_unlink_operations_state",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (state::text = ANY (ARRAY['PROPAGATION_PENDING'::character varying, 'UNLINKED'::character varying]::text[]))"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_operations.entry_identity_unlink_operations_minimum_entry_epoch_check",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (minimum_entry_epoch \u003e= 1)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_operations.entry_identity_unlink_operations_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (operation_id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_operations.fk_entry_identity_unlink_operations_bot",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (bot_id) REFERENCES bots(id) ON UPDATE CASCADE ON DELETE CASCADE"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_operations.fk_entry_identity_unlink_operations_identity",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (entry_identity_ref) REFERENCES bot_identities(entry_identity_ref) ON UPDATE CASCADE ON DELETE RESTRICT"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_operations.fk_entry_identity_unlink_operations_user",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_targets.entry_identity_unlink_targets_pkey",
+    "detail": "type=p;deferrable=f;deferred=f;validated=t;definition=PRIMARY KEY (operation_id, grant_id)"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_targets.fk_entry_identity_unlink_targets_grant",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (grant_id) REFERENCES consumer_grants(id) ON UPDATE CASCADE ON DELETE CASCADE"
+  },
+  {
+    "kind": "constraint",
+    "name": "public.entry_identity_unlink_targets.fk_entry_identity_unlink_targets_operation",
+    "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (operation_id) REFERENCES entry_identity_unlink_operations(operation_id) ON UPDATE CASCADE ON DELETE CASCADE"
   },
   {
     "kind": "constraint",
@@ -2481,8 +2681,8 @@
   },
   {
     "kind": "index",
-    "name": "public.bot_identities.uk_bot_identities_bot_external",
-    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_bot_identities_bot_external ON public.bot_identities USING btree (bot_id, external_user_id)"
+    "name": "public.bot_identities.uk_bot_identities_issuer_subject_active",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_bot_identities_issuer_subject_active ON public.bot_identities USING btree (issuer, external_user_id) WHERE (deleted_at IS NULL)"
   },
   {
     "kind": "index",
@@ -2491,8 +2691,8 @@
   },
   {
     "kind": "index",
-    "name": "public.bot_identities.uk_bot_identities_user_bot",
-    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_bot_identities_user_bot ON public.bot_identities USING btree (user_id, bot_id)"
+    "name": "public.bot_identities.uk_bot_identities_user_issuer_active",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_bot_identities_user_issuer_active ON public.bot_identities USING btree (user_id, issuer) WHERE (deleted_at IS NULL)"
   },
   {
     "kind": "index",
@@ -2533,6 +2733,11 @@
     "kind": "index",
     "name": "public.bots.idx_bots_status",
     "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_bots_status ON public.bots USING btree (status)"
+  },
+  {
+    "kind": "index",
+    "name": "public.bots.uk_bots_entry_issuer",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_bots_entry_issuer ON public.bots USING btree (entry_issuer)"
   },
   {
     "kind": "index",
@@ -2578,6 +2783,56 @@
     "kind": "index",
     "name": "public.consumer_grants.uk_consumer_grants_binding_consumer",
     "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uk_consumer_grants_binding_consumer ON public.consumer_grants USING btree (binding_id, consumer)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_link_challenges.entry_identity_link_challenges_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX entry_identity_link_challenges_pkey ON public.entry_identity_link_challenges USING btree (challenge_hash)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_link_challenges.idx_entry_identity_link_challenges_bot",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_link_challenges_bot ON public.entry_identity_link_challenges USING btree (bot_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_link_challenges.idx_entry_identity_link_challenges_consumer",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_link_challenges_consumer ON public.entry_identity_link_challenges USING btree (consumer)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_link_challenges.idx_entry_identity_link_challenges_status_expiry",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_link_challenges_status_expiry ON public.entry_identity_link_challenges USING btree (status, expires_at)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_link_challenges.idx_entry_identity_link_challenges_user",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_link_challenges_user ON public.entry_identity_link_challenges USING btree (approved_user_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_unlink_operations.entry_identity_unlink_operations_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX entry_identity_unlink_operations_pkey ON public.entry_identity_unlink_operations USING btree (operation_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_unlink_operations.idx_entry_identity_unlink_operations_state",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_unlink_operations_state ON public.entry_identity_unlink_operations USING btree (state)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_unlink_operations.idx_entry_identity_unlink_operations_user_bot",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_unlink_operations_user_bot ON public.entry_identity_unlink_operations USING btree (user_id, bot_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_unlink_targets.entry_identity_unlink_targets_pkey",
+    "detail": "primary=t;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX entry_identity_unlink_targets_pkey ON public.entry_identity_unlink_targets USING btree (operation_id, grant_id)"
+  },
+  {
+    "kind": "index",
+    "name": "public.entry_identity_unlink_targets.idx_entry_identity_unlink_targets_grant",
+    "detail": "primary=f;unique=f;valid=t;ready=t;definition=CREATE INDEX idx_entry_identity_unlink_targets_grant ON public.entry_identity_unlink_targets USING btree (grant_id)"
   },
   {
     "kind": "index",
@@ -3228,6 +3483,21 @@
     "kind": "relation",
     "name": "public.consumer_grants_id_seq",
     "detail": "kind=S;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.entry_identity_link_challenges",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.entry_identity_unlink_operations",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
+  },
+  {
+    "kind": "relation",
+    "name": "public.entry_identity_unlink_targets",
+    "detail": "kind=r;persistence=p;row_security=f;force_row_security=f"
   },
   {
     "kind": "relation",

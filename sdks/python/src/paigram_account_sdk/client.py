@@ -37,6 +37,7 @@ from .models import (
     CredentialStatus,
     CredentialStatusResult,
     DeviceSummary,
+    EntryIdentityLink,
     PlatformAccountStatus,
     PlatformBinding,
     PlatformDescriptor,
@@ -138,6 +139,39 @@ class PaiGramAccountClient:
             bot_id=response.bot_id,
             external_user_id=response.external_user_id,
             external_username=response.external_username,
+        )
+
+    async def start_entry_identity_link(
+        self,
+        external_subject: str,
+        external_username: str = "",
+        *,
+        request_id: str | None = None,
+    ) -> EntryIdentityLink:
+        self._ensure_open()
+        if not external_subject:
+            logger.warning("PaiGram Account SDK rejected an empty external_subject")
+            raise InvalidRequestError("external_subject is required")
+        resolved_request_id = self._resolve_request_id(request_id)
+        response = cast(
+            bot_access_pb2.StartEntryIdentityLinkResponse,
+            await self._account_call(
+                self._account.StartEntryIdentityLink,
+                bot_access_pb2.StartEntryIdentityLinkRequest(
+                    external_subject=external_subject,
+                    external_username=external_username,
+                ),
+                resolved_request_id,
+                required_scopes=("bot.access.link_identity",),
+            ),
+        )
+        return EntryIdentityLink(
+            approval_url=response.approval_url,
+            issuer=response.issuer,
+            masked_subject=response.masked_subject,
+            bot_id=response.bot_id,
+            bot_display_name=response.bot_display_name,
+            expires_at=_datetime_from_timestamp(response.expires_at),
         )
 
     async def list_bindings(
@@ -400,8 +434,9 @@ class PaiGramAccountClient:
         request_id: str,
         *,
         failed_precondition_error: type[AccountSDKError] = CredentialError,
+        required_scopes: tuple[str, ...] = ("bot.access.read", "bot.access.issue_ticket"),
     ) -> object:
-        token = await self._tokens.get(request_id)
+        token = await self._tokens.get(request_id, required_scopes)
         call = method(
             request,
             metadata=(("authorization", f"Bearer {token}"), *_correlation_metadata(request_id)),

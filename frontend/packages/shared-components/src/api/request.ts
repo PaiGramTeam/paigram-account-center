@@ -8,6 +8,7 @@ export interface NormalizedApiError {
   error?: string
   code?: string
   message?: string
+  status?: number
   details?: Record<string, unknown>
 }
 
@@ -111,6 +112,7 @@ export function createRequest(config: RequestConfig = {}) {
         }
 
         const errorData = normalizeApiError(data as ApiError)
+        errorData.status = status
         const errorMessage = errorData.message || errorData.error || getDefaultErrorMessage(status)
 
         if (!requestConfig.skipErrorToast) {

@@ -1,11 +1,13 @@
 package meidentities_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 
@@ -20,6 +22,7 @@ import (
 	"paigram/internal/middleware"
 	"paigram/internal/model"
 	"paigram/internal/service/botlink"
+	"paigram/internal/service/entryidentity"
 )
 
 // dbCounter mirrors botlink/service_test.go: per-call shared-cache DSN
@@ -49,6 +52,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 			entry_epoch        INTEGER NOT NULL DEFAULT 1,
 			user_id           INTEGER NOT NULL,
 			bot_id            TEXT    NOT NULL,
+			issuer            TEXT    NOT NULL DEFAULT 'urn:paigram:entry:paigrambot',
 			external_user_id  TEXT    NOT NULL,
 			external_username TEXT,
 			linked_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -60,10 +64,10 @@ func newTestDB(t *testing.T) *gorm.DB {
 		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_ref ON bot_identities(entry_identity_ref)`,
 	).Error)
 	require.NoError(t, db.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_bot ON bot_identities(user_id, bot_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_issuer_active ON bot_identities(user_id, issuer) WHERE deleted_at IS NULL`,
 	).Error)
 	require.NoError(t, db.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_bot_external ON bot_identities(bot_id, external_user_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_issuer_subject_active ON bot_identities(issuer, external_user_id) WHERE deleted_at IS NULL`,
 	).Error)
 	require.NoError(t, db.Exec(`
 		CREATE TABLE IF NOT EXISTS audit_logs (
@@ -79,6 +83,35 @@ func newTestDB(t *testing.T) *gorm.DB {
 			details     TEXT,
 			created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY, user_ref TEXT NOT NULL, owner_epoch INTEGER NOT NULL DEFAULT 1, deleted_at DATETIME
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS bots (
+		id TEXT PRIMARY KEY, entry_issuer TEXT NOT NULL, display_name TEXT NOT NULL, status TEXT NOT NULL,
+		owner_user_id INTEGER NOT NULL, deleted_at DATETIME
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS service_credentials (
+		client_id TEXT PRIMARY KEY, bot_id TEXT NOT NULL, status TEXT NOT NULL, deleted_at DATETIME
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_link_challenges (
+		challenge_hash TEXT PRIMARY KEY, consumer TEXT NOT NULL, bot_id TEXT NOT NULL, issuer TEXT NOT NULL,
+		external_subject TEXT NOT NULL, external_username TEXT, status TEXT NOT NULL, expires_at DATETIME NOT NULL,
+		approved_user_id INTEGER, consumed_at DATETIME, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_unlink_operations (
+		operation_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, bot_id TEXT NOT NULL, entry_identity_ref TEXT NOT NULL,
+		minimum_entry_epoch INTEGER NOT NULL, state TEXT NOT NULL, completed_at DATETIME,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS platform_account_bindings (
+		id INTEGER PRIMARY KEY, owner_user_id INTEGER NOT NULL
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS consumer_grants (
+		id INTEGER PRIMARY KEY, binding_id INTEGER NOT NULL, consumer TEXT NOT NULL, pending_entry_epoch INTEGER NOT NULL DEFAULT 0
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_unlink_targets (
+		operation_id TEXT NOT NULL, grant_id INTEGER NOT NULL, confirmed_at DATETIME, PRIMARY KEY (operation_id, grant_id)
+	)`).Error)
 	return db
 }
 
@@ -100,11 +133,63 @@ func authedRouter(t *testing.T, userID uint64, h *meidentities.Handler) *gin.Eng
 	}
 	r.GET("/api/v1/me/bot-identities", h.List)
 	r.DELETE("/api/v1/me/bot-identities/:botId", h.Unlink)
+	r.GET("/api/v1/me/bot-identities/:botId/unlink-status", h.UnlinkStatus)
+	r.POST("/api/v1/me/entry-identity-links/preview", h.PreviewLink)
+	r.POST("/api/v1/me/entry-identity-links/approve", h.ApproveLink)
+	r.POST("/api/v1/me/entry-identity-links/cancel", h.CancelLink)
 	return r
 }
 
-func seedLink(t *testing.T, svc *botlink.Service, userID uint64, botID, externalID string) {
+func TestEntryIdentityApprovalUsesBodyTokenAndRejectsReplay(t *testing.T) {
+	db := newTestDB(t)
+	require.NoError(t, db.Exec(`INSERT INTO users (id, user_ref) VALUES (42, 'user-42')`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO bots (id, entry_issuer, display_name, status, owner_user_id)
+		VALUES ('paigrambot', 'urn:paigram:entry:telegram', 'PaiGram', 'ACTIVE', 1)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO service_credentials (client_id, bot_id, status)
+		VALUES ('telegram-service', 'paigrambot', 'active')`).Error)
+	linking := entryidentity.NewService(db, zap.NewNop(), entryidentity.Config{FrontendBaseURL: "https://account.example.com"})
+	started, err := linking.Start(context.Background(), entryidentity.StartInput{
+		Consumer: "telegram-service", BotID: "paigrambot", ExternalSubject: "external-42", ExternalUsername: "traveler",
+	})
+	require.NoError(t, err)
+	approvalURL, err := url.Parse(started.ApprovalURL)
+	require.NoError(t, err)
+	fragment, err := url.ParseQuery(approvalURL.Fragment)
+	require.NoError(t, err)
+	challenge := fragment.Get("challenge")
+	require.NotEmpty(t, challenge)
+
+	handler := meidentities.NewApiGroup(botlink.NewService(db, zap.NewNop()), zap.NewNop(), linking).Identities
+	router := authedRouter(t, 42, handler)
+	body := []byte(fmt.Sprintf(`{"challenge":%q}`, challenge))
+	preview := httptest.NewRecorder()
+	previewRequest := httptest.NewRequest(http.MethodPost, "/api/v1/me/entry-identity-links/preview", bytes.NewReader(body))
+	previewRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(preview, previewRequest)
+	require.Equal(t, http.StatusOK, preview.Code)
+	assert.Equal(t, "no-store", preview.Header().Get("Cache-Control"))
+	assert.NotContains(t, preview.Body.String(), challenge)
+	assert.Contains(t, preview.Body.String(), `"masked_subject"`)
+
+	approved := httptest.NewRecorder()
+	approveRequest := httptest.NewRequest(http.MethodPost, "/api/v1/me/entry-identity-links/approve", bytes.NewReader(body))
+	approveRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(approved, approveRequest)
+	require.Equal(t, http.StatusOK, approved.Code)
+	assert.NotContains(t, approved.Body.String(), challenge)
+
+	replay := httptest.NewRecorder()
+	replayRequest := httptest.NewRequest(http.MethodPost, "/api/v1/me/entry-identity-links/approve", bytes.NewReader(body))
+	replayRequest.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(replay, replayRequest)
+	assert.Equal(t, http.StatusConflict, replay.Code)
+}
+
+func seedLink(t *testing.T, db *gorm.DB, svc *botlink.Service, userID uint64, botID, externalID string) {
 	t.Helper()
+	require.NoError(t, db.Exec(`INSERT OR IGNORE INTO users (id, user_ref) VALUES (?, ?)`, userID, fmt.Sprintf("user-%d", userID)).Error)
+	require.NoError(t, db.Exec(`INSERT OR IGNORE INTO bots (id, entry_issuer, display_name, status, owner_user_id)
+		VALUES (?, ?, ?, 'ACTIVE', 1)`, botID, model.DefaultEntryIssuer(botID), botID).Error)
 	_, err := svc.UpsertLink(context.Background(), botlink.UpsertLinkInput{
 		BotID:          botID,
 		UserID:         userID,
@@ -154,7 +239,7 @@ func TestList_Empty(t *testing.T) {
 func TestList_Multiple_OrderByLinkedAt(t *testing.T) {
 	db := newTestDB(t)
 	svc := botlink.NewService(db, zap.NewNop())
-	seedLink(t, svc, 42, "paigrambot", "ext-1")
+	seedLink(t, db, svc, 42, "paigrambot", "ext-1")
 	// Backdate paigrambot so deltabot (linked second, real-time) sorts
 	// first under ORDER BY linked_at DESC. SQLite CURRENT_TIMESTAMP has
 	// only second precision; this trick is borrowed from
@@ -163,7 +248,7 @@ func TestList_Multiple_OrderByLinkedAt(t *testing.T) {
 		`UPDATE bot_identities SET linked_at = '2020-01-01 00:00:00' WHERE bot_id = ?`,
 		"paigrambot",
 	).Error)
-	seedLink(t, svc, 42, "deltabot", "ext-2")
+	seedLink(t, db, svc, 42, "deltabot", "ext-2")
 
 	api := meidentities.NewApiGroup(svc, zap.NewNop())
 	r := authedRouter(t, 42, api.Identities)
@@ -195,12 +280,12 @@ func TestList_Multiple_OrderByLinkedAt(t *testing.T) {
 func TestUnlink_Success_204(t *testing.T) {
 	db := newTestDB(t)
 	svc := botlink.NewService(db, zap.NewNop())
-	seedLink(t, svc, 42, "paigrambot", "ext-1")
+	seedLink(t, db, svc, 42, "paigrambot", "ext-1")
 
 	api := meidentities.NewApiGroup(svc, zap.NewNop())
 	r := authedRouter(t, 42, api.Identities)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/paigrambot", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/paigrambot?operation_id=00000000-0000-4000-8000-000000000011", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -218,12 +303,12 @@ func TestUnlink_NotFound_404(t *testing.T) {
 	api := meidentities.NewApiGroup(svc, zap.NewNop())
 	r := authedRouter(t, 42, api.Identities)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/never-existed", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/never-existed?operation_id=00000000-0000-4000-8000-000000000012", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
-	assert.JSONEq(t, `{"code":404, "data":null, "message":"not_found"}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"entry_identity_unlink_operation_not_found","message":"entry identity unlink operation not found"}}`, rec.Body.String())
 }
 
 // TestUnlink_OtherUserRow_404 verifies the opaque-404 invariant from
@@ -239,24 +324,24 @@ func TestUnlink_NotFound_404(t *testing.T) {
 func TestUnlink_OtherUserRow_404(t *testing.T) {
 	db := newTestDB(t)
 	svc := botlink.NewService(db, zap.NewNop())
-	seedLink(t, svc, 99, "paigrambot", "ext-99")
+	seedLink(t, db, svc, 99, "paigrambot", "ext-99")
 
 	api := meidentities.NewApiGroup(svc, zap.NewNop())
 	h := api.Identities
 
 	// Attempt as attacker (user 42) against victim's row.
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/paigrambot", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/paigrambot?operation_id=00000000-0000-4000-8000-000000000013", nil)
 	rec := httptest.NewRecorder()
 	authedRouter(t, 42, h).ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusNotFound, rec.Code,
 		"must be 404, NOT 403, to keep user 99's link state opaque")
-	assert.JSONEq(t, `{"code":404, "data":null, "message":"not_found"}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"entry_identity_unlink_operation_not_found","message":"entry identity unlink operation not found"}}`, rec.Body.String())
 
 	// Parallel request against a TRULY-nonexistent bot — body must be
 	// byte-identical so an attacker cannot distinguish "other user's row"
 	// from "row never existed".
-	reqMissing := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/no-such-bot", nil)
+	reqMissing := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/no-such-bot?operation_id=00000000-0000-4000-8000-000000000014", nil)
 	recMissing := httptest.NewRecorder()
 	authedRouter(t, 42, h).ServeHTTP(recMissing, reqMissing)
 	require.Equal(t, http.StatusNotFound, recMissing.Code)
@@ -270,15 +355,28 @@ func TestUnlink_OtherUserRow_404(t *testing.T) {
 	assert.Equal(t, int64(1), cnt, "other user's row must be untouched")
 }
 
+func TestUnlinkStatusMissingUsesStableTerminalCode(t *testing.T) {
+	db := newTestDB(t)
+	linking := entryidentity.NewService(db, zap.NewNop(), entryidentity.Config{})
+	handler := meidentities.NewApiGroup(botlink.NewService(db, zap.NewNop()), zap.NewNop(), linking).Identities
+	router := authedRouter(t, 42, handler)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me/bot-identities/paigrambot/unlink-status?operation_id=00000000-0000-4000-8000-000000000019", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.JSONEq(t, `{"error":{"code":"entry_identity_unlink_operation_not_found","message":"entry identity unlink operation not found"}}`, recorder.Body.String())
+}
+
 func TestUnlink_AuditWritten(t *testing.T) {
 	db := newTestDB(t)
 	svc := botlink.NewService(db, zap.NewNop())
-	seedLink(t, svc, 42, "paigrambot", "ext-1")
+	seedLink(t, db, svc, 42, "paigrambot", "ext-1")
 
 	api := meidentities.NewApiGroup(svc, zap.NewNop())
 	r := authedRouter(t, 42, api.Identities)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/paigrambot", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/me/bot-identities/paigrambot?operation_id=00000000-0000-4000-8000-000000000015", nil)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNoContent, rec.Code)

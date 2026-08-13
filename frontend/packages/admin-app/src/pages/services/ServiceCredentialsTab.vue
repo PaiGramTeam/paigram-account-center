@@ -12,6 +12,7 @@
     </template>
     <template #bot="{ record }">
       <code>{{ record.bot_id }}</code>
+      <div class="mt-1 text-xs break-all text-gray-500">{{ record.entry_issuer }}</div>
     </template>
     <template #scopes="{ record }">
       <a-space wrap size="mini">
@@ -48,6 +49,9 @@
       </a-form-item>
       <a-form-item label="逻辑 Bot ID" required>
         <a-input v-model="form.bot_id" placeholder="paigram" />
+      </a-form-item>
+      <a-form-item label="外部身份命名空间">
+        <a-input v-model="form.entry_issuer" placeholder="留空时使用 urn:paigram:entry:<Bot ID>" />
       </a-form-item>
       <a-form-item label="显示名称" required><a-input v-model="form.display_name" /></a-form-item>
       <a-form-item label="描述"><a-textarea v-model="form.description" /></a-form-item>
@@ -108,10 +112,11 @@ const oneTimeSecret = ref('')
 const form = reactive({
   client_id: '',
   bot_id: '',
+  entry_issuer: '',
   display_name: '',
   description: '',
   audiencesText: 'account-center',
-  scopesText: 'bot.access.read\nbot.access.issue_ticket',
+  scopesText: 'bot.access.read\nbot.access.issue_ticket\nbot.access.link_identity',
 })
 
 const splitLines = (value: string): string[] => [
@@ -153,6 +158,7 @@ const create = async (): Promise<boolean> => {
       await adminServicesApi.createServiceCredential({
         client_id: form.client_id.trim(),
         bot_id: form.bot_id.trim(),
+        entry_issuer: form.entry_issuer.trim() || undefined,
         display_name: form.display_name.trim(),
         description: form.description.trim(),
         audiences,
@@ -202,10 +208,11 @@ const resetForm = (): void => {
   Object.assign(form, {
     client_id: '',
     bot_id: '',
+    entry_issuer: '',
     display_name: '',
     description: '',
     audiencesText: 'account-center',
-    scopesText: 'bot.access.read\nbot.access.issue_ticket',
+    scopesText: 'bot.access.read\nbot.access.issue_ticket\nbot.access.link_identity',
   })
 }
 

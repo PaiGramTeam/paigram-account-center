@@ -53,6 +53,7 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 	refreshHandler := tasks.NewRefreshOAuthTokenHandler(db, cfg, authHandler)
 	scheduleHandler := tasks.NewScheduleOAuthRefreshHandler(db, cfg, asynqClient)
 	cleanupHandler := tasks.NewCleanExpiredOAuthStatesHandler(db)
+	entryIdentityCleanupHandler := tasks.NewCleanExpiredEntryIdentityChallengesHandler(db)
 	bindingReconcileHandler := tasks.NewPlatformBindingReconcileHandler(db, asynqClient)
 	bindingProjectionRepairHandler := tasks.NewPlatformBindingProjectionRepairHandler(db, &platformService.PlatformService)
 	bindingDeleteRepairHandler := tasks.NewPlatformBindingDeleteRepairHandler(db, &platformService.PlatformService)
@@ -66,6 +67,7 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 	mux.HandleFunc(tasks.TypeRefreshOAuthToken, refreshHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypeScheduleOAuthRefresh, scheduleHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypeCleanExpiredOAuthStates, cleanupHandler.ProcessTask)
+	mux.HandleFunc(tasks.TypeCleanExpiredEntryIdentityChallenges, entryIdentityCleanupHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypePlatformBindingReconcile, bindingReconcileHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypePlatformBindingProjectionRepair, bindingProjectionRepairHandler.ProcessTask)
 	mux.HandleFunc(tasks.TypePlatformBindingDeleteRepair, bindingDeleteRepairHandler.ProcessTask)
@@ -149,6 +151,13 @@ func StartAsynqServer(cfg *config.Config, redisClient *redis.Client, db *gorm.DB
 		return nil, nil, err
 	}
 	log.Printf("[Asynq] Registered periodic task: clean_expired_oauth_states (entry_id=%s)", entryID2)
+
+	entryIdentityCleanupTask := tasks.NewCleanExpiredEntryIdentityChallengesTask()
+	entryIdentityCleanupID, err := scheduler.Register("@hourly", entryIdentityCleanupTask)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Printf("[Asynq] Registered periodic task: clean_expired_entry_identity_challenges (entry_id=%s)", entryIdentityCleanupID)
 
 	// Path D §3.1 dropped the bot_tokens table; the matching cleanup
 	// schedule entry is intentionally removed. OAuth access tokens are

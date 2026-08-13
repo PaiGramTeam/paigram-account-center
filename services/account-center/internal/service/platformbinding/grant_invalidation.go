@@ -11,6 +11,7 @@ type GrantInvalidationInput struct {
 	PlatformServiceKey  string
 	Consumer            string
 	MinimumGrantVersion uint64
+	MinimumEntryEpoch   uint64
 	ActorType           string
 	ActorID             string
 }

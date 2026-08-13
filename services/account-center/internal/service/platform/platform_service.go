@@ -275,7 +275,7 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 		input.MinimumGrantVersion,
 		0,
 		0,
-		0,
+		input.MinimumEntryEpoch,
 	)
 	operationID := operationid.DeterministicID(operationFingerprint)
 	operation := &platformv2.OperationRef{
@@ -321,6 +321,7 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 		Operation:           operation,
 		ConsumerPrincipal:   input.Consumer,
 		MinimumGrantVersion: input.MinimumGrantVersion,
+		MinimumEntryEpoch:   input.MinimumEntryEpoch,
 	})
 	if err != nil && isPlatformUnavailableRPCError(err) {
 		return fmt.Errorf("%w: %v", ErrPlatformServiceUnavailable, err)

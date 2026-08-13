@@ -107,6 +107,7 @@ type ConsumerGrant struct {
 	Consumer          string              `gorm:"size:64;not null;uniqueIndex:uk_consumer_grants_binding_consumer,priority:2"`
 	Status            ConsumerGrantStatus `gorm:"size:32;not null;default:'active';index:idx_consumer_grants_status"`
 	TicketVersion     uint64              `gorm:"not null;default:1"`
+	PendingEntryEpoch uint64              `gorm:"not null;default:0"`
 	GrantedBy         sql.NullInt64       `gorm:"type:bigint;index:idx_consumer_grants_granted_by"`
 	GrantedAt         time.Time           `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	RevokedAt         sql.NullTime        `gorm:"type:timestamptz"`

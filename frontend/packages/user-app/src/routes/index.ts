@@ -45,6 +45,12 @@ export const constantRoutes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, hideInMenu: true },
   },
   {
+    path: '/entry-identity-link',
+    name: 'EntryIdentityLink',
+    component: () => import('@/pages/entry-identity-link/index.vue'),
+    meta: { requiresAuth: false, hideInMenu: true, title: '确认 Bot 身份关联' },
+  },
+  {
     path: '/404',
     name: 'NotFound',
     component: () => import('@/pages/error/404.vue'),

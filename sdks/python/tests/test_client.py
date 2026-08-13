@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import parse_qs
 
 import grpc
 import httpx
@@ -28,6 +29,18 @@ class BotAccessService(bot_access_pb2_grpc.BotAccessServiceServicer):
     def __init__(self, runtime_target: str = "127.0.0.1:1", runtime_server_name: str = "runtime.internal") -> None:
         self.runtime_target = runtime_target
         self.runtime_server_name = runtime_server_name
+
+    async def StartEntryIdentityLink(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
+        await require_account_metadata(context)
+        if request.external_subject != "external-42" or request.external_username != "traveler":
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "unexpected identity")
+        return bot_access_pb2.StartEntryIdentityLinkResponse(
+            approval_url="https://account.example.test/entry-identity-link#challenge=opaque",
+            issuer="urn:paigram:entry:telegram",
+            masked_subject="ex*******42",
+            bot_id="paigram",
+            bot_display_name="PaiGram",
+        )
 
     async def ResolveBotUser(self, request, context):  # type: ignore[no-untyped-def, no-untyped-call]
         metadata = dict(context.invocation_metadata())
@@ -239,18 +252,22 @@ async def platform_server(service: MihomoRuntimeService | None = None) -> AsyncI
         await server.stop(grace=None)
 
 
-def token_transport() -> httpx.MockTransport:
+def token_transport(requested_scopes: list[str] | None = None) -> httpx.MockTransport:
     def issue_token(request: httpx.Request) -> httpx.Response:
         assert request.headers["content-type"].startswith("application/x-www-form-urlencoded")
         assert request.headers["x-request-id"] == "request-123"
         assert b"client_secret=secret" in request.content
+        scope = parse_qs(request.content.decode("ascii"))["scope"][0]
+        assert scope in {"bot.access.read bot.access.issue_ticket", "bot.access.link_identity"}
+        if requested_scopes is not None:
+            requested_scopes.append(scope)
         return httpx.Response(
             200,
             json={
                 "access_token": "machine-token",
                 "token_type": "Bearer",
                 "expires_in": 3600,
-                "scope": "bot.access.read bot.access.issue_ticket",
+                "scope": "bot.access.read bot.access.issue_ticket bot.access.link_identity",
             },
         )
 
@@ -265,6 +282,30 @@ def client_for(account_target: str) -> PaiGramAccountClient:
         client_secret="secret",
         http_transport=token_transport(),
     )
+
+
+@pytest.mark.asyncio
+async def test_start_entry_identity_link_returns_public_domain_model() -> None:
+    requested_scopes: list[str] = []
+    async with (
+        account_server() as account_target,
+        PaiGramAccountClient(
+            account_http_url="https://account.example.test",
+            account_grpc_target=account_target,
+            client_id="paigram",
+            client_secret="secret",
+            http_transport=token_transport(requested_scopes),
+        ) as client,
+    ):
+        link = await client.start_entry_identity_link(
+            "external-42", external_username="traveler", request_id="request-123"
+        )
+
+    assert link.issuer == "urn:paigram:entry:telegram"
+    assert link.masked_subject == "ex*******42"
+    assert link.bot_id == "paigram"
+    assert link.approval_url.endswith("#challenge=opaque")
+    assert requested_scopes == ["bot.access.link_identity"]
 
 
 @pytest.fixture(autouse=True)

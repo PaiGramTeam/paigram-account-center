@@ -7,10 +7,25 @@ option go_package = "github.com/PaiGramTeam/paigram-account-center/contracts/gen
 import "google/protobuf/timestamp.proto";
 
 service BotAccessService {
+  rpc StartEntryIdentityLink(StartEntryIdentityLinkRequest) returns (StartEntryIdentityLinkResponse);
   rpc ResolveBotUser(ResolveBotUserRequest) returns (ResolveBotUserResponse);
   rpc ListAccessibleBindings(ListAccessibleBindingsRequest) returns (ListAccessibleBindingsResponse);
   rpc GetPlatformRuntimeRoute(GetPlatformRuntimeRouteRequest) returns (GetPlatformRuntimeRouteResponse);
   rpc IssueServiceTicket(IssueServiceTicketRequest) returns (IssueServiceTicketResponse);
+}
+
+message StartEntryIdentityLinkRequest {
+  string external_subject = 1;
+  string external_username = 2;
+}
+
+message StartEntryIdentityLinkResponse {
+  string approval_url = 1;
+  string issuer = 2;
+  string masked_subject = 3;
+  string bot_id = 4;
+  string bot_display_name = 5;
+  google.protobuf.Timestamp expires_at = 6;
 }
 
 enum PlatformAccountStatus {

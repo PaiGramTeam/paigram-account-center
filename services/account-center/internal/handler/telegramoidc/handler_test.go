@@ -142,6 +142,27 @@ func newTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.Exec(
 		`CREATE UNIQUE INDEX IF NOT EXISTS uk_user_profiles_user_id ON user_profiles(user_id)`,
 	).Error)
+	require.NoError(t, db.Exec(`
+		CREATE TABLE IF NOT EXISTS bots (
+			id           TEXT PRIMARY KEY,
+			entry_issuer TEXT NOT NULL,
+			status       TEXT NOT NULL,
+			deleted_at   DATETIME
+		)`).Error)
+	require.NoError(t, db.Exec(
+		`INSERT OR IGNORE INTO bots (id, entry_issuer, status) VALUES ('paigrambot', 'urn:paigram:entry:paigrambot', 'ACTIVE')`,
+	).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_unlink_operations (
+		operation_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, bot_id TEXT NOT NULL, entry_identity_ref TEXT NOT NULL,
+		minimum_entry_epoch INTEGER NOT NULL, state TEXT NOT NULL, completed_at DATETIME,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS consumer_grants (
+		id INTEGER PRIMARY KEY, pending_entry_epoch INTEGER NOT NULL DEFAULT 0
+	)`).Error)
+	require.NoError(t, db.Exec(`CREATE TABLE IF NOT EXISTS entry_identity_unlink_targets (
+		operation_id TEXT NOT NULL, grant_id INTEGER NOT NULL, confirmed_at DATETIME, PRIMARY KEY (operation_id, grant_id)
+	)`).Error)
 
 	// user_credentials — UNIQUE (provider, provider_account_id) is the
 	// canonical OIDC lookup index.
@@ -177,6 +198,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 			entry_epoch        INTEGER NOT NULL DEFAULT 1,
 			user_id           INTEGER NOT NULL,
 			bot_id            TEXT    NOT NULL,
+			issuer            TEXT    NOT NULL DEFAULT 'urn:paigram:entry:paigrambot',
 			external_user_id  TEXT    NOT NULL,
 			external_username TEXT,
 			linked_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -188,10 +210,10 @@ func newTestDB(t *testing.T) *gorm.DB {
 		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_ref ON bot_identities(entry_identity_ref)`,
 	).Error)
 	require.NoError(t, db.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_bot ON bot_identities(user_id, bot_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_user_issuer_active ON bot_identities(user_id, issuer) WHERE deleted_at IS NULL`,
 	).Error)
 	require.NoError(t, db.Exec(
-		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_bot_external ON bot_identities(bot_id, external_user_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uk_bot_identities_issuer_subject_active ON bot_identities(issuer, external_user_id) WHERE deleted_at IS NULL`,
 	).Error)
 
 	// audit_logs — botlink.UpsertLink writes telegram_link_created rows.

@@ -1,12 +1,4 @@
-// Package meidentities wires the linked-Telegram-identities HTTP routes
-// onto the session-authenticated /api/v1/me/* group.
-//
-// AuthMiddleware (post-A4.1-A, see internal/middleware/auth.go) reads
-// either `Authorization: Bearer <token>` or the `ac_session` cookie, so
-// OIDC-issued sessions (A4 + A4.1-C) reach this handler with userID set
-// without additional middleware glue.
-//
-// Spec: docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.5
+// Package meidentities wires bot identity routes onto the authenticated user API.
 package meidentities
 
 import (
@@ -21,8 +13,7 @@ import (
 	"paigram/internal/response"
 )
 
-// RouterGroup wires the meidentities handler onto a gin router subtree.
-// Follows the AGENTS.md §2 enter.go pattern used by sibling /me routers.
+// RouterGroup wires the meidentities handler onto a router subtree.
 type RouterGroup struct{}
 
 // Init mounts the /me/bot-identities subtree on the SESSION-AUTHENTICATED
@@ -41,10 +32,28 @@ func (r *RouterGroup) Register(rg *httpserver.Group, _ *gorm.DB) {
 		http.StatusUnauthorized, http.StatusInternalServerError,
 	))
 	unlinkContract := httpserver.ResponseContract(
-		nil, http.StatusNoContent,
+		response.Envelope[handlermeidentities.EntryIdentityUnlinkResult]{}, http.StatusAccepted, http.StatusNoContent,
 		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusConflict, http.StatusInternalServerError,
-	).WithParameters(httpserver.PathString("botId"))
+	).WithParameters(httpserver.PathString("botId"), httpserver.RequiredQueryString("operation_id"))
 	rg.RegisterContract(http.MethodDelete, "/me/bot-identities/:botId", unlinkContract)
+	rg.RegisterContract(http.MethodGet, "/me/bot-identities/:botId/unlink-status", httpserver.ResponseContract(
+		response.Envelope[handlermeidentities.EntryIdentityUnlinkResult]{}, http.StatusOK,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError,
+	).WithParameters(httpserver.PathString("botId"), httpserver.RequiredQueryString("operation_id")))
+	rg.RegisterContract(http.MethodPost, "/me/entry-identity-links/preview", httpserver.JSONContract(
+		handlermeidentities.EntryIdentityChallengeRequest{},
+		response.Envelope[handlermeidentities.EntryIdentityChallengeView]{}, http.StatusOK,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusGone, http.StatusConflict, http.StatusInternalServerError,
+	))
+	rg.RegisterContract(http.MethodPost, "/me/entry-identity-links/approve", httpserver.JSONContract(
+		handlermeidentities.EntryIdentityChallengeRequest{},
+		response.Envelope[handlermeidentities.BotIdentityDTO]{}, http.StatusOK,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusGone, http.StatusConflict, http.StatusInternalServerError,
+	))
+	rg.RegisterContract(http.MethodPost, "/me/entry-identity-links/cancel", httpserver.JSONContract(
+		handlermeidentities.EntryIdentityChallengeRequest{}, nil, http.StatusNoContent,
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusGone, http.StatusConflict, http.StatusInternalServerError,
+	))
 	registerRoutes(r, rg)
 }
 
@@ -54,5 +63,12 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 	{
 		identities.GET("", h.List)
 		identities.DELETE("/:botId", h.Unlink)
+		identities.GET("/:botId/unlink-status", h.UnlinkStatus)
+	}
+	links := rg.Group("/me/entry-identity-links")
+	{
+		links.POST("/preview", h.PreviewLink)
+		links.POST("/approve", h.ApproveLink)
+		links.POST("/cancel", h.CancelLink)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,9 +169,11 @@ type pythonTracerInput struct {
 	ExpectedAudience  string
 	ExpectedActions   string
 	ExternalUserID    string
+	EntrySubject      string
+	EntryAction       string
 }
 
-func runPythonTLSRouteTracer(t *testing.T, input pythonTracerInput) {
+func runPythonTLSRouteTracer(t *testing.T, input pythonTracerInput) string {
 	t.Helper()
 	sdkDirectory, err := filepath.Abs(filepath.Join("..", "..", "..", "sdks", "python"))
 	require.NoError(t, err)
@@ -189,9 +192,12 @@ func runPythonTLSRouteTracer(t *testing.T, input pythonTracerInput) {
 		"PAI_TRACER_EXPECTED_AUDIENCE="+input.ExpectedAudience,
 		"PAI_TRACER_EXPECTED_ACTIONS="+input.ExpectedActions,
 		"PAI_TRACER_EXTERNAL_USER_ID="+input.ExternalUserID,
+		"PAI_TRACER_ENTRY_SUBJECT="+input.EntrySubject,
+		"PAI_TRACER_ENTRY_ACTION="+input.EntryAction,
 	)
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, "Python SDK TLS tracer failed:\n%s", output)
+	return strings.TrimSpace(string(output))
 }
 
 const pythonTLSRouteTracer = `
@@ -199,6 +205,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from paigram_account_sdk import CredentialStatus, PaiGramAccountClient
 
@@ -214,6 +221,19 @@ async def main():
         client_id=os.environ["PAI_TRACER_CLIENT_ID"],
         client_secret=os.environ["PAI_TRACER_CLIENT_SECRET"],
     ) as client:
+        entry_subject = os.environ.get("PAI_TRACER_ENTRY_SUBJECT", "")
+        if entry_subject:
+            if os.environ.get("PAI_TRACER_ENTRY_ACTION") == "resolve":
+                resolved = await client.resolve_user(entry_subject)
+                assert resolved.external_user_id == entry_subject
+                print(json.dumps({"resolved_bot_id": resolved.bot_id}))
+                return
+            link = await client.start_entry_identity_link(entry_subject)
+            assert link.approval_url.startswith("https://account.example.test/entry-identity-link#challenge=")
+            assert link.masked_subject != entry_subject
+            challenge = parse_qs(urlparse(link.approval_url).fragment)["challenge"][0]
+            print(json.dumps({"challenge": challenge}))
+            return
         descriptor = await client.describe_platform("platform-mihomo-service")
         assert descriptor.platform_key == "mihomo"
         assert descriptor.service_audience == os.environ["PAI_TRACER_EXPECTED_AUDIENCE"]

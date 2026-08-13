@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -17,6 +18,7 @@ import (
 // is purely an identity anchor for platform-user binding.
 type Bot struct {
 	ID          string         `gorm:"primaryKey;size:64"            json:"id"`
+	EntryIssuer string         `gorm:"size:191;not null;uniqueIndex:uk_bots_entry_issuer" json:"entry_issuer"`
 	DisplayName string         `gorm:"column:display_name;size:255;not null" json:"display_name"`
 	Description string         `gorm:"type:text"                     json:"description"`
 	Type        string         `gorm:"size:32;not null;default:'OTHER'" json:"type"`
@@ -25,6 +27,17 @@ type Bot struct {
 	CreatedAt   time.Time      `                                     json:"created_at"`
 	UpdatedAt   time.Time      `                                     json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index"                         json:"-"`
+}
+
+func (bot *Bot) BeforeCreate(_ *gorm.DB) error {
+	if strings.TrimSpace(bot.EntryIssuer) == "" {
+		bot.EntryIssuer = DefaultEntryIssuer(bot.ID)
+	}
+	return nil
+}
+
+func DefaultEntryIssuer(botID string) string {
+	return "urn:paigram:entry:" + strings.TrimSpace(botID)
 }
 
 // TableName pins the GORM table name to the migration's `bots`.

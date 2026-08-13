@@ -32,6 +32,35 @@ func TestCreateRegistersMissingLogicalBot(t *testing.T) {
 	assert.Equal(t, "SERVICE", bot.Type)
 	assert.Equal(t, "ACTIVE", bot.Status)
 	assert.Equal(t, uint64(42), bot.OwnerUserID)
+	assert.Equal(t, "urn:paigram:entry:paigram", bot.EntryIssuer)
+}
+
+func TestCreateRegistersAndEnforcesConfiguredEntryIssuer(t *testing.T) {
+	db := setupCredentialsTestDB(t)
+	service := NewService(db)
+	first, err := service.Create(CreateInput{
+		ClientID: "telegram-service", BotID: "paigram", EntryIssuer: "urn:paigram:entry:telegram",
+		DisplayName: "Telegram", OwnerUserID: 42,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "urn:paigram:entry:telegram", first.View.EntryIssuer)
+
+	second, err := service.Create(CreateInput{
+		ClientID: "telegram-worker", BotID: "paigram", DisplayName: "Worker", OwnerUserID: 42,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "urn:paigram:entry:telegram", second.View.EntryIssuer)
+
+	_, err = service.Create(CreateInput{
+		ClientID: "discord-service", BotID: "paigram", EntryIssuer: "urn:paigram:entry:discord",
+		DisplayName: "Discord", OwnerUserID: 42,
+	})
+	assert.ErrorIs(t, err, ErrBotIssuerConflict)
+	_, err = service.Create(CreateInput{
+		ClientID: "invalid-service", BotID: "invalid", EntryIssuer: "relative/issuer",
+		DisplayName: "Invalid", OwnerUserID: 42,
+	})
+	assert.ErrorIs(t, err, ErrInvalidEntryIssuer)
 }
 
 func TestCreateReturnsConflictForDuplicateClientID(t *testing.T) {

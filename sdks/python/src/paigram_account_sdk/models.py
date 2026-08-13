@@ -13,6 +13,16 @@ class BotUser:
     external_username: str
 
 
+@dataclass(frozen=True, slots=True)
+class EntryIdentityLink:
+    approval_url: str
+    issuer: str
+    masked_subject: str
+    bot_id: str
+    bot_display_name: str
+    expires_at: datetime | None
+
+
 class PlatformAccountStatus(Enum):
     UNSPECIFIED = "unspecified"
     ACTIVE = "active"

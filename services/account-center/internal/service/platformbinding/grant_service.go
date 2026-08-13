@@ -126,10 +126,10 @@ func (s *GrantService) UpsertGrant(input UpsertGrantInput) (*model.ConsumerGrant
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		if err := s.invalidateGrant(ctx, binding, input.Consumer, input.GrantedBy, minimumGrantVersion); err != nil {
+		if err := s.invalidateGrant(ctx, binding, input.Consumer, input.GrantedBy, minimumGrantVersion, grant.PendingEntryEpoch); err != nil {
 			return nil, false, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
-		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, grantedAt); err != nil {
+		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, grant.PendingEntryEpoch, grantedAt); err != nil {
 			return nil, false, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
 	}
@@ -275,10 +275,10 @@ func (s *GrantService) RevokeGrant(input RevokeGrantInput) (*model.ConsumerGrant
 		return nil, err
 	}
 	if shouldInvalidate {
-		if err := s.invalidateGrant(ctx, binding, input.Consumer, input.ActorUserID, minimumGrantVersion); err != nil {
+		if err := s.invalidateGrant(ctx, binding, input.Consumer, input.ActorUserID, minimumGrantVersion, grant.PendingEntryEpoch); err != nil {
 			return nil, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
-		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, revokedAt); err != nil {
+		if err := s.completeGrantInvalidation(&grant, minimumGrantVersion, grant.PendingEntryEpoch, revokedAt); err != nil {
 			return nil, newGrantPropagationPendingError(binding.ID, input.Consumer, minimumGrantVersion, err)
 		}
 	}
@@ -350,10 +350,11 @@ func (s *GrantService) ReconcileGrantInvalidation(ctx context.Context, grantID u
 	if minimumVersion == 0 {
 		minimumVersion = 1
 	}
-	if err := s.invalidateGrant(ctx, binding, grant.Consumer, grant.GrantedBy, minimumVersion); err != nil {
+	minimumEntryEpoch := grant.PendingEntryEpoch
+	if err := s.invalidateGrant(ctx, binding, grant.Consumer, grant.GrantedBy, minimumVersion, minimumEntryEpoch); err != nil {
 		return newGrantPropagationPendingError(binding.ID, grant.Consumer, minimumVersion, err)
 	}
-	if err := s.completeGrantInvalidation(&grant, minimumVersion, time.Now().UTC()); err != nil {
+	if err := s.completeGrantInvalidation(&grant, minimumVersion, minimumEntryEpoch, time.Now().UTC()); err != nil {
 		return newGrantPropagationPendingError(binding.ID, grant.Consumer, minimumVersion, err)
 	}
 	return nil
@@ -410,7 +411,7 @@ func (s *GrantService) ensureBindingOwnedByUser(ownerUserID, bindingID uint64) e
 	return nil
 }
 
-func (s *GrantService) invalidateGrant(ctx context.Context, binding *model.PlatformAccountBinding, consumer string, actorUserID sql.NullInt64, minimumGrantVersion uint64) error {
+func (s *GrantService) invalidateGrant(ctx context.Context, binding *model.PlatformAccountBinding, consumer string, actorUserID sql.NullInt64, minimumGrantVersion uint64, minimumEntryEpoch ...uint64) error {
 	if s.invalidator == nil {
 		return nil
 	}
@@ -431,6 +432,7 @@ func (s *GrantService) invalidateGrant(ctx context.Context, binding *model.Platf
 		PlatformServiceKey:  binding.PlatformServiceKey,
 		Consumer:            consumer,
 		MinimumGrantVersion: minimumGrantVersion,
+		MinimumEntryEpoch:   firstEpoch(minimumEntryEpoch),
 		ActorType:           actorType,
 		ActorID:             actorID,
 	})
@@ -438,6 +440,13 @@ func (s *GrantService) invalidateGrant(ctx context.Context, binding *model.Platf
 		return err
 	}
 	return nil
+}
+
+func firstEpoch(values []uint64) uint64 {
+	if len(values) == 0 {
+		return 0
+	}
+	return values[0]
 }
 
 func (s *GrantService) validateConsumer(consumer string) error {
