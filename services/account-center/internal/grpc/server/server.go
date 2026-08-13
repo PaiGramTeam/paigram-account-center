@@ -92,10 +92,12 @@ func NewGRPCServerWithTicketSignerAndReadiness(port int, db *gorm.DB, redisClien
 	opts := []grpc.ServerOption{
 		grpc.Creds(grpccredentials.NewTLS(tlsConfig)),
 		grpc.ChainUnaryInterceptor(
+			interceptor.UnaryCorrelationInterceptor(),
 			observability.UnaryServerInterceptor(),
 			authInterceptor.Unary(),
 		),
 		grpc.ChainStreamInterceptor(
+			interceptor.StreamCorrelationInterceptor(),
 			observability.StreamServerInterceptor(),
 			authInterceptor.Stream(),
 		),

@@ -9,15 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/correlation"
 	grpcmetadata "google.golang.org/grpc/metadata"
 	"gorm.io/gorm"
 
 	"paigram/internal/model"
 )
-
-type contextKey string
-
-const requestIDContextKey contextKey = "audit_request_id"
 
 // WriteInput describes one canonical unified audit event.
 type WriteInput struct {
@@ -31,7 +28,6 @@ type WriteInput struct {
 	OwnerUserID *uint64
 	Result      string
 	ReasonCode  string
-	RequestID   string
 	IP          string
 	UserAgent   string
 	Metadata    map[string]any
@@ -173,10 +169,7 @@ func buildAuditEventView(row model.AuditEvent) AuditEventView {
 }
 
 func buildAuditEventRow(ctx context.Context, input WriteInput) (model.AuditEvent, error) {
-	requestID := strings.TrimSpace(input.RequestID)
-	if requestID == "" {
-		requestID = requestIDFromContext(ctx)
-	}
+	requestID := requestIDFromContext(ctx)
 	metadataJSON, err := buildMetadataJSON(input, requestID)
 	if err != nil {
 		return model.AuditEvent{}, err
@@ -243,22 +236,21 @@ func buildMetadataJSON(input WriteInput, requestID string) (string, error) {
 }
 
 func requestIDFromContext(ctx context.Context) string {
+	if requestID := correlation.FromContext(ctx).RequestID; requestID != "" {
+		return requestID
+	}
 	if ctx == nil {
-		return generatedRequestID()
+		ctx = context.Background()
 	}
-	if value, ok := ctx.Value(requestIDContextKey).(string); ok && strings.TrimSpace(value) != "" {
-		return strings.TrimSpace(value)
-	}
+	requestID := ""
 	if md, ok := grpcmetadata.FromIncomingContext(ctx); ok {
-		if values := md.Get("x-request-id"); len(values) > 0 && strings.TrimSpace(values[0]) != "" {
-			return strings.TrimSpace(values[0])
+		if values := md.Get(correlation.RequestIDHeader); len(values) == 1 {
+			requestID = values[0]
+		} else if len(values) > 1 {
+			requestID = "\x00"
 		}
 	}
-	return generatedRequestID()
-}
-
-func generatedRequestID() string {
-	return fmt.Sprintf("audit-%d", time.Now().UTC().UnixNano())
+	return correlation.FromContext(correlation.Ensure(ctx, correlation.Fields{RequestID: requestID})).RequestID
 }
 
 func nullUint64(value uint64) sql.NullInt64 {

@@ -10,7 +10,6 @@ import (
 
 	pb "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
 	"google.golang.org/grpc/codes"
-	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
@@ -350,18 +349,8 @@ func (s *BotAccessService) recordTicketAudit(ctx context.Context, bot *Bot, bind
 		OwnerUserID: ownerUserID,
 		Result:      result,
 		ReasonCode:  reasonCode,
-		RequestID:   requestIDFromGRPCContext(ctx),
 		Metadata:    writeMetadata,
 	})
-}
-
-func requestIDFromGRPCContext(ctx context.Context) string {
-	if md, ok := grpcmetadata.FromIncomingContext(ctx); ok {
-		if values := md.Get("x-request-id"); len(values) > 0 {
-			return values[0]
-		}
-	}
-	return ""
 }
 
 func reasonCodeFromBotAccessErr(err error) string {

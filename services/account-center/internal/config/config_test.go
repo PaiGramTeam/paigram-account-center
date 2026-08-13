@@ -30,6 +30,15 @@ func TestSetDefaultsIncludesSentry(t *testing.T) {
 	require.False(t, v.GetBool("auth.session_cookie_secure"))
 }
 
+func TestSetDefaultsExposesCorrelationHeaders(t *testing.T) {
+	v := viper.New()
+	setDefaults(v)
+
+	require.Contains(t, v.GetStringSlice("app.cors.allow_headers"), "X-Request-ID")
+	require.Contains(t, v.GetStringSlice("app.cors.allow_headers"), "traceparent")
+	require.Equal(t, []string{"X-Request-ID", "traceparent"}, v.GetStringSlice("app.cors.expose_headers"))
+}
+
 func TestTrustedProxiesCanBeConfiguredFromEnvironment(t *testing.T) {
 	t.Setenv("PAI_APP_TRUSTED_PROXIES", "10.77.20.10")
 	v := viper.New()

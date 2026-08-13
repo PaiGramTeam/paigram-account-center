@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/correlation"
 	sentry "github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
@@ -128,6 +129,7 @@ func GinScopeMiddleware() gin.HandlerFunc {
 		hub := sentrygin.GetHubFromContext(c)
 		if hub != nil {
 			hub.Scope().SetTag("component", "http")
+			applyCorrelationScope(hub.Scope(), c.Request.Context())
 			if clientIP := strings.TrimSpace(c.ClientIP()); clientIP != "" {
 				hub.Scope().SetTag("client_ip", clientIP)
 			}
@@ -234,13 +236,30 @@ func beforeSend(event *sentry.Event, _ *sentry.EventHint) *sentry.Event {
 	}
 
 	if event.Request.Headers != nil {
-		delete(event.Request.Headers, "Authorization")
-		delete(event.Request.Headers, "Cookie")
-		delete(event.Request.Headers, "X-Api-Key")
+		for header := range event.Request.Headers {
+			if strings.EqualFold(header, "Authorization") || strings.EqualFold(header, "Cookie") || strings.EqualFold(header, "X-Api-Key") {
+				delete(event.Request.Headers, header)
+			}
+		}
 	}
+	event.Request.URL = requestURLWithoutQuery(event.Request.URL)
+	event.Request.Data = ""
+	event.Request.QueryString = ""
 	event.Request.Cookies = ""
 
 	return event
+}
+
+func requestURLWithoutQuery(rawURL string) string {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	parsedURL.RawQuery = ""
+	parsedURL.ForceQuery = false
+	parsedURL.Fragment = ""
+	parsedURL.RawFragment = ""
+	return parsedURL.String()
 }
 
 func shouldIgnoreRequestURL(rawURL string) bool {
@@ -277,18 +296,33 @@ func shouldCaptureGRPCStatus(code codes.Code) bool {
 func applyGRPCScope(scope *sentry.Scope, ctx context.Context, fullMethod string) {
 	scope.SetTag("component", "grpc")
 	scope.SetTag("grpc.method", fullMethod)
+	applyCorrelationScope(scope, ctx)
 
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if userAgent := firstMetadataValue(md, "user-agent"); userAgent != "" {
 			scope.SetExtra("grpc.user_agent", userAgent)
 		}
-		if requestID := firstMetadataValue(md, "x-request-id"); requestID != "" {
-			scope.SetTag("request_id", requestID)
-		}
 	}
 
 	if peerInfo, ok := peer.FromContext(ctx); ok && peerInfo.Addr != nil {
 		scope.SetTag("peer.address", peerInfo.Addr.String())
+	}
+}
+
+func applyCorrelationScope(scope *sentry.Scope, ctx context.Context) {
+	fields := correlation.FromContext(ctx)
+	values := map[string]interface{}{}
+	if fields.RequestID != "" {
+		values["request_id"] = fields.RequestID
+	}
+	if fields.TraceID != "" {
+		values["trace_id"] = fields.TraceID
+	}
+	if fields.OperationID != "" {
+		values["operation_id"] = fields.OperationID
+	}
+	if len(values) > 0 {
+		scope.SetContext("correlation", values)
 	}
 }
 

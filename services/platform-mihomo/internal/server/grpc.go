@@ -3,18 +3,19 @@ package server
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"time"
 
 	mihomov2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/mihomo/v2"
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/servicehealth"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
-	"github.com/go-kratos/kratos/v2/middleware/recovery"
 	kratosgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
 	"google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"platform-mihomo-service/internal/conf"
+	"platform-mihomo-service/internal/observability"
 	"platform-mihomo-service/internal/service"
 )
 
@@ -57,7 +58,12 @@ func NewGRPCServersWithReadiness(
 		kratosgrpc.Address(controlConf.GetAddr()),
 		kratosgrpc.Timeout(time.Duration(controlConf.GetTimeoutSeconds())*time.Second),
 		kratosgrpc.TLSConfig(controlTLS),
-		kratosgrpc.Middleware(recovery.Recovery(), controlSvc.ServiceTicketMiddleware()),
+		kratosgrpc.Middleware(
+			observability.CorrelationMiddleware(),
+			observability.RequestLoggingMiddleware(slog.Default()),
+			observability.SanitizedRecoveryMiddleware(slog.Default()),
+			controlSvc.ServiceTicketMiddleware(),
+		),
 	)
 	healthCoordinator := newGRPCHealthCoordinator(readiness, defaultHealthRefreshInterval)
 	_ = healthCoordinator.Refresh(context.Background())
@@ -70,7 +76,12 @@ func NewGRPCServersWithReadiness(
 		kratosgrpc.Address(runtimeConf.GetAddr()),
 		kratosgrpc.Timeout(time.Duration(runtimeConf.GetTimeoutSeconds())*time.Second),
 		kratosgrpc.TLSConfig(runtimeTLS),
-		kratosgrpc.Middleware(recovery.Recovery(), controlSvc.ServiceTicketMiddleware()),
+		kratosgrpc.Middleware(
+			observability.CorrelationMiddleware(),
+			observability.RequestLoggingMiddleware(slog.Default()),
+			observability.SanitizedRecoveryMiddleware(slog.Default()),
+			controlSvc.ServiceTicketMiddleware(),
+		),
 	)
 	registerHealthServer(runtimeServer, healthCoordinator.Server())
 	mihomov2.RegisterMihomoRuntimeServiceServer(runtimeServer, runtimeSvc)

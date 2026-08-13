@@ -53,7 +53,7 @@ func (g *GRPCGenericCredentialGateway) ResolveCredentialOperation(ctx context.Co
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, reference.OperationID)
 	defer cancel()
 	response, err := platformv2.NewPlatformControlServiceClient(conn).ResolveOperation(callCtx, &platformv2.ResolveOperationRequest{Operation: operation})
 	if err != nil {
@@ -103,7 +103,7 @@ func (g *GRPCGenericCredentialGateway) GetCredentialBindingState(ctx context.Con
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, "")
 	defer cancel()
 	response, err := platformv2.NewPlatformControlServiceClient(conn).GetBindingState(callCtx, &platformv2.GetBindingStateRequest{BindingRef: bindingRef})
 	if err != nil {

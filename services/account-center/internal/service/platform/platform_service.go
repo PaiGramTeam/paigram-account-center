@@ -9,6 +9,7 @@ import (
 	"time"
 
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/correlation"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/platformaction"
 
@@ -313,6 +314,7 @@ func (s *PlatformService) InvalidateConsumerGrant(ctx context.Context, input pla
 
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	callCtx = correlation.WithOperationID(callCtx, operationID)
 	callCtx = clientauth.WithServiceTicket(callCtx, signed)
 
 	resp, err := platformv2.NewPlatformControlServiceClient(conn).ApplyAuthorizationFence(callCtx, &platformv2.ApplyAuthorizationFenceRequest{

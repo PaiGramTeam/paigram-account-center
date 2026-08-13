@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/correlation"
 	"github.com/stretchr/testify/require"
 
 	"paigram/internal/model"
@@ -46,7 +47,8 @@ func TestRecordStoresCanonicalAuditMetadata(t *testing.T) {
 	actorUserID := uint64(12)
 	ownerUserID := uint64(34)
 	bindingID := uint64(56)
-	require.NoError(t, Record(context.Background(), db, WriteInput{
+	ctx := correlation.Ensure(context.Background(), correlation.Fields{RequestID: "req-audit-1"})
+	require.NoError(t, Record(ctx, db, WriteInput{
 		Category:    "platform_binding",
 		ActorType:   "user",
 		ActorUserID: &actorUserID,
@@ -57,7 +59,6 @@ func TestRecordStoresCanonicalAuditMetadata(t *testing.T) {
 		OwnerUserID: &ownerUserID,
 		Result:      "failure",
 		ReasonCode:  "upstream_unavailable",
-		RequestID:   "req-audit-1",
 		Metadata: map[string]any{
 			"platform": "mihomo",
 		},

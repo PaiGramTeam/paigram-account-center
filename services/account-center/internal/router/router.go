@@ -17,6 +17,7 @@ import (
 	authhandler "paigram/internal/handler/auth"
 	"paigram/internal/healthcheck"
 	"paigram/internal/httpserver"
+	"paigram/internal/logging"
 	"paigram/internal/middleware"
 	"paigram/internal/observability"
 	"paigram/internal/platformtransport"
@@ -70,13 +71,14 @@ func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncac
 	gin.SetMode(appCfg.Mode)
 
 	engine := gin.New()
+	engine.Use(middleware.Correlation())
 	if sentryMiddleware := observability.GinMiddleware(cfg.Sentry); sentryMiddleware != nil {
 		engine.Use(sentryMiddleware)
 	}
 	if scopeMiddleware := observability.GinScopeMiddleware(); scopeMiddleware != nil {
 		engine.Use(scopeMiddleware)
 	}
-	engine.Use(gin.Recovery(), gin.Logger())
+	engine.Use(middleware.RequestLogger(logging.Logger()), gin.Recovery())
 
 	// V10: emit baseline security response headers BEFORE CORS so they
 	// are present even on CORS-rejected and error responses.

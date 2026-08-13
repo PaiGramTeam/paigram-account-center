@@ -23,6 +23,7 @@ import (
 	"gorm.io/gorm"
 
 	pb "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/account/v1"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/correlation"
 	contractticket "github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/serviceticket"
 	"paigram/internal/grpc/interceptor"
 	grpcservice "paigram/internal/grpc/service"
@@ -113,7 +114,11 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 
 	accessToken := seedServiceCredentialAndIssueToken(t, db, signingKey, bot.ID, []string{"bot.access.read", "bot.access.issue_ticket"})
 
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+accessToken))
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
+		"authorization", "Bearer "+accessToken,
+		correlation.RequestIDHeader, "attacker-first",
+		correlation.RequestIDHeader, "attacker-second",
+	))
 	accessClient := pb.NewBotAccessServiceClient(conn)
 
 	resolved, err := accessClient.ResolveBotUser(ctx, &pb.ResolveBotUserRequest{ExternalUserId: "tg-123"})
@@ -180,6 +185,8 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 	assert.Equal(t, "success", event.Result)
 	assert.Equal(t, "binding", event.TargetType)
 	assert.Equal(t, ref.BindingRef, event.TargetID)
+	assert.Regexp(t, `^[0-9a-f]{32}$`, event.RequestID)
+	assert.NotEqual(t, "attacker-first", event.RequestID)
 }
 
 func TestBotAccessServiceRejectsRequestedActionOutsideGrantedSet(t *testing.T) {
@@ -473,7 +480,10 @@ func newBotAccessBufconnClient(t *testing.T, db *gorm.DB, signingKey []byte, tic
 	require.NoError(t, err)
 
 	listener := bufconn.Listen(1024 * 1024)
-	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(interceptor.NewAuthInterceptor(tokenSvc).Unary()))
+	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		interceptor.UnaryCorrelationInterceptor(),
+		interceptor.NewAuthInterceptor(tokenSvc).Unary(),
+	))
 
 	authConfig, ticketPublicKey := testutil.NewAuthConfig(t)
 	if len(ticketPublicKeyOutput) > 0 && ticketPublicKeyOutput[0] != nil {

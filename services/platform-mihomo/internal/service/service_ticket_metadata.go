@@ -14,6 +14,7 @@ import (
 
 	"platform-mihomo-service/internal/biz"
 	"platform-mihomo-service/internal/data"
+	"platform-mihomo-service/internal/observability"
 )
 
 var controlServiceOperationPrefix = "/" + platformv2.PlatformControlService_ServiceDesc.ServiceName + "/"
@@ -33,9 +34,17 @@ func (s *PlatformControlService) ServiceTicketMiddleware() middleware.Middleware
 			if err != nil {
 				return nil, err
 			}
-			return next(context.WithValue(ctx, verifiedServiceTicketClaimsKey{}, claims), req)
+			return next(contextWithVerifiedServiceTicketClaims(ctx, claims), req)
 		}
 	}
+}
+
+func contextWithVerifiedServiceTicketClaims(ctx context.Context, claims *biz.ServiceTicketClaims) context.Context {
+	ctx = context.WithValue(ctx, verifiedServiceTicketClaimsKey{}, claims)
+	if claims == nil {
+		return observability.WithVerifiedOperation(ctx, "")
+	}
+	return observability.WithVerifiedOperation(ctx, claims.OperationID)
 }
 
 func isProtectedPlatformOperation(operation string) bool {

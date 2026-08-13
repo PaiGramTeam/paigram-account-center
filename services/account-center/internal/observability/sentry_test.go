@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	sentry "github.com/getsentry/sentry-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 
@@ -18,6 +19,34 @@ func TestShouldIgnoreRequestURL(t *testing.T) {
 	require.True(t, shouldIgnoreRequestURL("https://example.com/readyz"))
 	require.False(t, shouldIgnoreRequestURL("https://example.com/api/v1/users"))
 	require.False(t, shouldIgnoreRequestURL("://bad-url"))
+}
+
+func TestBeforeSendRemovesRequestSecrets(t *testing.T) {
+	event := sentry.NewEvent()
+	event.Request = &sentry.Request{
+		URL:         "https://example.com/oauth/callback?code=secret-code&state=secret-state",
+		Data:        `{"credential":"secret-body"}`,
+		QueryString: "code=secret-code&state=secret-state",
+		Cookies:     "refresh_token=secret-cookie",
+		Headers: map[string]string{
+			"Authorization": "Bearer secret-ticket",
+			"Cookie":        "refresh_token=secret-cookie",
+			"X-Api-Key":     "secret-key",
+			"Content-Type":  "application/json",
+		},
+	}
+
+	filtered := beforeSend(event, nil)
+
+	require.NotNil(t, filtered)
+	require.Equal(t, "https://example.com/oauth/callback", filtered.Request.URL)
+	require.Empty(t, filtered.Request.Data)
+	require.Empty(t, filtered.Request.QueryString)
+	require.Empty(t, filtered.Request.Cookies)
+	require.NotContains(t, filtered.Request.Headers, "Authorization")
+	require.NotContains(t, filtered.Request.Headers, "Cookie")
+	require.NotContains(t, filtered.Request.Headers, "X-Api-Key")
+	require.Equal(t, "application/json", filtered.Request.Headers["Content-Type"])
 }
 
 func TestFlushTimeout(t *testing.T) {

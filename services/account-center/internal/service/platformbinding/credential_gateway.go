@@ -7,6 +7,7 @@ import (
 	"time"
 
 	platformv2 "github.com/PaiGramTeam/paigram-account-center/contracts/gen/go/platform/v2"
+	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/correlation"
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/operationid"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
@@ -43,7 +44,7 @@ func (g *GRPCGenericCredentialGateway) BindCredential(ctx context.Context, endpo
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, operationID)
 	defer cancel()
 	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_BIND_CREDENTIAL, operationID)
 	resp, err := platformv2.NewPlatformControlServiceClient(conn).BindCredential(callCtx, &platformv2.BindCredentialRequest{
@@ -63,7 +64,7 @@ func (g *GRPCGenericCredentialGateway) ReplaceCredential(ctx context.Context, en
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, operationID)
 	defer cancel()
 	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_REPLACE_CREDENTIAL, operationID)
 	resp, err := platformv2.NewPlatformControlServiceClient(conn).ReplaceCredential(callCtx, &platformv2.ReplaceCredentialRequest{
@@ -84,7 +85,7 @@ func (g *GRPCGenericCredentialGateway) RefreshCredential(ctx context.Context, en
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, operationID)
 	defer cancel()
 	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_REFRESH_CREDENTIAL, operationID)
 	resp, err := platformv2.NewPlatformControlServiceClient(conn).RefreshCredential(callCtx, &platformv2.RefreshCredentialRequest{
@@ -108,7 +109,7 @@ func (g *GRPCGenericCredentialGateway) DeleteCredential(ctx context.Context, end
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, operationID)
 	defer cancel()
 	operation := newOperationRef(binding, platformv2.OperationKind_OPERATION_KIND_DELETE_CREDENTIAL, operationID)
 	resp, err := platformv2.NewPlatformControlServiceClient(conn).DeleteCredential(callCtx, &platformv2.DeleteCredentialRequest{
@@ -128,7 +129,7 @@ func (g *GRPCGenericCredentialGateway) SetPrimaryProfile(ctx context.Context, en
 	}
 	defer conn.Close()
 
-	callCtx, cancel := credentialGatewayCallContext(ctx, ticket)
+	callCtx, cancel := credentialGatewayCallContext(ctx, ticket, operationID)
 	defer cancel()
 	operation := newPrimaryProfileOperationRef(binding, operationID, profileRef)
 	resp, err := platformv2.NewPlatformControlServiceClient(conn).SetPrimaryProfile(callCtx, &platformv2.SetPrimaryProfileRequest{
@@ -177,8 +178,9 @@ func newPrimaryProfileOperationRef(binding *model.PlatformAccountBinding, operat
 	}
 }
 
-func credentialGatewayCallContext(ctx context.Context, ticket string) (context.Context, context.CancelFunc) {
+func credentialGatewayCallContext(ctx context.Context, ticket, operationID string) (context.Context, context.CancelFunc) {
 	callCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	callCtx = correlation.WithOperationID(callCtx, operationID)
 	return clientauth.WithServiceTicket(callCtx, ticket), cancel
 }
 

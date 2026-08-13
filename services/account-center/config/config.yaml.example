@@ -25,7 +25,11 @@ app:
       - "Content-Type"
       - "Accept"
       - "Authorization"
-    expose_headers: []
+      - "X-Request-ID"
+      - "traceparent"
+    expose_headers:
+      - "X-Request-ID"
+      - "traceparent"
     allow_credentials: true
     allow_wildcard: false
     allow_private_network: false

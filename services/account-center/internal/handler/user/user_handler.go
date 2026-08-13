@@ -1428,7 +1428,6 @@ func (h *Handler) recordAdminUserAudit(c *gin.Context, input serviceaudit.WriteI
 	if h.db == nil {
 		return
 	}
-	input.RequestID = c.GetHeader("X-Request-ID")
 	input.IP = c.ClientIP()
 	input.UserAgent = c.Request.UserAgent()
 	_ = serviceaudit.Record(c.Request.Context(), h.db, input)

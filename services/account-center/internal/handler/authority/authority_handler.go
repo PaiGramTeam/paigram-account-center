@@ -310,7 +310,6 @@ func (h *AuthorityHandler) recordAudit(c *gin.Context, input serviceaudit.WriteI
 	if h == nil || h.service == nil || h.service.DB() == nil {
 		return
 	}
-	input.RequestID = c.GetHeader("X-Request-ID")
 	input.IP = c.ClientIP()
 	input.UserAgent = c.Request.UserAgent()
 	_ = serviceaudit.Record(c.Request.Context(), h.service.DB(), input)
