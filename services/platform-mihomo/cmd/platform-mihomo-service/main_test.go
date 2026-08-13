@@ -119,6 +119,7 @@ func TestSecretFilePathsResolveFromPrefixedEnvironment(t *testing.T) {
 		"PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE":         "/run/secrets/platform-runtime-cert",
 		"PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE":         "/run/secrets/platform-runtime-key",
 		"PAI_UPSTREAM_BEARER_TOKEN_FILE":                  "/run/secrets/upstream-token",
+		"PAI_UPSTREAM_ROOT_CA_FILE":                       "/run/secrets/upstream-ca",
 	}
 	for name, value := range values {
 		t.Setenv(name, value)
@@ -145,6 +146,7 @@ security:
   service_ticket_public_keyring_file: "${SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE}"
 upstream:
   bearer_token_file: "${UPSTREAM_BEARER_TOKEN_FILE}"
+  root_ca_file: "${UPSTREAM_ROOT_CA_FILE}"
 `
 	require.NoError(t, os.WriteFile(path, []byte(configuration), 0o600))
 
@@ -163,6 +165,7 @@ upstream:
 	require.Equal(t, values["PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE"], bootstrap.GetServer().GetRuntime().GetTls().GetCertificateFile())
 	require.Equal(t, values["PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE"], bootstrap.GetServer().GetRuntime().GetTls().GetPrivateKeyFile())
 	require.Equal(t, values["PAI_UPSTREAM_BEARER_TOKEN_FILE"], bootstrap.GetUpstream().GetBearerTokenFile())
+	require.Equal(t, values["PAI_UPSTREAM_ROOT_CA_FILE"], bootstrap.GetUpstream().GetRootCaFile())
 }
 
 func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {

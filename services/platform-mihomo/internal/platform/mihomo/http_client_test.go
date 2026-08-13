@@ -3,9 +3,12 @@ package mihomo
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -197,4 +200,34 @@ func TestHTTPClientRefreshAcceptsExplicitCompleteEmptyProfiles(t *testing.T) {
 func TestHTTPClientRequiresHTTPSByDefault(t *testing.T) {
 	_, err := NewHTTPClient(HTTPClientConfig{BaseURL: "http://upstream.example", Timeout: time.Second})
 	require.EqualError(t, err, "mihomo upstream base_url must use https")
+}
+
+func TestHTTPClientTrustsConfiguredPrivateRootCA(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"account_id":"10001","region":"cn_gf01","profiles":[]}`))
+	}))
+	defer server.Close()
+
+	certificate := server.Certificate()
+	require.NotNil(t, certificate)
+	require.NoError(t, certificate.CheckSignatureFrom(certificate))
+	rootCAFile := filepath.Join(t.TempDir(), "upstream-ca.pem")
+	require.NoError(t, os.WriteFile(rootCAFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw}), 0o600))
+
+	client, err := NewHTTPClient(HTTPClientConfig{BaseURL: server.URL, Timeout: time.Second, RootCAFile: rootCAFile})
+	require.NoError(t, err)
+	accountID, region, profiles, err := client.ValidateAndDiscover(context.Background(), `{}`, "")
+	require.NoError(t, err)
+	require.Equal(t, "10001", accountID)
+	require.Equal(t, "cn_gf01", region)
+	require.Empty(t, profiles)
+}
+
+func TestHTTPClientRejectsInvalidRootCA(t *testing.T) {
+	rootCAFile := filepath.Join(t.TempDir(), "upstream-ca.pem")
+	require.NoError(t, os.WriteFile(rootCAFile, []byte("not a certificate"), 0o600))
+
+	_, err := NewHTTPClient(HTTPClientConfig{BaseURL: "https://mihomo.example.test", Timeout: time.Second, RootCAFile: rootCAFile})
+	require.EqualError(t, err, "mihomo upstream root CA file does not contain a valid PEM certificate")
 }

@@ -25,7 +25,8 @@ function Get-EnvValue {
 
 $composeEnvironmentKeys = @(
     "PAI_PLATFORM_INSTANCE", "PAI_PLATFORM_NETWORK", "PAI_PLATFORM_IMAGE", "PAI_RUNTIME_BIND",
-    "PAI_RUNTIME_PORT", "PAI_RUNTIME_SERVER_NAME", "PAI_MIHOMO_UPSTREAM_BASE_URL"
+    "PAI_RUNTIME_PORT", "PAI_RUNTIME_SERVER_NAME", "PAI_MIHOMO_UPSTREAM_BASE_URL",
+    "PAI_MIHOMO_UPSTREAM_PRIVATE_CA"
 )
 foreach ($name in $composeEnvironmentKeys) {
     [Environment]::SetEnvironmentVariable($name, (Get-EnvValue -Name $name), "Process")
@@ -52,10 +53,18 @@ if ($LASTEXITCODE -ne 0) {
     if ($LASTEXITCODE -ne 0) { throw "Could not create shared Platform network $network" }
 }
 
-$composeArguments = @("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
+$privateUpstreamCA = (Get-EnvValue -Name "PAI_MIHOMO_UPSTREAM_PRIVATE_CA").Trim().ToLowerInvariant()
+if ($privateUpstreamCA -notin @("", "false", "true")) {
+    throw "PAI_MIHOMO_UPSTREAM_PRIVATE_CA must be true or false"
+}
+$composeArguments = [System.Collections.Generic.List[string]]@("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
+if ($privateUpstreamCA -eq "true") {
+    $composeArguments.Add("-f")
+    $composeArguments.Add("compose.upstream-private-ca.yaml")
+}
 Invoke-ImmutableComposeDeployment `
     -PodmanCompose $podmanCompose `
-    -ComposeArguments $composeArguments `
+    -ComposeArguments $composeArguments.ToArray() `
     -FailureMessage "Platform Mihomo deployment failed"
 
 for ($attempt = 1; $attempt -le 60; $attempt++) {

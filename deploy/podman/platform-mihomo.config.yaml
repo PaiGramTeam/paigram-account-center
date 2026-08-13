@@ -30,6 +30,7 @@ upstream:
   base_url: "${UPSTREAM_BASE_URL}"
   timeout_seconds: 10
   bearer_token_file: "${UPSTREAM_BEARER_TOKEN_FILE}"
+  root_ca_file: "${UPSTREAM_ROOT_CA_FILE}"
   allow_insecure_http: false
 metrics:
   addr: "${METRICS_ADDR}"

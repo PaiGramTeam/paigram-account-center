@@ -1,0 +1,9 @@
+services:
+  platform-mihomo:
+    environment:
+      PAI_UPSTREAM_ROOT_CA_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-ca"
+    secrets:
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-ca"
+
+secrets:
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-ca": {external: true}

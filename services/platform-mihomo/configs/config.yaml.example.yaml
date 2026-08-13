@@ -31,6 +31,7 @@ upstream:
   base_url: "https://mihomo-upstream.internal"
   timeout_seconds: 10
   bearer_token_file: "/run/secrets/mihomo_upstream_token"
+  root_ca_file: "/run/secrets/mihomo_upstream_ca.pem"
   allow_insecure_http: false
 metrics:
   addr: "0.0.0.0:9090"

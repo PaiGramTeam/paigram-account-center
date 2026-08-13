@@ -197,6 +197,7 @@ func newMihomoUpstreamClient(upstream *conf.Upstream) (*platformmihomo.HTTPClien
 		BaseURL:           upstream.GetBaseUrl(),
 		Timeout:           time.Duration(upstream.GetTimeoutSeconds()) * time.Second,
 		BearerTokenFile:   upstream.GetBearerTokenFile(),
+		RootCAFile:        upstream.GetRootCaFile(),
 		AllowInsecureHTTP: upstream.GetAllowInsecureHttp(),
 	})
 }

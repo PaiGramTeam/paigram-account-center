@@ -17,6 +17,7 @@ message Upstream {
   int32 timeout_seconds = 2;
   string bearer_token_file = 3;
   bool allow_insecure_http = 4;
+  string root_ca_file = 5;
 }
 
 message Server {

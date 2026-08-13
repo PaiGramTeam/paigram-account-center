@@ -43,8 +43,11 @@ The remaining Platform secrets use these formats and pairings:
 | `<platform-instance>-runtime-cert` / `<platform-instance>-runtime-key` | Matching PEM server certificate and PKCS#8 private key; the server-auth SAN must equal the runtime server name registered with Account Center. |
 | `<platform-instance>-runtime-ca` | PEM CA bundle that validates `<platform-instance>-runtime-cert`; the in-container readiness probe uses it with `PAI_RUNTIME_SERVER_NAME`. |
 | `<platform-instance>-upstream-token` | Raw upstream bearer token with no `Bearer ` prefix. |
+| `<platform-instance>-upstream-ca` | Optional PEM CA bundle that validates an HTTPS Mihomo upstream using a private CA. |
 
 Encode reserved DSN password characters using PostgreSQL URI percent-encoding. Do not copy a percent-encoded DSN password into the raw PostgreSQL password secret.
+
+The default composition validates the upstream with the image's system roots and does not require an upstream CA secret. For an upstream using a private CA, create `<platform-instance>-upstream-ca`, set `PAI_MIHOMO_UPSTREAM_PRIVATE_CA=true` in `.env`, and deploy through `deploy.ps1`. The entry point then adds `compose.upstream-private-ca.yaml`; enabling it without the external secret fails before the service starts. Do not mount a public system root bundle through this override.
 
 Podman injects secrets only when it creates a container. After every `podman secret create --replace`, recreate each consumer with `podman-compose up -d --force-recreate`; restarting an existing container does not load the replacement.
 

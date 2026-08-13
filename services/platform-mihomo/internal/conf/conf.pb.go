@@ -103,6 +103,7 @@ type Upstream struct {
 	TimeoutSeconds    int32                  `protobuf:"varint,2,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	BearerTokenFile   string                 `protobuf:"bytes,3,opt,name=bearer_token_file,json=bearerTokenFile,proto3" json:"bearer_token_file,omitempty"`
 	AllowInsecureHttp bool                   `protobuf:"varint,4,opt,name=allow_insecure_http,json=allowInsecureHttp,proto3" json:"allow_insecure_http,omitempty"`
+	RootCaFile        string                 `protobuf:"bytes,5,opt,name=root_ca_file,json=rootCaFile,proto3" json:"root_ca_file,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -163,6 +164,13 @@ func (x *Upstream) GetAllowInsecureHttp() bool {
 		return x.AllowInsecureHttp
 	}
 	return false
+}
+
+func (x *Upstream) GetRootCaFile() string {
+	if x != nil {
+		return x.RootCaFile
+	}
+	return ""
 }
 
 type Server struct {
@@ -639,12 +647,14 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x04data\x18\x02 \x01(\v2\x1a.platform.mihomo.conf.DataR\x04data\x12:\n" +
 	"\bsecurity\x18\x03 \x01(\v2\x1e.platform.mihomo.conf.SecurityR\bsecurity\x12:\n" +
 	"\bupstream\x18\x04 \x01(\v2\x1e.platform.mihomo.conf.UpstreamR\bupstream\x127\n" +
-	"\ametrics\x18\x05 \x01(\v2\x1d.platform.mihomo.conf.MetricsR\ametrics\"\xaa\x01\n" +
+	"\ametrics\x18\x05 \x01(\v2\x1d.platform.mihomo.conf.MetricsR\ametrics\"\xcc\x01\n" +
 	"\bUpstream\x12\x19\n" +
 	"\bbase_url\x18\x01 \x01(\tR\abaseUrl\x12'\n" +
 	"\x0ftimeout_seconds\x18\x02 \x01(\x05R\x0etimeoutSeconds\x12*\n" +
 	"\x11bearer_token_file\x18\x03 \x01(\tR\x0fbearerTokenFile\x12.\n" +
-	"\x13allow_insecure_http\x18\x04 \x01(\bR\x11allowInsecureHttp\"\x99\x03\n" +
+	"\x13allow_insecure_http\x18\x04 \x01(\bR\x11allowInsecureHttp\x12 \n" +
+	"\froot_ca_file\x18\x05 \x01(\tR\n" +
+	"rootCaFile\"\x99\x03\n" +
 	"\x06Server\x12;\n" +
 	"\acontrol\x18\x01 \x01(\v2!.platform.mihomo.conf.Server.GRPCR\acontrol\x12;\n" +
 	"\aruntime\x18\x02 \x01(\v2!.platform.mihomo.conf.Server.GRPCR\aruntime\x1a\x80\x01\n" +

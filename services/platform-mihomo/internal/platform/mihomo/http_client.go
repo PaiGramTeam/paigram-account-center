@@ -3,6 +3,8 @@ package mihomo
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +23,7 @@ type HTTPClientConfig struct {
 	BaseURL           string
 	Timeout           time.Duration
 	BearerTokenFile   string
+	RootCAFile        string
 	AllowInsecureHTTP bool
 	HTTPClient        *http.Client
 }
@@ -86,9 +89,33 @@ func NewHTTPClient(cfg HTTPClientConfig) (*HTTPClient, error) {
 	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: cfg.Timeout}
+		transport, err := newHTTPTransport(cfg.RootCAFile)
+		if err != nil {
+			return nil, err
+		}
+		httpClient = &http.Client{Timeout: cfg.Timeout, Transport: transport}
 	}
 	return &HTTPClient{baseURL: baseURL, httpClient: httpClient, bearerToken: bearerToken}, nil
+}
+
+func newHTTPTransport(rootCAFile string) (*http.Transport, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if strings.TrimSpace(rootCAFile) == "" {
+		return transport, nil
+	}
+	raw, err := os.ReadFile(rootCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("read mihomo upstream root CA file: %w", err)
+	}
+	roots, err := x509.SystemCertPool()
+	if err != nil || roots == nil {
+		roots = x509.NewCertPool()
+	}
+	if !roots.AppendCertsFromPEM(raw) {
+		return nil, errors.New("mihomo upstream root CA file does not contain a valid PEM certificate")
+	}
+	transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	return transport, nil
 }
 
 func (c *HTTPClient) ValidateAndDiscover(ctx context.Context, cookieBundleJSON string, regionHint string) (string, string, []DiscoveredProfile, error) {
