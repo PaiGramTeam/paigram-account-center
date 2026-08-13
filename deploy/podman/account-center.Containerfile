@@ -22,7 +22,8 @@ COPY contracts/gen/go/ contracts/gen/go/
 COPY contracts/runtime/go/ contracts/runtime/go/
 COPY services/account-center/ services/account-center/
 RUN cd services/account-center \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/paigram ./cmd/paigram
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/paigram ./cmd/paigram \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/recovery-dsn-verify ./cmd/recovery-dsn-verify
 
 FROM metadata
 
@@ -37,6 +38,7 @@ RUN addgroup -S -g 10001 paigram \
     && adduser -S -D -H -u 10001 -G paigram paigram
 
 COPY --from=build /out/paigram /usr/local/bin/paigram
+COPY --from=build /out/recovery-dsn-verify /usr/local/bin/recovery-dsn-verify
 COPY --chown=paigram:paigram services/account-center/initialize/migrate/sql/ /opt/paigram/migrations/
 COPY --chown=paigram:paigram deploy/podman/config.yaml /opt/paigram/config/config.yaml
 

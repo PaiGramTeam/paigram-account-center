@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 
 Set-Location -LiteralPath $PSScriptRoot
 Import-Module (Join-Path $PSScriptRoot "../PodmanCompose.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../DeploymentComposition.psm1") -Force
 if (-not (Test-Path -LiteralPath ".env")) {
     throw "Missing deploy/podman/.env; run ./init-env.ps1 first"
 }
@@ -66,10 +67,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $composeArguments = @("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
-& $podmanCompose @composeArguments up --no-build -d
-if ($LASTEXITCODE -ne 0) {
-    throw "Podman Compose deployment failed"
-}
+Invoke-ImmutableComposeDeployment `
+    -PodmanCompose $podmanCompose `
+    -ComposeArguments $composeArguments `
+    -FailureMessage "Podman Compose deployment failed"
 
 foreach ($container in @("$instance-frontend")) {
     for ($attempt = 1; $attempt -le 60; $attempt++) {

@@ -14,15 +14,20 @@ WORKDIR /src
 COPY go.work go.work.sum ./
 COPY contracts/gen/go/go.mod contracts/gen/go/go.sum contracts/gen/go/
 COPY contracts/runtime/go/go.mod contracts/runtime/go/go.sum contracts/runtime/go/
+COPY services/account-center/go.mod services/account-center/go.sum services/account-center/
 COPY services/platform-mihomo/go.mod services/platform-mihomo/go.sum services/platform-mihomo/
-RUN cd services/platform-mihomo && go mod download
+RUN cd services/platform-mihomo && go mod download \
+    && cd ../account-center && go mod download
 
 COPY contracts/gen/go/ contracts/gen/go/
 COPY contracts/runtime/go/ contracts/runtime/go/
 COPY services/platform-mihomo/ services/platform-mihomo/
+COPY services/account-center/cmd/recovery-dsn-verify/ services/account-center/cmd/recovery-dsn-verify/
 RUN cd services/platform-mihomo \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/platform-mihomo ./cmd/platform-mihomo-service \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/platform-mihomo-healthcheck ./cmd/platform-mihomo-healthcheck
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/platform-mihomo-healthcheck ./cmd/platform-mihomo-healthcheck \
+    && cd ../account-center \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/recovery-dsn-verify ./cmd/recovery-dsn-verify
 
 FROM metadata
 
@@ -38,6 +43,7 @@ RUN addgroup -S -g 10002 platform \
 
 COPY --from=build /out/platform-mihomo /usr/local/bin/platform-mihomo
 COPY --from=build /out/platform-mihomo-healthcheck /usr/local/bin/platform-mihomo-healthcheck
+COPY --from=build /out/recovery-dsn-verify /usr/local/bin/recovery-dsn-verify
 COPY --chown=platform:platform services/platform-mihomo/initialize/migrate/sql/ /opt/platform-mihomo/initialize/migrate/sql/
 COPY --chown=platform:platform deploy/podman/platform-mihomo.config.yaml /opt/platform-mihomo/config/config.yaml
 

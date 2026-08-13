@@ -5,6 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Set-Location -LiteralPath $PSScriptRoot
 Import-Module (Join-Path $PSScriptRoot "../PodmanCompose.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "../DeploymentComposition.psm1") -Force
 
 if (-not (Test-Path -LiteralPath ".env")) {
     throw "Missing deploy/podman-platform-mihomo/.env"
@@ -52,8 +53,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $composeArguments = @("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
-& $podmanCompose @composeArguments up --no-build -d
-if ($LASTEXITCODE -ne 0) { throw "Platform Mihomo deployment failed" }
+Invoke-ImmutableComposeDeployment `
+    -PodmanCompose $podmanCompose `
+    -ComposeArguments $composeArguments `
+    -FailureMessage "Platform Mihomo deployment failed"
 
 for ($attempt = 1; $attempt -le 60; $attempt++) {
     $status = & podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $instance 2>$null
