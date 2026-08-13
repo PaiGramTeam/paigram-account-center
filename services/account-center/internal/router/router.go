@@ -79,6 +79,11 @@ func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncac
 		engine.Use(scopeMiddleware)
 	}
 	engine.Use(middleware.RequestLogger(logging.Logger()), gin.Recovery())
+	engine.GET("/metrics", gin.WrapH(observability.NewMetricsHandler(db, []observability.CertificateTarget{
+		{Identity: "grpc-server", CertificateFile: cfg.GRPC.CertificateFile},
+		{Identity: "platform-control-client", CertificateFile: cfg.PlatformControl.CertificateFile},
+		{Identity: "platform-control-trust", CertificateFile: cfg.PlatformControl.RootCAFile},
+	})))
 
 	// V10: emit baseline security response headers BEFORE CORS so they
 	// are present even on CORS-rejected and error responses.

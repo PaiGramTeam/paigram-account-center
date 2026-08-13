@@ -34,12 +34,11 @@ var (
 	)
 
 	// EmailRateLimitExceeded tracks rate limit violations
-	EmailRateLimitExceeded = promauto.NewCounterVec(
+	EmailRateLimitExceeded = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "email_rate_limit_exceeded_total",
 			Help: "Total number of rate limit violations",
 		},
-		[]string{"recipient"},
 	)
 
 	// EmailRetries tracks retry attempts

@@ -13,6 +13,10 @@ func RequestLogger(logger *zap.Logger) gin.HandlerFunc {
 		logger = zap.NewNop()
 	}
 	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/metrics" {
+			c.Next()
+			return
+		}
 		startedAt := time.Now()
 		c.Next()
 

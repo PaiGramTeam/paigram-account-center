@@ -16,6 +16,7 @@ import (
 
 	"paigram/internal/grpc/interceptor"
 	"paigram/internal/model"
+	"paigram/internal/observability"
 	serviceaudit "paigram/internal/service/audit"
 	"paigram/internal/service/botaccess"
 	"paigram/internal/service/credentials"
@@ -324,6 +325,9 @@ func mapBotAccessError(operation string, err error) error {
 }
 
 func (s *BotAccessService) recordTicketAudit(ctx context.Context, bot *Bot, binding *model.PlatformAccountBinding, req *pb.IssueServiceTicketRequest, action, result, reasonCode string, metadata map[string]any) {
+	if action == "ticket_reject" {
+		observability.RecordTicketRejection(reasonCode)
+	}
 	if s == nil || s.db == nil || bot == nil || req == nil {
 		return
 	}

@@ -1,0 +1,109 @@
+rule_files:
+  - paigram-alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: paigram_reconciliation_outbox_due
+        values: 1x20
+      - series: paigram_reconciliation_outbox_backlog
+        values: 1x20
+      - series: paigram_reconciliation_outbox_oldest_backlog_age_seconds
+        values: 600x20
+      - series: paigram_reconciliation_outbox_dead_letter
+        values: 0x20
+      - series: 'paigram_service_ticket_rejections_total{service="platform-mihomo",surface="runtime"}'
+        values: 0+5x20
+      - series: 'paigram_key_material_expiry_timestamp_seconds{service="account-center",identity="grpc-server"}'
+        values: 86400x20
+      - series: 'paigram_key_material_read_error{service="platform-mihomo",identity="runtime-server"}'
+        values: 1x20
+      - series: 'paigram_platform_upstream_degraded{operation="refresh"}'
+        values: 1x20
+      - series: 'up{job="account-center",instance="account-center:8080"}'
+        values: 0x20
+      - series: 'up{job="platform-mihomo",instance="platform-mihomo:9090"}'
+        values: 1x20
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: PaiGramReconciliationOutboxBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: Account reconciliation is not converging
+              description: Pending reconciliation work has remained stale for more than five minutes, or at least one reconciliation record is in dead-letter state.
+      - eval_time: 20m
+        alertname: PaiGramServiceTicketRejectSpike
+        exp_alerts:
+          - exp_labels:
+              service: platform-mihomo
+              surface: runtime
+              severity: warning
+            exp_annotations:
+              summary: Service-ticket rejections are elevated
+              description: platform-mihomo rejected more than twenty service-ticket operations on runtime during the last ten minutes.
+      - eval_time: 20m
+        alertname: PaiGramKeyMaterialExpiryApproaching
+        exp_alerts:
+          - exp_labels:
+              service: account-center
+              identity: grpc-server
+              severity: warning
+            exp_annotations:
+              summary: Service certificate key material requires rotation or repair
+              description: account-center certificate identity grpc-server is approaching expiry, has expired, or is unreadable and must be rotated or repaired.
+          - exp_labels:
+              service: platform-mihomo
+              identity: runtime-server
+              severity: warning
+            exp_annotations:
+              summary: Service certificate key material requires rotation or repair
+              description: platform-mihomo certificate identity runtime-server is approaching expiry, has expired, or is unreadable and must be rotated or repaired.
+      - eval_time: 20m
+        alertname: PaiGramPlatformUpstreamDegraded
+        exp_alerts:
+          - exp_labels:
+              operation: refresh
+              severity: warning
+            exp_annotations:
+              summary: A Platform upstream capability is degraded
+              description: The most recent refresh capability call failed because the upstream was unavailable, rate-limited, or returned an invalid response.
+      - eval_time: 20m
+        alertname: PaiGramMetricsTargetDown
+        exp_alerts:
+          - exp_labels:
+              job: account-center
+              instance: account-center:8080
+              severity: critical
+            exp_annotations:
+              summary: A PaiGram metrics target is unavailable
+              description: Prometheus cannot scrape the account-center metrics target or the configured target is absent.
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="account-center",instance="account-center:8080"}'
+        values: 1x10
+      - series: 'up{job="platform-mihomo",instance="platform-mihomo:9090"}'
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PaiGramMetricsTargetDown
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'up{job="account-center",instance="account-center:8080"}'
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PaiGramMetricsTargetDown
+        exp_alerts:
+          - exp_labels:
+              job: platform-mihomo
+              severity: critical
+            exp_annotations:
+              summary: A PaiGram metrics target is unavailable
+              description: Prometheus cannot scrape the platform-mihomo metrics target or the configured target is absent.

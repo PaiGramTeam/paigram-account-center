@@ -42,3 +42,17 @@ func TestWriteStateRemovesTemporaryFileWhenPublishFails(t *testing.T) {
 		t.Fatalf("temporary state still exists: %v", statErr)
 	}
 }
+
+func TestWritePlatformConfigIncludesPrivateMetricsListener(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "platform.yaml")
+	if err := writePlatformConfig(path, "postgres://integration", "redis:6379", "http://upstream", fixtureMaterial{}); err != nil {
+		t.Fatalf("writePlatformConfig() error = %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(body), "metrics:\n  addr: \"127.0.0.1:0\"") {
+		t.Fatal("platform config does not define the private metrics listener")
+	}
+}

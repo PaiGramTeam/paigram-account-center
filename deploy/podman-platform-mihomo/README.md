@@ -12,6 +12,8 @@ The control listener is available only as `platform-mihomo:9000` on the shared n
 
 Both listeners expose standard gRPC Health. The empty service name reports readiness and becomes `NOT_SERVING` when PostgreSQL or Redis is unavailable. The `liveness` service remains `SERVING` during dependency outages and changes to `NOT_SERVING` only during process shutdown. The Podman health check intentionally probes readiness.
 
+The private backplane also exposes Prometheus metrics at `platform-mihomo:9090/metrics`; it is not published on the host. See the [monitoring rules and scrape topology](../monitoring/README.md).
+
 ## Secret formats
 
 The shared Platform secret `paigram-account-center-service-ticket-public-keyring` must use the same `kid` and public key as the Account Center signing secret:

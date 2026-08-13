@@ -178,7 +178,7 @@ func (s *Service) SendAsync(ctx context.Context, msg *Message) error {
 	// Check rate limit for each recipient
 	for _, recipient := range msg.To {
 		if !s.rateLimiter.Allow(recipient) {
-			EmailRateLimitExceeded.WithLabelValues(recipient).Inc()
+			EmailRateLimitExceeded.Inc()
 			return fmt.Errorf("rate limit exceeded for recipient: %s", recipient)
 		}
 	}

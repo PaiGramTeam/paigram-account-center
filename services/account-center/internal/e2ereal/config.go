@@ -92,6 +92,8 @@ upstream:
   base_url: %s
   timeout_seconds: 5
   allow_insecure_http: true
+metrics:
+  addr: "127.0.0.1:0"
 `, quote(material.controlTLS.ServerCertFile), quote(material.controlTLS.ServerKeyFile), quote(material.controlTLS.CAFile),
 		quote(material.runtimeTLS.ServerCertFile), quote(material.runtimeTLS.ServerKeyFile), quote(databaseDSN),
 		quote(redisAddress), quote(material.keyringFile), quote(material.publicKeysFile), quote(upstreamURL))

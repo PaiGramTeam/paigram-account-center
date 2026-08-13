@@ -1,0 +1,75 @@
+groups:
+  - name: paigram-reconciliation
+    rules:
+      - alert: PaiGramReconciliationOutboxBacklog
+        expr: >-
+          (paigram_reconciliation_outbox_backlog > 0
+          and paigram_reconciliation_outbox_oldest_backlog_age_seconds > 300)
+          or paigram_reconciliation_outbox_dead_letter > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Account reconciliation is not converging
+          description: >-
+            Pending reconciliation work has remained stale for more than five minutes,
+            or at least one reconciliation record is in dead-letter state.
+
+  - name: paigram-service-tickets
+    rules:
+      - alert: PaiGramServiceTicketRejectSpike
+        expr: >-
+          sum by (service, surface)
+          (increase(paigram_service_ticket_rejections_total[10m])) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Service-ticket rejections are elevated
+          description: >-
+            {{ $labels.service }} rejected more than twenty service-ticket operations
+            on {{ $labels.surface }} during the last ten minutes.
+
+  - name: paigram-key-material
+    rules:
+      - alert: PaiGramKeyMaterialExpiryApproaching
+        expr: >-
+          paigram_key_material_expiry_timestamp_seconds - time() < 1209600
+          or paigram_key_material_read_error == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Service certificate key material requires rotation or repair
+          description: >-
+            {{ $labels.service }} certificate identity {{ $labels.identity }} is
+            approaching expiry, has expired, or is unreadable and must be rotated or repaired.
+
+  - name: paigram-platform-upstream
+    rules:
+      - alert: PaiGramPlatformUpstreamDegraded
+        expr: max by (operation) (paigram_platform_upstream_degraded) == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A Platform upstream capability is degraded
+          description: >-
+            The most recent {{ $labels.operation }} capability call failed because the
+            upstream was unavailable, rate-limited, or returned an invalid response.
+
+  - name: paigram-monitoring-targets
+    rules:
+      - alert: PaiGramMetricsTargetDown
+        expr: >-
+          up{job=~"account-center|platform-mihomo"} == 0
+          or absent(up{job="account-center"})
+          or absent(up{job="platform-mihomo"})
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: A PaiGram metrics target is unavailable
+          description: >-
+            Prometheus cannot scrape the {{ $labels.job }} metrics target or the
+            configured target is absent.

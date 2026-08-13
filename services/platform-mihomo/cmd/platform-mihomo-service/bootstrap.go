@@ -9,6 +9,8 @@ import (
 	"platform-mihomo-service/internal/conf"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
+	"platform-mihomo-service/internal/observability"
+	platformmihomo "platform-mihomo-service/internal/platform/mihomo"
 	"platform-mihomo-service/internal/server"
 	"platform-mihomo-service/internal/service"
 	"platform-mihomo-service/internal/usecase"
@@ -19,6 +21,7 @@ type productionComponents struct {
 	runtimeService               *service.MihomoRuntimeService
 	artifactCleanupServer        *server.ArtifactCleanupServer
 	credentialReencryptionServer *server.CredentialReencryptionServer
+	metrics                      *observability.Metrics
 }
 
 func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClient *redis.Client) (*productionComponents, error) {
@@ -39,8 +42,14 @@ func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClien
 	if err != nil {
 		return nil, err
 	}
+	metrics := observability.NewMetrics([]observability.CertificateTarget{
+		{Identity: "control-server", CertificateFile: bc.GetServer().GetControl().GetTls().GetCertificateFile()},
+		{Identity: "control-client-trust", CertificateFile: bc.GetServer().GetControl().GetTls().GetClientCaFile()},
+		{Identity: "runtime-server", CertificateFile: bc.GetServer().GetRuntime().GetTls().GetCertificateFile()},
+	})
+	observedClient := platformmihomo.NewObservedClient(client, metrics)
 	artifactLifecycle := usecase.NewArtifactLifecycle(artifactRepo, usecase.ArtifactLifecycleConfig{
-		Revoker: client, EncryptionKey: encryptionKey,
+		Revoker: observedClient, EncryptionKey: encryptionKey,
 	})
 	ticketVerifier, err := newTicketVerifierFromSecurity(bc.GetSecurity())
 	if err != nil {
@@ -49,10 +58,10 @@ func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClien
 	ticketVerifier.WithGrantVersionLookup(grantInvalidationRepo).
 		WithAuthorizationStateLookup(data.NewTicketAuthorizationStateLookup(database))
 
-	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, client, encryptionKey, artifactRepo)
-	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, client, encryptionKey, artifactLifecycle)
+	bindUC := usecase.NewBindUsecase(credentialRepo, deviceRepo, profileRepo, observedClient, encryptionKey, artifactRepo)
+	statusUC := usecase.NewStatusUsecase(credentialRepo, profileRepo, observedClient, encryptionKey, artifactLifecycle)
 	profileUC := usecase.NewProfileUsecase(profileRepo)
-	authkeyUC := usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, artifactLifecycle, client, encryptionKey)
+	authkeyUC := usecase.NewAuthkeyUsecase(credentialRepo, artifactRepo, artifactLifecycle, observedClient, encryptionKey)
 	managementUC := usecase.NewManagementUsecase(
 		credentialRepo, deviceRepo, profileRepo, artifactRepo, managementRepo, bindUC, profileUC,
 	)
@@ -67,7 +76,7 @@ func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClien
 		authorizationFenceRepo,
 		grantInvalidationRepo,
 		artifactLifecycle,
-	)
+	).WithTicketRejectionRecorder(metrics)
 	return &productionComponents{
 		controlService:        controlService,
 		runtimeService:        service.NewMihomoRuntimeService(ticketVerifier, statusUC, profileUC, authkeyUC, managementUC, deviceRepo),
@@ -75,5 +84,6 @@ func buildProductionComponents(bc *conf.Bootstrap, database *gorm.DB, redisClien
 		credentialReencryptionServer: server.NewCredentialReencryptionServer(
 			usecase.NewCredentialReencryptionUsecase(credentialRepo, encryptionKey), 5*time.Minute,
 		),
+		metrics: metrics,
 	}, nil
 }

@@ -31,3 +31,5 @@ upstream:
   timeout_seconds: 10
   bearer_token_file: "${UPSTREAM_BEARER_TOKEN_FILE}"
   allow_insecure_http: false
+metrics:
+  addr: "${METRICS_ADDR}"

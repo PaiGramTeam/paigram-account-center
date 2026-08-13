@@ -32,3 +32,5 @@ upstream:
   timeout_seconds: 10
   bearer_token_file: "/run/secrets/mihomo_upstream_token"
   allow_insecure_http: false
+metrics:
+  addr: "0.0.0.0:9090"

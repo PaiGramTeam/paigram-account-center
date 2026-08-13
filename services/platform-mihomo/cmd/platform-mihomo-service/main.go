@@ -84,9 +84,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	metricsServer := server.NewMetricsServer(bc.GetMetrics().GetAddr(), components.metrics.Handler())
 	app := kratos.New(
 		kratos.Name("platform-mihomo-service"),
-		kratos.Server(grpcServers.Control, grpcServers.Runtime, components.artifactCleanupServer, components.credentialReencryptionServer),
+		kratos.Server(grpcServers.Control, grpcServers.Runtime, metricsServer, components.artifactCleanupServer, components.credentialReencryptionServer),
 		kratos.AfterStart(func(context.Context) error {
 			grpcServers.Health.Start()
 			return nil
@@ -140,6 +141,9 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	}
 	if bc.GetData().GetRedis().GetAddr() == "" {
 		return errors.New("data.redis.addr is required")
+	}
+	if bc.GetMetrics().GetAddr() == "" {
+		return errors.New("metrics.addr is required")
 	}
 	upstream := bc.GetUpstream()
 	if upstream.GetBaseUrl() == "" {

@@ -215,6 +215,8 @@ upstream:
   base_url: %s
   timeout_seconds: 5
   allow_insecure_http: true
+metrics:
+  addr: "127.0.0.1:0"
 `, input.ControlPort, quote(input.ControlTLS.ServerCertFile), quote(input.ControlTLS.ServerKeyFile), quote(input.ControlTLS.CAFile),
 		input.RuntimePort, quote(input.RuntimeTLS.ServerCertFile), quote(input.RuntimeTLS.ServerKeyFile), quote(input.DatabaseDSN),
 		quote(input.RedisAddress), quote(input.RedisPrefix), quote(input.EncryptionKeyringFile), quote(input.PublicKeyringFile), quote(input.UpstreamURL))

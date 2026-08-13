@@ -22,6 +22,10 @@ var runtimeServiceOperationPrefix = "/" + mihomov2.MihomoRuntimeService_ServiceD
 
 type verifiedServiceTicketClaimsKey struct{}
 
+type ticketRejectionRecorder interface {
+	RecordTicketRejection(surface, reason string)
+}
+
 // ServiceTicketMiddleware verifies tickets for protected v2 platform RPCs before dispatch.
 func (s *PlatformControlService) ServiceTicketMiddleware() middleware.Middleware {
 	return func(next middleware.Handler) middleware.Handler {
@@ -32,11 +36,33 @@ func (s *PlatformControlService) ServiceTicketMiddleware() middleware.Middleware
 			}
 			claims, err := verifyIncomingServiceTicket(ctx, s.ticketVerifier)
 			if err != nil {
+				s.recordTicketRejection(serverTransport.Operation(), err)
 				return nil, err
 			}
-			return next(contextWithVerifiedServiceTicketClaims(ctx, claims), req)
+			response, err := next(contextWithVerifiedServiceTicketClaims(ctx, claims), req)
+			if code := status.Code(err); code == codes.Unauthenticated || code == codes.PermissionDenied {
+				s.recordTicketRejection(serverTransport.Operation(), err)
+			}
+			return response, err
 		}
 	}
+}
+
+func (s *PlatformControlService) recordTicketRejection(operation string, err error) {
+	if s == nil || s.ticketMetrics == nil {
+		return
+	}
+	s.ticketMetrics.RecordTicketRejection(ticketSurface(operation), status.Code(err).String())
+}
+
+func ticketSurface(operation string) string {
+	if strings.HasPrefix(operation, controlServiceOperationPrefix) {
+		return "control"
+	}
+	if strings.HasPrefix(operation, runtimeServiceOperationPrefix) {
+		return "runtime"
+	}
+	return "other"
 }
 
 func contextWithVerifiedServiceTicketClaims(ctx context.Context, claims *biz.ServiceTicketClaims) context.Context {

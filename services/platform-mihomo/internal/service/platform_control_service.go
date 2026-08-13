@@ -32,6 +32,14 @@ type PlatformControlService struct {
 	fences           biz.AuthorizationFenceRepository
 	invalidationRepo grantInvalidationStore
 	artifacts        *usecase.ArtifactLifecycle
+	ticketMetrics    ticketRejectionRecorder
+}
+
+func (s *PlatformControlService) WithTicketRejectionRecorder(recorder ticketRejectionRecorder) *PlatformControlService {
+	if s != nil {
+		s.ticketMetrics = recorder
+	}
+	return s
 }
 
 func NewPlatformControlService(

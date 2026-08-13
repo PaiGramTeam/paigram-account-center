@@ -55,6 +55,13 @@ func TestValidateBootstrap(t *testing.T) {
 		require.EqualError(t, validateBootstrap(bc), "data.redis.addr is required")
 	})
 
+	t.Run("rejects missing metrics address", func(t *testing.T) {
+		bc := validMainTestBootstrap(t)
+		bc.Metrics.Addr = ""
+
+		require.EqualError(t, validateBootstrap(bc), "metrics.addr is required")
+	})
+
 	t.Run("rejects missing grpc address", func(t *testing.T) {
 		bc := validMainTestBootstrap(t)
 		bc.Server.Control.Addr = ""
@@ -190,6 +197,7 @@ func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {
 			},
 			Redis: &conf.Data_Redis{Addr: "127.0.0.1:6379"},
 		},
+		Metrics: &conf.Metrics{Addr: "127.0.0.1:0"},
 		Upstream: &conf.Upstream{
 			BaseUrl:        "https://mihomo-upstream.internal",
 			TimeoutSeconds: 10,
@@ -255,6 +263,7 @@ func TestBuildProductionComponentsWiresHTTPUpstreamAndArtifactCleanup(t *testing
 	require.NotNil(t, components.runtimeService)
 	require.NotNil(t, components.artifactCleanupServer)
 	require.NotNil(t, components.credentialReencryptionServer)
+	require.NotNil(t, components.metrics)
 }
 
 func mainTestPublicKeyPEM(t *testing.T) string {

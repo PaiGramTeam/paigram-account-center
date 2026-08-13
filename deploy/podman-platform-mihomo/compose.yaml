@@ -51,6 +51,7 @@ services:
       PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
       PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
       PAI_UPSTREAM_BEARER_TOKEN_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"
+      PAI_METRICS_ADDR: "0.0.0.0:9090"
     secrets:
       - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"
       - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"
