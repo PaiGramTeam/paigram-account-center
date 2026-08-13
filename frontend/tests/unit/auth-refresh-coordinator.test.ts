@@ -36,4 +36,34 @@ describe('AuthRefreshCoordinator', () => {
     expect(results.every((result) => result.status === 'rejected')).toBe(true)
     expect(failures).toBe(1)
   })
+
+  test('waits for terminal session cleanup before rejecting callers', async () => {
+    const coordinator = new AuthRefreshCoordinator<string>()
+    const releaseCleanup = Promise.withResolvers<void>()
+    let cleanupStarted = false
+
+    const request = coordinator.run(
+      async () => {
+        throw new Error('expired')
+      },
+      async () => {
+        cleanupStarted = true
+        await releaseCleanup.promise
+      }
+    )
+    await Promise.resolve()
+
+    expect(cleanupStarted).toBe(true)
+    const settledBeforeCleanup = await Promise.race([
+      request.then(
+        () => true,
+        () => true
+      ),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 0)),
+    ])
+    expect(settledBeforeCleanup).toBe(false)
+
+    releaseCleanup.resolve()
+    await expect(request).rejects.toThrow('expired')
+  })
 })

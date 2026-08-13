@@ -46,6 +46,19 @@ export type { UserDetail, UserListItem, UserStatus, LoginType } from './api/type
 export * from './api'
 export { createRequest } from './api/request'
 export type { RequestConfig } from './api/request'
+export {
+  BrowserSessionBroker,
+  BrowserSessionCapabilityError,
+  BrowserSessionEndedError,
+  browserSessionBroker,
+  isTerminalBrowserSessionFailure,
+} from './api/session-broker'
+export type {
+  BrowserAuthenticationResult,
+  BrowserSessionEvent,
+  BrowserSessionRefreshOptions,
+  BrowserSessionSnapshot,
+} from './api/session-broker'
 
 // Development mocks
 export { enableMocking } from './mocks'

@@ -1,8 +1,8 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Request } from '@playwright/test'
 import { readSystemState } from './system-state'
 
 test.describe.serial('production browser journeys', () => {
-  test('user registers, signs in, binds Mihomo, reads profiles, and logs out', async ({ page }) => {
+  test('user registers, signs in, binds Mihomo, reads profiles, and logs out', async ({ page, context }) => {
     const system = await readSystemState()
     await page.goto(`${system.frontend_url}/register`)
     await page.getByPlaceholder('请输入显示名称').fill('Browser User')
@@ -45,9 +45,51 @@ test.describe.serial('production browser journeys', () => {
     await expect(accountDrawer.getByText('Aether', { exact: true })).toBeVisible()
     await accountDrawer.getByRole('button', { name: 'Close' }).click()
 
-    await page.locator('.arco-avatar').click()
-    await page.getByText('退出登录', { exact: true }).click()
-    await expect(page).toHaveURL(/\/login$/)
+    let refreshRequests = 0
+    let sessionLockRequests = 0
+    const bothTabsRequestedSessionLock = Promise.withResolvers<void>()
+    await context.exposeBinding('recordSessionLockRequest', () => {
+      sessionLockRequests += 1
+      if (sessionLockRequests >= 2) bothTabsRequestedSessionLock.resolve()
+    })
+    await context.addInitScript(`
+      {
+        const originalRequest = navigator.locks.request.bind(navigator.locks)
+        navigator.locks.request = function (...args) {
+          void globalThis.recordSessionLockRequest()
+          return originalRequest(...args)
+        }
+      }
+    `)
+    const countRefresh = (request: Request) => {
+      if (new URL(request.url()).pathname === '/api/v1/auth/refresh' && request.method() === 'POST') {
+        refreshRequests += 1
+      }
+    }
+    context.on('request', countRefresh)
+    await context.route('**/api/v1/auth/refresh', async (route) => {
+      await bothTabsRequestedSessionLock.promise
+      await route.continue()
+    })
+    await page.close()
+    const firstTab = await context.newPage()
+    const secondTab = await context.newPage()
+    await Promise.all([
+      firstTab.goto(`${system.frontend_url}/dashboard`),
+      secondTab.goto(`${system.frontend_url}/dashboard`),
+    ])
+    await expect(firstTab.getByRole('heading', { name: '欢迎回来，Browser User' })).toBeVisible()
+    await expect(secondTab.getByRole('heading', { name: '欢迎回来，Browser User' })).toBeVisible()
+    expect(refreshRequests).toBe(1)
+    expect(sessionLockRequests).toBe(2)
+    context.off('request', countRefresh)
+    await context.unroute('**/api/v1/auth/refresh')
+
+    await firstTab.locator('.arco-layout-header .arco-avatar').click()
+    await firstTab.getByText('退出登录', { exact: true }).click()
+    await expect(firstTab).toHaveURL(/\/login$/)
+    await expect(secondTab).toHaveURL((url) => url.pathname === '/login')
+    await secondTab.close()
   })
 
   test('administrator reads the user platform binding through the admin application', async ({ page }) => {

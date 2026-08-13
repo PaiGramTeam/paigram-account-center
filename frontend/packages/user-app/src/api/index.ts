@@ -5,6 +5,8 @@ import {
   createProfileApi,
   createSecurityApi,
   configureUserLogout,
+  browserSessionBroker,
+  isTerminalBrowserSessionFailure,
   createPlatformAccountsApi,
 } from '@paigram/shared-components'
 import { useUserStore } from '@paigram/shared-components'
@@ -18,12 +20,25 @@ export const request = createRequest({
     return userStore.token
   },
   getSessionEpoch: () => useUserStore().sessionEpoch,
+  getSessionId: () => browserSessionBroker.currentSessionId(),
   setAuthData: (data: { accessToken: string }) => {
     const userStore = useUserStore()
     userStore.setAuthData(data)
   },
-  onUnauthorized: () => {
+  coordinateRefresh: (refresh, options) =>
+    browserSessionBroker.refresh(refresh, {
+      rejectedAccessToken: options.rejectedAccessToken,
+      commit: options.commit,
+      onFailure: (error) => {
+        if (isTerminalBrowserSessionFailure(error)) browserSessionBroker.invalidate()
+      },
+    }),
+  onUnauthorized: async (rejectedAccessToken) => {
+    const ended =
+      browserSessionBroker.isEnded() || (await browserSessionBroker.invalidateIfCurrent(rejectedAccessToken))
+    if (!ended) return
     const userStore = useUserStore()
+    if (userStore.token && userStore.token !== rejectedAccessToken) return
     userStore.reset()
     const redirect = router.currentRoute.value.path
     void router.push({ path: '/login', query: redirect === '/login' ? undefined : { redirect } })
@@ -32,7 +47,9 @@ export const request = createRequest({
 
 export const authApi = createAuthApi(request)
 configureUserLogout(async () => {
-  await authApi.logout()
+  await browserSessionBroker.logout(async () => {
+    await authApi.logout()
+  })
 })
 export const userApi = createUserApi(request)
 export const profileApi = createProfileApi(request)

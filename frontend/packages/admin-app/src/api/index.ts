@@ -7,6 +7,8 @@ import {
   createRoleApi,
   createPermissionApi,
   configureUserLogout,
+  browserSessionBroker,
+  isTerminalBrowserSessionFailure,
   createAdminPlatformAccountsApi,
   createAdminSystemApi,
   createAdminServicesApi,
@@ -22,12 +24,25 @@ export const request = createRequest({
     return userStore.token
   },
   getSessionEpoch: () => useUserStore().sessionEpoch,
+  getSessionId: () => browserSessionBroker.currentSessionId(),
   setAuthData: (data: { accessToken: string }) => {
     const userStore = useUserStore()
     userStore.setAuthData(data)
   },
-  onUnauthorized: () => {
+  coordinateRefresh: (refresh, options) =>
+    browserSessionBroker.refresh(refresh, {
+      rejectedAccessToken: options.rejectedAccessToken,
+      commit: options.commit,
+      onFailure: (error) => {
+        if (isTerminalBrowserSessionFailure(error)) browserSessionBroker.invalidate()
+      },
+    }),
+  onUnauthorized: async (rejectedAccessToken) => {
+    const ended =
+      browserSessionBroker.isEnded() || (await browserSessionBroker.invalidateIfCurrent(rejectedAccessToken))
+    if (!ended) return
     const userStore = useUserStore()
+    if (userStore.token && userStore.token !== rejectedAccessToken) return
     userStore.reset()
     void router.push('/login')
   },
@@ -35,7 +50,9 @@ export const request = createRequest({
 
 export const authApi = createAuthApi(request)
 configureUserLogout(async () => {
-  await authApi.logout()
+  await browserSessionBroker.logout(async () => {
+    await authApi.logout()
+  })
 })
 export const userApi = createUserApi(request)
 export const profileApi = createProfileApi(request)

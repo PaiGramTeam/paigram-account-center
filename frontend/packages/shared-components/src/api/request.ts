@@ -15,15 +15,31 @@ export interface NormalizedApiError {
 export interface RequestOptions extends AxiosRequestConfig {
   skipErrorToast?: boolean
   authRetryAttempted?: boolean
+  browserSessionId?: string
+}
+
+export class BrowserSessionChangedError extends Error {
+  constructor() {
+    super('Browser session changed while the request was in flight')
+    this.name = 'BrowserSessionChangedError'
+  }
 }
 
 export interface RequestConfig {
   baseURL?: string
   timeout?: number
   getToken?: () => string
+  getSessionId?: () => string
   getSessionEpoch?: () => number
   setAuthData?: (data: { accessToken: string }) => void
-  onUnauthorized?: () => void
+  coordinateRefresh?: (
+    refresh: () => Promise<{ accessToken: string; userId: number }>,
+    options: {
+      rejectedAccessToken: string
+      commit: (session: { accessToken: string; userId: number }) => void
+    }
+  ) => Promise<{ accessToken: string; userId: number }>
+  onUnauthorized?: (rejectedAccessToken: string) => void | Promise<void>
 }
 
 export function createRequest(config: RequestConfig = {}) {
@@ -31,8 +47,10 @@ export function createRequest(config: RequestConfig = {}) {
     baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
     timeout = 30000,
     getToken,
+    getSessionId,
     getSessionEpoch,
     setAuthData,
+    coordinateRefresh,
     onUnauthorized,
   } = config
 
@@ -51,12 +69,21 @@ export function createRequest(config: RequestConfig = {}) {
 
   instance.interceptors.request.use(
     (config) => {
+      const requestConfig = config as typeof config & {
+        authRetryAttempted?: boolean
+        browserSessionId?: string
+      }
+      if (requestConfig.browserSessionId === undefined) {
+        requestConfig.browserSessionId = getSessionId?.() ?? ''
+      } else {
+        assertRequestSessionCurrent(requestConfig.browserSessionId, getSessionId)
+      }
       const token = getToken?.()
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`
+      if (token && !requestConfig.authRetryAttempted) {
+        requestConfig.headers.Authorization = `Bearer ${token}`
       }
 
-      return config
+      return requestConfig
     },
     (error) => {
       return Promise.reject(error)
@@ -65,50 +92,72 @@ export function createRequest(config: RequestConfig = {}) {
 
   instance.interceptors.response.use(
     (response: AxiosResponse<ApiResponse>) => {
+      const requestConfig = response.config as RequestOptions
+      assertRequestSessionCurrent(requestConfig.browserSessionId, getSessionId)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return response.data as any
     },
     async (error) => {
       const { response, config } = error
       const requestConfig = (config || {}) as RequestOptions
+      assertRequestSessionCurrent(requestConfig.browserSessionId, getSessionId)
 
       if (response) {
         const { status, data } = response
+        const isAuthenticationRequest = requestConfig.url?.startsWith('/auth/') === true
 
-        if (status === 401 && config.url !== '/auth/refresh' && !requestConfig.authRetryAttempted) {
+        if (status === 401 && !isAuthenticationRequest && !requestConfig.authRetryAttempted) {
+          assertRequestSessionCurrent(requestConfig.browserSessionId, getSessionId)
           if (setAuthData) {
             try {
               requestConfig.authRetryAttempted = true
               const sessionEpoch = getSessionEpoch?.()
+              const rejectedAccessToken = bearerToken(requestConfig.headers?.Authorization)
+              const refresh = async () => {
+                const refreshResponse = await instance.post('/auth/refresh', undefined, {
+                  skipErrorToast: true,
+                } as RequestOptions)
+                const refreshed = {
+                  accessToken: refreshResponse.data.access_token,
+                  userId: refreshResponse.data.user_id,
+                }
+
+                if (sessionEpoch !== undefined && getSessionEpoch?.() !== sessionEpoch) {
+                  throw new Error('Session changed while refreshing')
+                }
+
+                return refreshed
+              }
               const authData = await refreshCoordinator.run(
                 async () => {
-                  const refreshResponse = await instance.post('/auth/refresh', undefined, {
-                    skipErrorToast: true,
-                  } as RequestOptions)
-                  const refreshed = {
-                    accessToken: refreshResponse.data.access_token,
-                  }
-
-                  if (sessionEpoch !== undefined && getSessionEpoch?.() !== sessionEpoch) {
-                    throw new Error('Session changed while refreshing')
-                  }
-
-                  setAuthData(refreshed)
-                  return refreshed
+                  if (!coordinateRefresh) return refresh()
+                  return coordinateRefresh(refresh, {
+                    rejectedAccessToken,
+                    commit: (session) => setAuthData(session),
+                  })
                 },
-                () => onUnauthorized?.()
+                async (refreshError) => {
+                  const status = (refreshError as NormalizedApiError | null)?.status
+                  if (status === 401 || status === 403) await onUnauthorized?.(rejectedAccessToken)
+                }
               )
 
-              config.headers.Authorization = `Bearer ${authData.accessToken}`
-              return instance(config)
+              if (sessionEpoch !== undefined && getSessionEpoch?.() !== sessionEpoch) {
+                throw new Error('Session changed while refreshing')
+              }
+              assertRequestSessionCurrent(requestConfig.browserSessionId, getSessionId)
+              if (!coordinateRefresh) setAuthData(authData)
+
+              requestConfig.headers!.Authorization = `Bearer ${authData.accessToken}`
+              return instance(requestConfig)
             } catch (refreshError) {
               return Promise.reject(refreshError)
             }
           } else {
-            onUnauthorized?.()
+            await onUnauthorized?.(bearerToken(requestConfig.headers?.Authorization))
           }
         } else if (status === 401 && requestConfig.authRetryAttempted) {
-          onUnauthorized?.()
+          await onUnauthorized?.(bearerToken(requestConfig.headers?.Authorization))
         }
 
         const errorData = normalizeApiError(data as ApiError)
@@ -151,6 +200,16 @@ export function createRequest(config: RequestConfig = {}) {
       return instance.delete(url, config)
     },
   }
+}
+
+function bearerToken(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const match = /^Bearer\s+(.+)$/i.exec(value.trim())
+  return match?.[1]?.trim() ?? ''
+}
+
+function assertRequestSessionCurrent(expected: string | undefined, getSessionId?: () => string): void {
+  if (getSessionId && getSessionId() !== (expected ?? '')) throw new BrowserSessionChangedError()
 }
 
 export function normalizeApiError(error: ApiError | undefined): NormalizedApiError {
