@@ -24,6 +24,7 @@ func NewApiGroup(serviceGroup *serviceplatformbinding.ServiceGroup) *ApiGroup {
 			&serviceGroup.GrantService,
 			&serviceGroup.OrchestrationService,
 			&serviceGroup.RuntimeSummaryService,
+			&serviceGroup.OperationRecoveryService,
 		),
 	}
 }

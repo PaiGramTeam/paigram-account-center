@@ -105,6 +105,7 @@ var permissionPolicies = map[string][]PolicyRule{
 		{Path: "/api/v1/admin/platform-accounts/:bindingId/profiles", Method: "GET"},
 		{Path: "/api/v1/admin/platform-accounts/:bindingId/runtime-summary", Method: "GET"},
 		{Path: "/api/v1/admin/platform-accounts/:bindingId/consumer-grants", Method: "GET"},
+		{Path: "/api/v1/admin/platform-accounts/:bindingId/operations", Method: "GET"},
 	},
 	model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionList): {
 		{Path: "/api/v1/admin/platform-accounts", Method: "GET"},
@@ -113,6 +114,7 @@ var permissionPolicies = map[string][]PolicyRule{
 		{Path: "/api/v1/admin/platform-accounts/:bindingId/credential", Method: "PUT"},
 		{Path: "/api/v1/admin/platform-accounts/:bindingId/consumer-grants/:consumer", Method: "PUT"},
 		{Path: "/api/v1/admin/platform-accounts/:bindingId/refresh", Method: "POST"},
+		{Path: "/api/v1/admin/platform-accounts/:bindingId/operations/:operationId/requeue", Method: "POST"},
 	},
 	model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionDelete): {
 		{Path: "/api/v1/admin/platform-accounts/:bindingId", Method: "DELETE"},

@@ -16,16 +16,18 @@ type AdminHandler struct {
 	grantService          grantService
 	orchestrationService  orchestrationService
 	runtimeSummaryService runtimeSummaryService
+	operationRecovery     operationRecoveryService
 }
 
 // NewAdminHandler constructs an admin platform binding handler.
-func NewAdminHandler(bindingService bindingService, profileService profileService, grantService grantService, orchestrationService orchestrationService, runtimeSummaryService runtimeSummaryService) *AdminHandler {
+func NewAdminHandler(bindingService bindingService, profileService profileService, grantService grantService, orchestrationService orchestrationService, runtimeSummaryService runtimeSummaryService, operationRecovery operationRecoveryService) *AdminHandler {
 	return &AdminHandler{
 		bindingService:        bindingService,
 		profileService:        profileService,
 		grantService:          grantService,
 		orchestrationService:  orchestrationService,
 		runtimeSummaryService: runtimeSummaryService,
+		operationRecovery:     operationRecovery,
 	}
 }
 

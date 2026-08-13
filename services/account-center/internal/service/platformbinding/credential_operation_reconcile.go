@@ -13,6 +13,9 @@ import (
 
 const credentialOperationRetryDelay = 30 * time.Second
 
+const missingTerminalCompensationProjectionReason = "missing_terminal_compensation_projection_pending"
+const duplicateOwnerCompensationProjectionReason = "duplicate_owner_compensation_projection_pending"
+
 func (s *OrchestrationService) ReconcileCredentialOperation(ctx context.Context, operationID string) error {
 	if s.operationIntents == nil || s.gateway == nil {
 		return ErrCredentialGatewayUnavailable
@@ -34,9 +37,6 @@ func (s *OrchestrationService) ReconcileCredentialOperation(ctx context.Context,
 		}
 		return s.operationIntents.MarkInputRequired(ctx, intent.OperationID, "credential_resubmission_required")
 	}
-	if intent.State == model.PlatformOperationIntentStateInvariantViolation {
-		return s.operationIntents.Reschedule(ctx, intent.OperationID, "manual_invariant_reconciliation_required", time.Now().UTC().Add(time.Hour))
-	}
 	if !intent.State.ReservesBinding() {
 		return nil
 	}
@@ -56,6 +56,9 @@ func (s *OrchestrationService) ReconcileCredentialOperation(ctx context.Context,
 			return err
 		}
 		return s.operationIntents.MarkSucceeded(ctx, intent.OperationID)
+	}
+	if binding.DeletedAt.Valid && intent.State == model.PlatformOperationIntentStateProjectionPending && intent.ReasonCode == duplicateOwnerCompensationProjectionReason {
+		return s.operationIntents.MarkFailed(ctx, intent.OperationID, "duplicate_owner")
 	}
 	platformRow, err := s.platformService.GetEnabledPlatform(binding.Platform)
 	if err != nil {
@@ -232,16 +235,21 @@ func (s *OrchestrationService) applyResolvedCredentialOperation(ctx context.Cont
 	updatedBinding, err := s.bindingReader.PersistRuntimeSummary(binding.ID, *summary)
 	if err != nil {
 		if errors.Is(err, ErrBindingAlreadyOwned) {
-			cleanupErr := s.compensateDeleteCredential(ctx, binding, summary.PlatformAccountID, summary.Generation, intent.ActorType, intent.ActorID, endpoint)
+			cleanupErr := s.compensateDeleteCredential(ctx, intent.OperationID, binding, summary.PlatformAccountID, summary.Generation, intent.ActorType, intent.ActorID, endpoint)
 			if cleanupErr != nil {
 				_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "compensation_delete_failed")
 				return cleanupErr
 			}
+			if markerErr := s.operationIntents.MarkProjectionPending(ctx, intent.OperationID, duplicateOwnerCompensationProjectionReason); markerErr != nil {
+				return markerErr
+			}
 			if _, deleteErr := s.bindingReader.DeleteBinding(binding.ID); deleteErr != nil {
-				_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "duplicate_owner_projection_delete_failed")
+				_ = s.operationIntents.Reschedule(ctx, intent.OperationID, duplicateOwnerCompensationProjectionReason, time.Now().UTC().Add(credentialOperationRetryDelay))
 				return deleteErr
 			}
-			_ = s.operationIntents.MarkFailed(ctx, intent.OperationID, "duplicate_owner")
+			if failErr := s.operationIntents.MarkFailed(ctx, intent.OperationID, "duplicate_owner"); failErr != nil {
+				return failErr
+			}
 		}
 		return err
 	}
@@ -260,6 +268,12 @@ func (s *OrchestrationService) confirmCredentialInputRequired(ctx context.Contex
 	if err != nil {
 		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "binding_state_unavailable", err)
 	}
+	if state != nil && !state.Exists && intent.State == model.PlatformOperationIntentStateProjectionPending && intent.ReasonCode == missingTerminalCompensationProjectionReason {
+		return s.finalizeMissingTerminalCompensation(ctx, intent, localBinding)
+	}
+	if state != nil && !state.Exists && intent.State == model.PlatformOperationIntentStateInvariantViolation && intent.ReasonCode == "missing_terminal_compensation_failed" {
+		return s.confirmMissingTerminalCompensation(ctx, resolver, endpoint, intent, localBinding)
+	}
 	if credentialStateAllowsResubmission(intent, state) {
 		if _, err := s.bindingReader.UpdateBindingFailure(localBinding.ID, model.PlatformAccountBindingStatusCredentialInvalid, "credential_input_required", "credential must be submitted again"); err != nil {
 			return s.rescheduleCredentialOperation(ctx, intent.OperationID, "input_projection_pending", err)
@@ -270,14 +284,64 @@ func (s *OrchestrationService) confirmCredentialInputRequired(ctx context.Contex
 		return nil
 	}
 	if state != nil && state.Exists && state.Summary != nil && state.Summary.Generation == intent.TargetGeneration {
-		_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "terminal_result_missing_at_target_generation")
-		return ErrBindingGenerationConflict
+		if err := s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "terminal_result_missing_at_target_generation"); err != nil {
+			return err
+		}
+		if !validOperationSummary(intent.Kind, intent.TargetGeneration, intent.ProfileRevision, intent.ProfileRef, state.Summary) {
+			_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "terminal_summary_mismatch")
+			return ErrBindingGenerationConflict
+		}
+		if err := s.compensateDeleteCredential(ctx, intent.OperationID, localBinding, state.Summary.PlatformAccountID, state.Summary.Generation, intent.ActorType, intent.ActorID, endpoint); err != nil {
+			_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "missing_terminal_compensation_failed")
+			return err
+		}
+		return s.finalizeMissingTerminalCompensation(ctx, intent, localBinding)
 	}
 	if _, err := s.bindingReader.UpdateBindingFailure(localBinding.ID, model.PlatformAccountBindingStatusCredentialInvalid, "operation_invariant_violation", "platform operation state requires manual reconciliation"); err != nil {
 		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "invariant_projection_pending", err)
 	}
 	_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "operation_terminal_state_inconsistent")
 	return ErrBindingGenerationConflict
+}
+
+func (s *OrchestrationService) confirmMissingTerminalCompensation(ctx context.Context, resolver credentialOperationResolver, endpoint string, intent *model.PlatformOperationIntent, binding *model.PlatformAccountBinding) error {
+	reference := missingTerminalCompensationReference(intent)
+	operationBinding := bindingAtGeneration(binding, reference.PreGeneration)
+	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(intent.ActorType, intent.ActorID, operationBinding, reference.OperationID, []string{platformaction.MihomoOperationResolve})
+	if err != nil {
+		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "compensation_resolve_ticket_failed", err)
+	}
+	resolution, err := resolver.ResolveCredentialOperation(ctx, endpoint, ticket, reference)
+	if err != nil {
+		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "compensation_resolve_failed", err)
+	}
+	if resolution == nil || resolution.State == CredentialRemoteOperationPending {
+		return s.operationIntents.Reschedule(ctx, intent.OperationID, "compensation_remote_pending", time.Now().UTC().Add(credentialOperationRetryDelay))
+	}
+	if resolution.State != CredentialRemoteOperationSucceeded {
+		_ = s.operationIntents.MarkInvariantViolation(ctx, intent.OperationID, "compensation_terminal_state_inconsistent")
+		return ErrBindingGenerationConflict
+	}
+	return s.finalizeMissingTerminalCompensation(ctx, intent, binding)
+}
+
+func (s *OrchestrationService) finalizeMissingTerminalCompensation(ctx context.Context, intent *model.PlatformOperationIntent, binding *model.PlatformAccountBinding) error {
+	if err := s.operationIntents.MarkProjectionPending(ctx, intent.OperationID, missingTerminalCompensationProjectionReason); err != nil {
+		return err
+	}
+	if _, err := s.bindingReader.DeleteBinding(binding.ID); err != nil && !errors.Is(err, ErrBindingNotFound) {
+		return s.rescheduleCredentialOperation(ctx, intent.OperationID, "compensation_projection_pending", err)
+	}
+	return s.operationIntents.MarkFailed(ctx, intent.OperationID, "terminal_result_missing_compensated")
+}
+
+func missingTerminalCompensationReference(intent *model.PlatformOperationIntent) CredentialOperationReference {
+	preGeneration := intent.TargetGeneration
+	return CredentialOperationReference{
+		OperationID: compensationDeleteOperationID(intent.OperationID), Kind: "OPERATION_KIND_DELETE_CREDENTIAL",
+		BindingRef: intent.BindingRef, PreGeneration: preGeneration, TargetGeneration: preGeneration + 1,
+		RequestFingerprint: operationid.Fingerprint("OPERATION_KIND_DELETE_CREDENTIAL", intent.BindingRef, preGeneration, preGeneration+1),
+	}
 }
 
 func (s *OrchestrationService) persistTerminalOperationFailure(intent *model.PlatformOperationIntent, binding *model.PlatformAccountBinding, reason string) error {

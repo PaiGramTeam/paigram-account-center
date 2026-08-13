@@ -12,6 +12,7 @@ type ServiceGroup struct {
 	ProfileProjectionService ProfileProjectionService
 	OrchestrationService     OrchestrationService
 	RuntimeSummaryService    RuntimeSummaryService
+	OperationRecoveryService OperationRecoveryService
 }
 
 func NewServiceGroup(db *gorm.DB, platformService interface {
@@ -36,5 +37,6 @@ func NewServiceGroup(db *gorm.DB, platformService interface {
 		ProfileProjectionService: *profileProjectionService,
 		OrchestrationService:     *NewOrchestrationService(bindingService, platformService, gateway, profileProjectionService, grantService, auditService, operationIntentService),
 		RuntimeSummaryService:    *NewRuntimeSummaryService(platformService, bindingService, profileProjectionService),
+		OperationRecoveryService: *NewOperationRecoveryService(db),
 	}
 }

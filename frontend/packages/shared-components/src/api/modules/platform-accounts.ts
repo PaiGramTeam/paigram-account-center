@@ -13,6 +13,7 @@ export type DashboardSummary = components['schemas']['DashboardSummaryView']
 export type BotIdentity = components['schemas']['BotIdentityDTO']
 export type EntryIdentityChallenge = components['schemas']['EntryIdentityChallengeView']
 export type EntryIdentityUnlinkResult = components['schemas']['UnlinkResult']
+export type OperationRecovery = components['schemas']['OperationRecoveryView']
 
 export interface PlatformBindingList<T> {
   items: T[] | null
@@ -147,6 +148,17 @@ export function createAdminPlatformAccountsApi(request: ReturnType<typeof create
 
     async listGrants(bindingId: number): Promise<{ data: PlatformBindingList<ConsumerGrant> }> {
       return request.get(`/admin/platform-accounts/${bindingId}/consumer-grants`)
+    },
+
+    async listOperations(
+      bindingId: number,
+      params?: { page?: number; page_size?: number }
+    ): Promise<{ data: PlatformBindingList<OperationRecovery> }> {
+      return request.get(`/admin/platform-accounts/${bindingId}/operations`, { params })
+    },
+
+    async requeueOperation(bindingId: number, operationId: string): Promise<{ data: OperationRecovery }> {
+      return request.post(`/admin/platform-accounts/${bindingId}/operations/${encodeURIComponent(operationId)}/requeue`)
     },
 
     async changeGrant(bindingId: number, consumer: string, data: GrantChangeInput): Promise<{ data: ConsumerGrant }> {

@@ -66,7 +66,7 @@ func TestMeHandlerGetRuntimeSummaryReturnsServiceUnavailableForProxyOutage(t *te
 func TestAdminHandlerGetRuntimeSummaryReturnsServiceUnavailableForProxyOutage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	runtimeSvc := &runtimeSummaryStub{err: serviceplatform.ErrPlatformSummaryProxyUnavailable}
-	h := NewAdminHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	h := NewAdminHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc, nil)
 	g := gin.New()
 	g.GET("/api/v1/admin/platform-accounts/:bindingId/runtime-summary", h.GetRuntimeSummary)
 
@@ -108,7 +108,7 @@ func TestMeHandlerGetRuntimeSummaryReturnsConflictForBindingNotReady(t *testing.
 func TestAdminHandlerGetRuntimeSummaryReturnsConflictForBindingNotReady(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	runtimeSvc := &runtimeSummaryStub{err: serviceplatformbinding.ErrBindingRuntimeSummaryNotReady}
-	h := NewAdminHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc)
+	h := NewAdminHandler(refreshBindingStub{}, nil, nil, &refreshOrchestrationStub{}, runtimeSvc, nil)
 	g := gin.New()
 	g.GET("/api/v1/admin/platform-accounts/:bindingId/runtime-summary", h.GetRuntimeSummary)
 

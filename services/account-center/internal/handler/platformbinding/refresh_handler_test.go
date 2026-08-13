@@ -115,7 +115,7 @@ func TestMeHandlerRefreshBindingUsesOrchestrationBoundary(t *testing.T) {
 func TestAdminHandlerRefreshBindingPassesAdminUserID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	orchestration := &refreshOrchestrationStub{}
-	h := NewAdminHandler(refreshBindingStub{}, nil, nil, orchestration, nil)
+	h := NewAdminHandler(refreshBindingStub{}, nil, nil, orchestration, nil, nil)
 	g := gin.New()
 	g.POST("/api/v1/admin/platform-accounts/:bindingId/refresh", func(c *gin.Context) {
 		c.Set("user_id", uint64(19))

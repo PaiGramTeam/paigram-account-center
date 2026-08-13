@@ -102,12 +102,14 @@ func TestPoliciesForPermissionPlatformAccountRoutes(t *testing.T) {
 	assert.Contains(t, readRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/profiles", Method: "GET"})
 	assert.Contains(t, readRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/runtime-summary", Method: "GET"})
 	assert.Contains(t, readRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/consumer-grants", Method: "GET"})
+	assert.Contains(t, readRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/operations", Method: "GET"})
 
 	updateRules := PoliciesForPermission(model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionUpdate))
 	require.NotEmpty(t, updateRules)
 	assert.Contains(t, updateRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/credential", Method: "PUT"})
 	assert.Contains(t, updateRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/consumer-grants/:consumer", Method: "PUT"})
 	assert.Contains(t, updateRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/refresh", Method: "POST"})
+	assert.Contains(t, updateRules, PolicyRule{Path: "/api/v1/admin/platform-accounts/:bindingId/operations/:operationId/requeue", Method: "POST"})
 
 	deleteRules := PoliciesForPermission(model.BuildPermissionName(model.ResourcePlatformAccount, model.ActionDelete))
 	require.NotEmpty(t, deleteRules)

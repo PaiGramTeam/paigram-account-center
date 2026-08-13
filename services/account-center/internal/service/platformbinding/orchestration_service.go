@@ -455,19 +455,30 @@ func (s *OrchestrationService) putCredentialWithOperation(ctx context.Context, b
 	updatedBinding, err := s.bindingReader.PersistRuntimeSummary(binding.ID, *runtimeSummary)
 	if err != nil {
 		if errors.Is(err, ErrBindingAlreadyOwned) {
-			cleanupErr := s.compensateDeleteCredential(ctx, binding, runtimeSummary.PlatformAccountID, runtimeSummary.Generation, input.ActorType, input.ActorID, platformRow.ControlEndpoint)
+			cleanupErr := s.compensateDeleteCredential(ctx, reference.OperationID, binding, runtimeSummary.PlatformAccountID, runtimeSummary.Generation, input.ActorType, input.ActorID, platformRow.ControlEndpoint)
 			if cleanupErr != nil {
 				s.markCredentialInvariantViolation(ctx, reference.OperationID, "compensation_delete_failed")
 				_, _ = s.bindingReader.UpdateBindingFailure(binding.ID, model.PlatformAccountBindingStatusDeleteFailed, "compensation_delete_failed", cleanupErr.Error())
 				return nil, nil, fmt.Errorf("%w: cleanup failed: %v", ErrBindingAlreadyOwned, cleanupErr)
 			}
+			if s.operationIntents != nil {
+				if markerErr := s.operationIntents.MarkProjectionPending(ctx, reference.OperationID, duplicateOwnerCompensationProjectionReason); markerErr != nil {
+					return nil, nil, errors.Join(err, markerErr)
+				}
+			}
 			if _, deleteErr := s.bindingReader.DeleteBinding(binding.ID); deleteErr != nil {
-				s.markCredentialInvariantViolation(ctx, reference.OperationID, "duplicate_owner_projection_delete_failed")
+				if s.operationIntents != nil {
+					_ = s.operationIntents.Reschedule(ctx, reference.OperationID, duplicateOwnerCompensationProjectionReason, time.Now().UTC().Add(credentialOperationRetryDelay))
+				}
 				return nil, nil, errors.Join(err, deleteErr)
 			}
 		}
 		if errors.Is(err, ErrBindingAlreadyOwned) {
-			s.failCredentialOperation(ctx, reference.OperationID, reasonCode(err))
+			if s.operationIntents != nil {
+				if failErr := s.operationIntents.MarkFailed(ctx, reference.OperationID, "duplicate_owner"); failErr != nil {
+					return nil, nil, errors.Join(err, failErr)
+				}
+			}
 		} else if s.operationIntents != nil {
 			_ = s.operationIntents.Reschedule(ctx, reference.OperationID, "projection_persist_failed", time.Now().UTC().Add(credentialOperationRetryDelay))
 		}
@@ -493,9 +504,12 @@ func (s *OrchestrationService) handlePutCredentialError(binding *model.PlatformA
 	return fmt.Errorf("%w: %v", ErrCredentialValidationFailed, err)
 }
 
-func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, binding *model.PlatformAccountBinding, resolvedAccountKey string, resolvedGeneration uint64, actorType, actorID, endpoint string) error {
+func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, sourceOperationID string, binding *model.PlatformAccountBinding, resolvedAccountKey string, resolvedGeneration uint64, actorType, actorID, endpoint string) error {
 	if s.gateway == nil {
 		return ErrCredentialGatewayUnavailable
+	}
+	if sourceOperationID == "" {
+		return ErrInvalidBindingMutation
 	}
 	resolvedBinding := binding
 	if binding != nil && resolvedAccountKey != "" {
@@ -505,16 +519,17 @@ func (s *OrchestrationService) compensateDeleteCredential(ctx context.Context, b
 		resolvedBinding = &clone
 	}
 
-	operationID, err := operationid.NewID()
-	if err != nil {
-		return err
-	}
+	operationID := compensationDeleteOperationID(sourceOperationID)
 	ticket, _, err := s.platformService.IssueBindingScopedOperationTicket(actorType, actorID, resolvedBinding, operationID, []string{platformaction.MihomoCredentialDelete})
 	if err != nil {
 		return err
 	}
 
 	return s.gateway.DeleteCredential(ctx, endpoint, ticket, operationID, resolvedBinding)
+}
+
+func compensationDeleteOperationID(sourceOperationID string) string {
+	return operationid.DeterministicID("compensate-delete:" + sourceOperationID)
 }
 
 func (s *OrchestrationService) syncProfiles(binding, updatedBinding *model.PlatformAccountBinding, summary *RuntimeSummary) error {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"paigram/internal/model"
+	serviceplatformbinding "paigram/internal/service/platformbinding"
 )
 
 type BindingView struct {
@@ -63,6 +64,23 @@ type GrantPropagationPendingView struct {
 	Consumer            string `json:"consumer"`
 	MinimumGrantVersion uint64 `json:"minimum_grant_version"`
 	State               string `json:"state"`
+}
+
+type OperationRecoveryView struct {
+	OperationID      string                              `json:"operation_id"`
+	Kind             string                              `json:"kind"`
+	State            model.PlatformOperationIntentState  `json:"state"`
+	ReasonCode       string                              `json:"reason_code"`
+	DeliveryMode     model.PlatformOperationDeliveryMode `json:"delivery_mode"`
+	PreGeneration    uint64                              `json:"pre_generation"`
+	TargetGeneration uint64                              `json:"target_generation"`
+	ProfileRevision  uint64                              `json:"profile_revision"`
+	OutboxStatus     model.PlatformOperationOutboxStatus `json:"outbox_status"`
+	AttemptCount     uint32                              `json:"attempt_count"`
+	LastReasonCode   string                              `json:"last_reason_code"`
+	AvailableAt      time.Time                           `json:"available_at"`
+	CreatedAt        time.Time                           `json:"created_at"`
+	UpdatedAt        time.Time                           `json:"updated_at"`
 }
 
 func buildMeBindingViews(items []model.PlatformAccountBinding) []BindingView {
@@ -129,4 +147,21 @@ func buildGrantView(item *model.ConsumerGrant) ConsumerGrantView {
 		view.PropagationState = "propagation_pending"
 	}
 	return view
+}
+
+func buildOperationRecoveryViews(items []serviceplatformbinding.OperationRecoveryRecord) []OperationRecoveryView {
+	views := make([]OperationRecoveryView, 0, len(items))
+	for _, item := range items {
+		views = append(views, buildOperationRecoveryView(&item))
+	}
+	return views
+}
+
+func buildOperationRecoveryView(item *serviceplatformbinding.OperationRecoveryRecord) OperationRecoveryView {
+	return OperationRecoveryView{
+		OperationID: item.OperationID, Kind: item.Kind, State: item.State, ReasonCode: item.ReasonCode,
+		DeliveryMode: item.DeliveryMode, PreGeneration: item.PreGeneration, TargetGeneration: item.TargetGeneration,
+		ProfileRevision: item.ProfileRevision, OutboxStatus: item.OutboxStatus, AttemptCount: item.AttemptCount,
+		LastReasonCode: item.LastReasonCode, AvailableAt: item.AvailableAt, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+	}
 }

@@ -202,7 +202,7 @@ func TestMePutConsumerGrantRejectsMissingEnabledField(t *testing.T) {
 func TestAdminPutConsumerGrantRejectsMissingEnabledField(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	grantStub := &mutationGrantStub{}
-	handler := NewAdminHandler(mutationBindingStub{}, &mutationProfileStub{}, grantStub, &mutationOrchestrationStub{}, mutationRuntimeSummaryStub{})
+	handler := NewAdminHandler(mutationBindingStub{}, &mutationProfileStub{}, grantStub, &mutationOrchestrationStub{}, mutationRuntimeSummaryStub{}, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -278,7 +278,7 @@ func TestMePutConsumerGrantAllowsExplicitEnabledFalse(t *testing.T) {
 func TestAdminPutConsumerGrantAllowsExplicitEnabledFalseWithActorAttribution(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	grantStub := &mutationGrantStub{}
-	handler := NewAdminHandler(mutationBindingStub{}, &mutationProfileStub{}, grantStub, &mutationOrchestrationStub{}, mutationRuntimeSummaryStub{})
+	handler := NewAdminHandler(mutationBindingStub{}, &mutationProfileStub{}, grantStub, &mutationOrchestrationStub{}, mutationRuntimeSummaryStub{}, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

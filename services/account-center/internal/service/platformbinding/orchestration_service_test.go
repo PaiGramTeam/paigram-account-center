@@ -34,6 +34,7 @@ type fakeRuntimeSummaryBindingReader struct {
 	ownerBinding     *model.PlatformAccountBinding
 	err              error
 	deleteErr        error
+	persistErr       error
 	updateErr        error
 	ownerID          uint64
 	id               uint64
@@ -122,6 +123,9 @@ func (f *fakeRuntimeSummaryBindingReader) DeleteBinding(bindingID uint64) (*mode
 func (f *fakeRuntimeSummaryBindingReader) PersistRuntimeSummary(bindingID uint64, summary RuntimeSummary) (*model.PlatformAccountBinding, error) {
 	f.id = bindingID
 	f.persistedSummary = &summary
+	if f.persistErr != nil {
+		return nil, f.persistErr
+	}
 	if f.binding != nil {
 		if summary.PlatformAccountID != "" {
 			f.binding.ExternalAccountKey = sql.NullString{String: summary.PlatformAccountID, Valid: true}
@@ -218,6 +222,7 @@ type fakeCredentialGateway struct {
 	deleteBindingID       uint64
 	deleteAccountKey      sql.NullString
 	deleteGeneration      uint64
+	deleteOperationID     string
 }
 
 type fakeProfileSyncer struct {
@@ -313,17 +318,34 @@ func (f *fakeCredentialGateway) RefreshCredential(context.Context, string, strin
 	panic("unexpected call")
 }
 
-func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ticket, _ string, binding *model.PlatformAccountBinding) error {
+func (f *fakeCredentialGateway) DeleteCredential(_ context.Context, endpoint, ticket, operationID string, binding *model.PlatformAccountBinding) error {
 	f.deleteCalled = true
 	f.deleteCallCount++
 	f.deleteControlEndpoint = endpoint
 	f.deleteTicket = ticket
+	f.deleteOperationID = operationID
 	if binding != nil {
 		f.deleteBindingID = binding.ID
 		f.deleteAccountKey = binding.ExternalAccountKey
 		f.deleteGeneration = binding.Generation
 	}
 	return f.deleteErr
+}
+
+func TestCompensationDeleteReusesDeterministicOperationID(t *testing.T) {
+	binding := &model.PlatformAccountBinding{ID: 101, BindingRef: "bind_test", Generation: 0}
+	gateway := &fakeCredentialGateway{}
+	platformService := &fakeOrchestrationPlatformService{ticket: "service-ticket"}
+	service := NewOrchestrationService(&fakeRuntimeSummaryBindingReader{binding: binding}, platformService, gateway)
+
+	require.NoError(t, service.compensateDeleteCredential(context.Background(), "op_original", binding, "account-101", 1, "user", "session:test", "127.0.0.1:9000"))
+	firstOperationID := gateway.deleteOperationID
+	require.NotEmpty(t, firstOperationID)
+	require.NotEqual(t, "op_original", firstOperationID)
+	require.NoError(t, service.compensateDeleteCredential(context.Background(), "op_original", binding, "account-101", 1, "user", "session:test", "127.0.0.1:9000"))
+	assert.Equal(t, firstOperationID, gateway.deleteOperationID)
+	assert.Equal(t, uint64(1), gateway.deleteGeneration)
+	assert.Equal(t, "account-101", gateway.deleteAccountKey.String)
 }
 
 func (f *fakeCredentialGateway) SetPrimaryProfile(_ context.Context, _, _ string, _ string, _ *model.PlatformAccountBinding, _ string) (*RuntimeSummary, error) {

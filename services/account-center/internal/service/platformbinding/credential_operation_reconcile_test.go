@@ -15,22 +15,28 @@ import (
 
 type fakeCredentialOperationResolver struct {
 	*fakeCredentialGateway
-	resolution     *CredentialOperationResolution
-	bindingState   *CredentialBindingState
-	resolveErr     error
-	stateErr       error
-	resolvedRef    CredentialOperationReference
-	refreshCalled  bool
-	deleteCalled   bool
-	deliveryErr    error
-	refreshSummary *RuntimeSummary
-	primarySummary *RuntimeSummary
-	primaryCalled  bool
-	primaryBinding *model.PlatformAccountBinding
+	resolution             *CredentialOperationResolution
+	compensationResolution *CredentialOperationResolution
+	bindingState           *CredentialBindingState
+	resolveErr             error
+	stateErr               error
+	resolvedRef            CredentialOperationReference
+	refreshCalled          bool
+	deleteCalled           bool
+	deleteOperationID      string
+	deleteOperationIDs     []string
+	deliveryErr            error
+	refreshSummary         *RuntimeSummary
+	primarySummary         *RuntimeSummary
+	primaryCalled          bool
+	primaryBinding         *model.PlatformAccountBinding
 }
 
 func (f *fakeCredentialOperationResolver) ResolveCredentialOperation(_ context.Context, _, _ string, reference CredentialOperationReference) (*CredentialOperationResolution, error) {
 	f.resolvedRef = reference
+	if reference.Kind == "OPERATION_KIND_DELETE_CREDENTIAL" && f.compensationResolution != nil {
+		return f.compensationResolution, f.resolveErr
+	}
 	return f.resolution, f.resolveErr
 }
 
@@ -43,9 +49,140 @@ func (f *fakeCredentialOperationResolver) RefreshCredential(context.Context, str
 	return f.refreshSummary, f.deliveryErr
 }
 
-func (f *fakeCredentialOperationResolver) DeleteCredential(context.Context, string, string, string, *model.PlatformAccountBinding) error {
+func (f *fakeCredentialOperationResolver) DeleteCredential(_ context.Context, _, _ string, operationID string, _ *model.PlatformAccountBinding) error {
 	f.deleteCalled = true
+	f.deleteOperationID = operationID
+	f.deleteOperationIDs = append(f.deleteOperationIDs, operationID)
 	return f.deliveryErr
+}
+
+func TestReconcileMissingTerminalRetriesSameCompensationOperationID(t *testing.T) {
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway: &fakeCredentialGateway{},
+		resolution:            &CredentialOperationResolution{State: CredentialRemoteOperationNotReceived},
+		bindingState: &CredentialBindingState{Exists: true, Summary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
+		}},
+		deliveryErr: context.DeadlineExceeded,
+	}
+	service, store, _ := newCredentialReconcileService(t, resolver)
+
+	require.ErrorIs(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"), context.DeadlineExceeded)
+	intent, err := store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateInvariantViolation, intent.State)
+	require.Len(t, resolver.deleteOperationIDs, 1)
+	firstCompensationID := resolver.deleteOperationIDs[0]
+
+	resolver.deliveryErr = nil
+	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	require.Len(t, resolver.deleteOperationIDs, 2)
+	assert.Equal(t, firstCompensationID, resolver.deleteOperationIDs[1])
+	intent, err = store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+}
+
+func TestReconcileLostCompensationResponseConfirmsDeterministicOperation(t *testing.T) {
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway:  &fakeCredentialGateway{},
+		resolution:             &CredentialOperationResolution{State: CredentialRemoteOperationNotReceived},
+		compensationResolution: &CredentialOperationResolution{State: CredentialRemoteOperationSucceeded},
+		bindingState: &CredentialBindingState{Exists: true, Summary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
+		}},
+		deliveryErr: context.DeadlineExceeded,
+	}
+	service, store, reader := newCredentialReconcileService(t, resolver)
+
+	require.ErrorIs(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"), context.DeadlineExceeded)
+	intent, err := store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateInvariantViolation, intent.State)
+	assert.Equal(t, "missing_terminal_compensation_failed", intent.ReasonCode)
+	require.Len(t, resolver.deleteOperationIDs, 1)
+	compensationID := resolver.deleteOperationIDs[0]
+
+	resolver.bindingState = &CredentialBindingState{Exists: false}
+	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	assert.Equal(t, compensationID, resolver.resolvedRef.OperationID)
+	assert.Equal(t, "OPERATION_KIND_DELETE_CREDENTIAL", resolver.resolvedRef.Kind)
+	require.Len(t, resolver.deleteOperationIDs, 1)
+	intent, err = store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+	assert.Equal(t, uint64(101), reader.deletedID)
+}
+
+func TestReconcileConfirmedMissingTerminalCompensationRetriesLocalProjection(t *testing.T) {
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway: &fakeCredentialGateway{},
+		resolution:            &CredentialOperationResolution{State: CredentialRemoteOperationNotReceived},
+		bindingState: &CredentialBindingState{Exists: true, Summary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
+		}},
+	}
+	service, store, reader := newCredentialReconcileService(t, resolver)
+	reader.deleteErr = errors.New("database unavailable")
+
+	require.Error(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	intent, err := store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateProjectionPending, intent.State)
+	assert.Equal(t, missingTerminalCompensationProjectionReason, intent.ReasonCode)
+
+	reader.deleteErr = nil
+	resolver.bindingState = &CredentialBindingState{Exists: false}
+	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	intent, err = store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+	assert.Equal(t, uint64(101), reader.deletedID)
+}
+
+func TestReconcileDuplicateOwnerMarkerFinalizesDeletedDraft(t *testing.T) {
+	resolver := &fakeCredentialOperationResolver{fakeCredentialGateway: &fakeCredentialGateway{}}
+	service, store, reader := newCredentialReconcileService(t, resolver)
+	require.NoError(t, store.MarkProjectionPending(context.Background(), "op_reconcile", duplicateOwnerCompensationProjectionReason))
+	reader.binding.DeletedAt.Time = time.Now().UTC()
+	reader.binding.DeletedAt.Valid = true
+
+	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	intent, err := store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+	assert.Equal(t, "duplicate_owner", intent.ReasonCode)
+	assert.False(t, resolver.deleteCalled)
+}
+
+func TestReconcileDuplicateOwnerDeleteErrorKeepsProjectionMarker(t *testing.T) {
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway: &fakeCredentialGateway{},
+		resolution: &CredentialOperationResolution{State: CredentialRemoteOperationSucceeded, Summary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
+		}},
+	}
+	service, store, reader := newCredentialReconcileService(t, resolver)
+	reader.persistErr = ErrBindingAlreadyOwned
+	reader.deleteErr = errors.New("delete result unavailable")
+
+	require.Error(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	intent, err := store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateProjectionPending, intent.State)
+	assert.Equal(t, duplicateOwnerCompensationProjectionReason, intent.ReasonCode)
+
+	reader.binding.DeletedAt.Time = time.Now().UTC()
+	reader.binding.DeletedAt.Valid = true
+	require.NoError(t, service.ReconcileCredentialOperation(context.Background(), "op_reconcile"))
+	intent, err = store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+	assert.Equal(t, "duplicate_owner", intent.ReasonCode)
 }
 
 func (f *fakeCredentialOperationResolver) SetPrimaryProfile(_ context.Context, _, _ string, _ string, binding *model.PlatformAccountBinding, _ string) (*RuntimeSummary, error) {
@@ -130,22 +267,50 @@ func TestReconcileSucceededOperationRepairsProjectionAndCompletesIntent(t *testi
 	assert.Equal(t, uint64(1), reader.persistedSummary.Generation)
 }
 
-func TestReconcileMissingTerminalAtTargetGenerationKeepsInvariantReservation(t *testing.T) {
+func TestReconcileInvariantViolationCompensatesMissingTerminalWithStableOperation(t *testing.T) {
 	resolver := &fakeCredentialOperationResolver{
 		fakeCredentialGateway: &fakeCredentialGateway{},
 		resolution:            &CredentialOperationResolution{State: CredentialRemoteOperationNotReceived},
 		bindingState: &CredentialBindingState{Exists: true, Summary: &RuntimeSummary{
-			PlatformAccountID: "account-101", Generation: 1,
+			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
+		}},
+	}
+	service, store, reader := newCredentialReconcileService(t, resolver)
+	require.NoError(t, store.MarkInvariantViolation(context.Background(), "op_reconcile", "compensation_delete_failed"))
+
+	err := service.ReconcileCredentialOperation(context.Background(), "op_reconcile")
+	require.NoError(t, err)
+	intent, getErr := store.Get(context.Background(), "op_reconcile")
+	require.NoError(t, getErr)
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+	assert.Equal(t, "terminal_result_missing_compensated", intent.ReasonCode)
+	assert.Equal(t, "op_reconcile", resolver.resolvedRef.OperationID)
+	assert.True(t, resolver.deleteCalled)
+	assert.NotEqual(t, "op_reconcile", resolver.deleteOperationID)
+	assert.Equal(t, uint64(101), reader.deletedID)
+	assert.Nil(t, reader.persistedSummary)
+}
+
+func TestReconcileMissingTerminalAtTargetGenerationCompensatesBeforeRelease(t *testing.T) {
+	resolver := &fakeCredentialOperationResolver{
+		fakeCredentialGateway: &fakeCredentialGateway{},
+		resolution:            &CredentialOperationResolution{State: CredentialRemoteOperationNotReceived},
+		bindingState: &CredentialBindingState{Exists: true, Summary: &RuntimeSummary{
+			PlatformAccountID: "account-101", Generation: 1, Status: "active",
+			ProfileSnapshotComplete: true, ProfileRevision: 1, ProfileObservedRevision: 1,
 		}},
 	}
 	service, store, reader := newCredentialReconcileService(t, resolver)
 
 	err := service.ReconcileCredentialOperation(context.Background(), "op_reconcile")
-	require.ErrorIs(t, err, ErrBindingGenerationConflict)
+	require.NoError(t, err)
 	intent, getErr := store.Get(context.Background(), "op_reconcile")
 	require.NoError(t, getErr)
-	assert.Equal(t, model.PlatformOperationIntentStateInvariantViolation, intent.State)
-	assert.True(t, intent.State.ReservesBinding())
+	assert.Equal(t, model.PlatformOperationIntentStateFailed, intent.State)
+	assert.False(t, intent.State.ReservesBinding())
+	assert.True(t, resolver.deleteCalled)
+	assert.Equal(t, uint64(101), reader.deletedID)
 	assert.Nil(t, reader.persistedSummary)
 }
 

@@ -53,6 +53,8 @@ func registerRoutes[T httpserver.RouteGroup[T]](_ *RouterGroup, rg T) {
 		admin.PUT("/:bindingId/credential", adminHandler.PutCredential)
 		admin.GET("/:bindingId/runtime-summary", adminHandler.GetRuntimeSummary)
 		admin.GET("/:bindingId/consumer-grants", adminHandler.ListConsumerGrants)
+		admin.GET("/:bindingId/operations", adminHandler.ListOperations)
+		admin.POST("/:bindingId/operations/:operationId/requeue", adminHandler.RequeueOperation)
 		admin.PUT("/:bindingId/consumer-grants/:consumer", adminHandler.PutConsumerGrant)
 		admin.POST("/:bindingId/refresh", adminHandler.RefreshBinding)
 		admin.DELETE("/:bindingId", adminHandler.DeleteBinding)

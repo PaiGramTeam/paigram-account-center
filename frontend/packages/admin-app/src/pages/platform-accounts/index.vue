@@ -97,6 +97,12 @@
           </div>
           <a-empty v-if="grants.length === 0" description="暂无消费者授权" />
         </a-tab-pane>
+        <a-tab-pane v-if="selectedBinding" key="operations" title="协调恢复">
+          <OperationRecoveryPanel
+            :binding-id="selectedBinding.id"
+            :can-requeue="hasPermission('platform_account:update')"
+          />
+        </a-tab-pane>
       </a-tabs>
     </a-spin>
   </a-drawer>
@@ -120,6 +126,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { adminPlatformAccountsApi } from '@/api'
+import OperationRecoveryPanel from './OperationRecoveryPanel.vue'
 import {
   useUserStore,
   type AdminPlatformBinding,

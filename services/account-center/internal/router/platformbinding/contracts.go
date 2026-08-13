@@ -65,6 +65,12 @@ func registerContracts(rg *httpserver.Group) {
 	rg.RegisterContract(http.MethodGet, "/admin/platform-accounts/:bindingId/consumer-grants", httpserver.ResponseContract(
 		response.Envelope[response.PaginatedData[handlerplatformbinding.ConsumerGrantView]]{}, http.StatusOK, adminErrors...,
 	).WithParameters(pagination...))
+	rg.RegisterContract(http.MethodGet, "/admin/platform-accounts/:bindingId/operations", httpserver.ResponseContract(
+		response.Envelope[response.PaginatedData[handlerplatformbinding.OperationRecoveryView]]{}, http.StatusOK, adminErrors...,
+	).WithParameters(pagination...))
+	rg.RegisterContract(http.MethodPost, "/admin/platform-accounts/:bindingId/operations/:operationId/requeue", httpserver.ResponseContract(
+		response.Envelope[handlerplatformbinding.OperationRecoveryView]{}, http.StatusOK, adminErrors...,
+	).WithParameters(httpserver.PathString("operationId")))
 	registerBindingActions(rg, "/admin/platform-accounts/:bindingId", true)
 }
 

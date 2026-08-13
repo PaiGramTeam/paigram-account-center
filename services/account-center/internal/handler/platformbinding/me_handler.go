@@ -619,6 +619,10 @@ func writeBindingError(c *gin.Context, err error, fallback string) {
 		response.Conflict(c, "platform binding runtime summary is not ready")
 	case errors.Is(err, serviceplatformbinding.ErrBindingGenerationConflict):
 		response.Conflict(c, "platform binding changed concurrently")
+	case errors.Is(err, serviceplatformbinding.ErrCredentialOperationNotFound):
+		response.NotFound(c, "platform credential operation not found")
+	case errors.Is(err, serviceplatformbinding.ErrCredentialOperationNotRecoverable):
+		response.Conflict(c, "platform credential operation is not recoverable")
 	case errors.Is(err, serviceplatformbinding.ErrPrimaryProfileNotOwned):
 		response.ErrorWithCode(c, http.StatusUnprocessableEntity, pkgerrors.ErrorCodePrimaryProfileInvalid, "primary profile must belong to platform binding", nil)
 	default:

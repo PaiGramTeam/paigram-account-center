@@ -132,6 +132,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/platform-accounts/{bindingId}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get-api-v1-admin-platform-accounts-bindingId-operations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/platform-accounts/{bindingId}/operations/{operationId}/requeue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["post-api-v1-admin-platform-accounts-bindingId-operations-operationId-requeue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/platform-accounts/{bindingId}/profiles": {
         parameters: {
             query?: never;
@@ -1716,6 +1748,29 @@ export interface components {
             /** Format: int64 */
             user_id?: number;
         };
+        OperationRecoveryView: {
+            /** Format: int32 */
+            attempt_count: number;
+            /** Format: date-time */
+            available_at: string;
+            /** Format: date-time */
+            created_at: string;
+            delivery_mode: string;
+            kind: string;
+            last_reason_code: string;
+            operation_id: string;
+            outbox_status: string;
+            /** Format: int64 */
+            pre_generation: number;
+            /** Format: int64 */
+            profile_revision: number;
+            reason_code: string;
+            state: string;
+            /** Format: int64 */
+            target_generation: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
         PaginatedDataActivityLogView: {
             items: components["schemas"]["ActivityLogView"][] | null;
             pagination: components["schemas"]["PaginationMeta"];
@@ -1734,6 +1789,10 @@ export interface components {
         };
         PaginatedDataConsumerGrantView: {
             items: components["schemas"]["ConsumerGrantView"][] | null;
+            pagination: components["schemas"]["PaginationMeta"];
+        };
+        PaginatedDataOperationRecoveryView: {
+            items: components["schemas"]["OperationRecoveryView"][] | null;
             pagination: components["schemas"]["PaginationMeta"];
         };
         PaginatedDataProfileView: {
@@ -3450,6 +3509,320 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
+    "get-api-v1-admin-platform-accounts-bindingId-operations": {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                bindingId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["PaginatedDataOperationRecoveryView"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+        };
+    };
+    "post-api-v1-admin-platform-accounts-bindingId-operations-operationId-requeue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                operationId: string;
+                bindingId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: components["schemas"]["OperationRecoveryView"];
+                        message: string;
+                    };
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        code: number;
+                        data: unknown;
+                        message: string;
+                    } | {
+                        error: components["schemas"]["CodedCompatibilityErrorDetail"];
+                    };
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

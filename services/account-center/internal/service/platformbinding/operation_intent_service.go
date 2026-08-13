@@ -255,19 +255,21 @@ func (s *OperationIntentService) MarkUncertain(ctx context.Context, operationID,
 
 func (s *OperationIntentService) MarkProjectionPending(ctx context.Context, operationID, reasonCode string) error {
 	return s.transition(ctx, operationID, model.PlatformOperationIntentStateProjectionPending, reasonCode, false,
-		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain, model.PlatformOperationIntentStateProjectionPending)
+		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain,
+		model.PlatformOperationIntentStateProjectionPending, model.PlatformOperationIntentStateInvariantViolation)
 }
 
 func (s *OperationIntentService) MarkInputRequired(ctx context.Context, operationID, reasonCode string) error {
 	expiresAt := time.Now().UTC().Add(credentialOperationInputTTL)
 	return s.transitionWithExpiry(ctx, operationID, model.PlatformOperationIntentStateInputRequired, reasonCode, expiresAt,
-		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain)
+		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain, model.PlatformOperationIntentStateInvariantViolation)
 }
 
 func (s *OperationIntentService) MarkInvariantViolation(ctx context.Context, operationID, reasonCode string) error {
 	zap.L().Error("platform credential operation invariant violation", zap.String("operation_id", operationID), zap.String("reason_code", reasonCode))
 	return s.transition(ctx, operationID, model.PlatformOperationIntentStateInvariantViolation, reasonCode, false,
-		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain, model.PlatformOperationIntentStateProjectionPending)
+		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain,
+		model.PlatformOperationIntentStateProjectionPending, model.PlatformOperationIntentStateInvariantViolation)
 }
 
 func (s *OperationIntentService) MarkSucceeded(ctx context.Context, operationID string) error {
@@ -277,7 +279,8 @@ func (s *OperationIntentService) MarkSucceeded(ctx context.Context, operationID 
 
 func (s *OperationIntentService) MarkFailed(ctx context.Context, operationID, reasonCode string) error {
 	return s.transition(ctx, operationID, model.PlatformOperationIntentStateFailed, reasonCode, true,
-		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain, model.PlatformOperationIntentStateProjectionPending)
+		model.PlatformOperationIntentStatePendingDelivery, model.PlatformOperationIntentStateUncertain,
+		model.PlatformOperationIntentStateProjectionPending, model.PlatformOperationIntentStateInvariantViolation)
 }
 
 func (s *OperationIntentService) ExpireInputRequired(ctx context.Context, operationID string, now time.Time) error {

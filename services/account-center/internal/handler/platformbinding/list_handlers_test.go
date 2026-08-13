@@ -74,7 +74,7 @@ func TestAdminListBindingsReturnsCanonicalPaginationPayload(t *testing.T) {
 	bindingService := serviceplatformbinding.NewBindingService(db)
 	profileService := serviceplatformbinding.NewProfileProjectionService(db)
 	grantService := serviceplatformbinding.NewGrantService(db)
-	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{})
+	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{}, nil)
 
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)
@@ -135,7 +135,7 @@ func TestAdminListProfilesReturnsCanonicalPaginationPayload(t *testing.T) {
 	bindingService := serviceplatformbinding.NewBindingService(db)
 	profileService := serviceplatformbinding.NewProfileProjectionService(db)
 	grantService := serviceplatformbinding.NewGrantService(db)
-	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{})
+	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{}, nil)
 
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)
@@ -175,7 +175,7 @@ func TestAdminListConsumerGrantsReturnsCanonicalPaginationPayload(t *testing.T) 
 	bindingService := serviceplatformbinding.NewBindingService(db)
 	profileService := serviceplatformbinding.NewProfileProjectionService(db)
 	grantService := serviceplatformbinding.NewGrantService(db)
-	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{})
+	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{}, nil)
 
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)
@@ -281,7 +281,7 @@ func TestAdminListBindingsNormalizesInvalidPaginationParams(t *testing.T) {
 	bindingService := serviceplatformbinding.NewBindingService(db)
 	profileService := serviceplatformbinding.NewProfileProjectionService(db)
 	grantService := serviceplatformbinding.NewGrantService(db)
-	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{})
+	handler := NewAdminHandler(bindingService, profileService, grantService, noopOrchestrationService{}, noopRuntimeSummaryService{}, nil)
 
 	owner := model.User{PrimaryLoginType: model.LoginTypeEmail, Status: model.UserStatusActive}
 	require.NoError(t, db.Create(&owner).Error)

@@ -36,6 +36,8 @@ func TestRouterGroupInitRegistersPlatformBindingRoutes(t *testing.T) {
 	assert.Equal(t, 1, routeCounts["GET /api/v1/admin/platform-accounts/:bindingId"])
 	assert.Equal(t, 1, routeCounts["GET /api/v1/admin/platform-accounts/:bindingId/profiles"])
 	assert.Equal(t, 1, routeCounts["GET /api/v1/admin/platform-accounts/:bindingId/consumer-grants"])
+	assert.Equal(t, 1, routeCounts["GET /api/v1/admin/platform-accounts/:bindingId/operations"])
+	assert.Equal(t, 1, routeCounts["POST /api/v1/admin/platform-accounts/:bindingId/operations/:operationId/requeue"])
 	assert.Equal(t, 1, routeCounts["PUT /api/v1/admin/platform-accounts/:bindingId/consumer-grants/:consumer"])
 	assert.Equal(t, 1, routeCounts["POST /api/v1/admin/platform-accounts/:bindingId/refresh"])
 	assert.Equal(t, 1, routeCounts["DELETE /api/v1/admin/platform-accounts/:bindingId"])
