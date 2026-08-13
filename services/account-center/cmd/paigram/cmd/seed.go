@@ -163,6 +163,6 @@ func seedAdminBootstrap(db *gorm.DB) error {
 	if err := seedRolesBootstrap(db); err != nil {
 		return err
 	}
-	cfg := config.MustLoad("config")
+	cfg := config.MustLoadDatabase("config")
 	return seed.CreateDefaultAdmin(db, cfg.GetBcryptCost())
 }

@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/secretfile"
@@ -16,6 +20,7 @@ import (
 	_ "github.com/go-kratos/kratos/v2/encoding/yaml"
 	"github.com/redis/go-redis/v9"
 
+	initmigrate "platform-mihomo-service/initialize/migrate"
 	"platform-mihomo-service/internal/conf"
 	internalcrypto "platform-mihomo-service/internal/crypto"
 	"platform-mihomo-service/internal/data"
@@ -29,6 +34,11 @@ func main() {
 	var configPath string
 	flag.StringVar(&configPath, "conf", "configs/config.yaml", "config path")
 	flag.Parse()
+	command, err := parseCommand(flag.Args())
+	if err != nil {
+		log.Print(err)
+		os.Exit(2)
+	}
 
 	c := config.New(config.WithSource(file.NewSource(configPath), env.NewSource("PAI_")))
 	defer c.Close()
@@ -41,14 +51,19 @@ func main() {
 	if err := c.Scan(&bc); err != nil {
 		log.Fatal(err)
 	}
-	if err := loadBootstrapSecretFiles(&bc); err != nil {
+	if err := loadDatabaseSecretFile(&bc); err != nil {
 		log.Fatal(err)
 	}
-	if err := validateBootstrap(&bc); err != nil {
-		log.Fatal(err)
-	}
-
 	databaseConfig := bc.GetData().GetDatabase()
+	if databaseConfig.GetDsn() == "" {
+		log.Fatal("data.database.dsn is required")
+	}
+	if command == "migrate" {
+		if err := runMigration(databaseConfig.GetDsn()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	database, err := internaldatabase.Connect(internaldatabase.Config{DSN: databaseConfig.GetDsn()})
 	if err != nil {
 		log.Fatal(err)
@@ -62,6 +77,12 @@ func main() {
 			log.Printf("close database: %v", err)
 		}
 	}()
+	if err := loadRuntimeSecretFiles(&bc); err != nil {
+		log.Fatal(err)
+	}
+	if err := validateBootstrap(&bc); err != nil {
+		log.Fatal(err)
+	}
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     bc.GetData().GetRedis().GetAddr(),
@@ -103,7 +124,49 @@ func main() {
 	}
 }
 
-func loadBootstrapSecretFiles(bc *conf.Bootstrap) error {
+func runMigration(dsn string) (err error) {
+	database, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return fmt.Errorf("open migration database: %w", err)
+	}
+	defer func() {
+		if closeErr := database.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("close migration database: %w", closeErr)
+		}
+	}()
+	if err := initmigrate.Run(database); err != nil {
+		return err
+	}
+	return nil
+}
+
+func parseCommand(arguments []string) (string, error) {
+	if len(arguments) == 0 {
+		return "serve", nil
+	}
+	if len(arguments) != 1 || (arguments[0] != "serve" && arguments[0] != "migrate") {
+		return "", fmt.Errorf("unsupported command %q", strings.Join(arguments, " "))
+	}
+	return arguments[0], nil
+}
+
+func loadDatabaseSecretFile(bc *conf.Bootstrap) error {
+	if bc == nil || bc.GetData() == nil {
+		return errors.New("data configuration is required")
+	}
+	database := bc.GetData().GetDatabase()
+	if database.GetDsnFile() == "" {
+		return nil
+	}
+	value, err := secretfile.Read(database.GetDsnFile())
+	if err != nil {
+		return errors.Join(errors.New("data.database.dsn_file"), err)
+	}
+	bc.Data.Database.Dsn = value
+	return nil
+}
+
+func loadRuntimeSecretFiles(bc *conf.Bootstrap) error {
 	if bc == nil || bc.GetData() == nil {
 		return errors.New("data configuration is required")
 	}
@@ -112,7 +175,6 @@ func loadBootstrapSecretFiles(bc *conf.Bootstrap) error {
 		path string
 		set  func(string)
 	}{
-		{name: "data.database.dsn_file", path: bc.GetData().GetDatabase().GetDsnFile(), set: func(value string) { bc.Data.Database.Dsn = value }},
 		{name: "data.redis.password_file", path: bc.GetData().GetRedis().GetPasswordFile(), set: func(value string) { bc.Data.Redis.Password = value }},
 	}
 	for _, target := range targets {

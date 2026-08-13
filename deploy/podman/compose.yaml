@@ -32,6 +32,44 @@ services:
       retries: 20
     networks: [account-center]
 
+  migrate:
+    image: "${PAI_ACCOUNT_IMAGE:?set PAI_ACCOUNT_IMAGE to an immutable image reference containing @sha256}"
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-migrate"
+    profiles: [bootstrap]
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      PAI_DATABASE_DSN_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-database-dsn"
+    secrets:
+      - "${PAI_INSTANCE:-paigram-account-center}-database-dsn"
+    command: ["migrate", "up"]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    networks: [account-center]
+
+  seed:
+    image: "${PAI_ACCOUNT_IMAGE:?set PAI_ACCOUNT_IMAGE to an immutable image reference containing @sha256}"
+    container_name: "${PAI_INSTANCE:-paigram-account-center}-seed"
+    profiles: [bootstrap]
+    restart: "no"
+    environment:
+      PAI_DATABASE_DSN_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-database-dsn"
+      ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
+      ADMIN_PASSWORD_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-admin-password"
+      ADMIN_NAME: "${PAI_ADMIN_NAME:-Administrator}"
+    secrets:
+      - "${PAI_INSTANCE:-paigram-account-center}-database-dsn"
+      - "${PAI_INSTANCE:-paigram-account-center}-admin-password"
+    command: ["seed", "all", "--with-admin"]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    networks: [account-center]
+
   account-center:
     image: "${PAI_ACCOUNT_IMAGE:?set PAI_ACCOUNT_IMAGE to an immutable image reference containing @sha256}"
     container_name: "${PAI_INSTANCE:-paigram-account-center}"
@@ -53,16 +91,12 @@ services:
       PAI_PLATFORM_CONTROL_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-control-client-key"
       PAI_GRPC_CERTIFICATE_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
       PAI_GRPC_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-key"
-      ADMIN_EMAIL: "${PAI_ADMIN_EMAIL:-admin@paigram.local}"
-      ADMIN_PASSWORD_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-admin-password"
-      ADMIN_NAME: "${PAI_ADMIN_NAME:-Administrator}"
     secrets:
       - "${PAI_INSTANCE:-paigram-account-center}-database-dsn"
       - "${PAI_INSTANCE:-paigram-account-center}-redis-password"
       - "${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"
       - "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"
       - "${PAI_INSTANCE:-paigram-account-center}-encryption-key"
-      - "${PAI_INSTANCE:-paigram-account-center}-admin-password"
       - "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"
       - "${PAI_INSTANCE:-paigram-account-center}-control-client-cert"
       - "${PAI_INSTANCE:-paigram-account-center}-control-client-key"

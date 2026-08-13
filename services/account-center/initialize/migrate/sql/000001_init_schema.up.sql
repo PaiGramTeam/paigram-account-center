@@ -300,21 +300,7 @@ CREATE TABLE admin_guard (
 );
 INSERT INTO admin_guard (singleton) VALUES (TRUE);
 
-CREATE FUNCTION validate_active_administrator_guard() RETURNS VOID AS $$
-DECLARE
-    guard_armed BOOLEAN;
-    administrator_exists BOOLEAN;
-BEGIN
-    UPDATE admin_guard
-    SET revision = revision + 1
-    WHERE singleton = TRUE
-    RETURNING armed INTO guard_armed;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION USING
-            ERRCODE = '23514',
-            CONSTRAINT = 'ck_admin_guard_singleton',
-            MESSAGE = 'administrator guard singleton is missing';
-    END IF;
+CREATE FUNCTION recovery_administrator_exists() RETURNS BOOLEAN AS $$
     SELECT EXISTS (
         SELECT 1
         FROM users
@@ -349,7 +335,25 @@ BEGIN
                 AND casbin_rule.v2 = 'PUT'
                 AND casbin_rule.v1 IN ('/api/v1/admin/roles/:id/permissions', '/api/v1/*')
           )
-    ) INTO administrator_exists;
+    );
+$$ LANGUAGE SQL STABLE;
+
+CREATE FUNCTION validate_active_administrator_guard() RETURNS VOID AS $$
+DECLARE
+    guard_armed BOOLEAN;
+    administrator_exists BOOLEAN;
+BEGIN
+    UPDATE admin_guard
+    SET revision = revision + 1
+    WHERE singleton = TRUE
+    RETURNING armed INTO guard_armed;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '23514',
+            CONSTRAINT = 'ck_admin_guard_singleton',
+            MESSAGE = 'administrator guard singleton is missing';
+    END IF;
+    SELECT recovery_administrator_exists() INTO administrator_exists;
     IF NOT guard_armed THEN
         IF administrator_exists THEN
             UPDATE admin_guard SET armed = TRUE WHERE singleton = TRUE;

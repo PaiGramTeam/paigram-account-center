@@ -46,7 +46,9 @@ func init() {
 }
 
 func runMigrateUp() {
-	cfg := config.MustLoad("config")
+	cfg := config.MustLoadDatabase("config")
+	cfg.Database.AutoMigrate = false
+	cfg.Database.AutoSeed = false
 
 	// Get raw database connection
 	db := database.MustConnect(cfg.Database, cfg.Security)
@@ -69,7 +71,9 @@ func runMigrateUp() {
 }
 
 func showMigrationStatus() {
-	cfg := config.MustLoad("config")
+	cfg := config.MustLoadDatabase("config")
+	cfg.Database.AutoMigrate = false
+	cfg.Database.AutoSeed = false
 
 	// Get raw database connection
 	db := database.MustConnect(cfg.Database, cfg.Security)

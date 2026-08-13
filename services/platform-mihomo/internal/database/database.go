@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -11,8 +10,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
-
-	initmigrate "platform-mihomo-service/initialize/migrate"
 )
 
 const connectTimeout = 10 * time.Second
@@ -28,16 +25,6 @@ func Connect(cfg Config) (*gorm.DB, error) {
 	if _, err := pgx.ParseConfig(cfg.DSN); err != nil {
 		return nil, fmt.Errorf("parse PostgreSQL DSN: %w", err)
 	}
-
-	migrationDB, err := sql.Open("pgx", cfg.DSN)
-	if err != nil {
-		return nil, fmt.Errorf("open PostgreSQL migration database: %w", err)
-	}
-	if err := initmigrate.Run(migrationDB); err != nil {
-		_ = migrationDB.Close()
-		return nil, fmt.Errorf("migrate PostgreSQL database: %w", err)
-	}
-	_ = migrationDB.Close()
 
 	db, err := gorm.Open(gormpostgres.Open(cfg.DSN), &gorm.Config{})
 	if err != nil {

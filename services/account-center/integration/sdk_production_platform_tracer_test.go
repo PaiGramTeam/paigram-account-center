@@ -356,6 +356,10 @@ func startProductionPlatform(t *testing.T, configPath string, controlPort, runti
 	build.Dir = platformRoot
 	buildOutput, err := build.CombinedOutput()
 	require.NoError(t, err, "build production Platform binary:\n%s", buildOutput)
+	migrate := exec.CommandContext(buildContext, binaryPath, "-conf", configPath, "migrate")
+	migrate.Dir = platformRoot
+	migrateOutput, err := migrate.CombinedOutput()
+	require.NoError(t, err, "migrate production Platform database:\n%s", migrateOutput)
 
 	logPath := filepath.Join(t.TempDir(), "platform.log")
 	logFile, err := os.Create(logPath)

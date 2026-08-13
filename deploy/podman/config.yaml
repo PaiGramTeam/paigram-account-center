@@ -20,8 +20,8 @@ database:
   log_mode: "warn"
   log_zap: true
   slow_threshold: 1000
-  auto_migrate: true
-  auto_seed: true
+  auto_migrate: false
+  auto_seed: false
 
 openapi:
   enabled: true

@@ -342,8 +342,7 @@ func buildHTTPServer(addr string, handler http.Handler) *http.Server {
 
 // getDB helper function to get database connection for CLI commands
 func getDB() *gorm.DB {
-	cfg := config.MustLoad("config")
-	// Disable auto initialization for CLI commands
+	cfg := config.MustLoadDatabase("config")
 	cfg.Database.AutoMigrate = false
 	cfg.Database.AutoSeed = false
 	return database.MustConnect(cfg.Database, cfg.Security)

@@ -14,6 +14,7 @@ DROP FUNCTION IF EXISTS prevent_admin_guard_downgrade();
 DROP FUNCTION IF EXISTS prevent_admin_guard_removal();
 DROP FUNCTION IF EXISTS enforce_active_administrator_guard();
 DROP FUNCTION IF EXISTS validate_active_administrator_guard();
+DROP FUNCTION IF EXISTS recovery_administrator_exists();
 DROP TABLE IF EXISTS admin_guard CASCADE;
 DROP TABLE IF EXISTS legal_documents CASCADE;
 DROP TABLE IF EXISTS system_config_entries CASCADE;

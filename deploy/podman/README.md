@@ -53,6 +53,8 @@ cd deploy/podman
 ./deploy.ps1
 ```
 
+Each deployment first stops the previous Compose project and verifies that no project container remains, then runs digest-pinned one-shot `migrate` and `seed` services. The Account Center service starts only after both jobs exit successfully. The seed job idempotently reconciles the managed permission and role catalog and creates the bootstrap administrator only when no active recovery administrator exists. The long-running service has automatic migration and seeding disabled, so multiple replicas never race to change the schema during startup. A failed teardown, migration, or seed keeps Account Center and the frontend stopped; preserve the failing `deploy.ps1` output before retrying because successful and failed one-shot containers are removed after execution.
+
 The frontend and Account Center Bot gRPC listener publish only their configured loopback ports. PostgreSQL, Redis, Account Center HTTP, and the Platform control listener remain private. Terminate public HTTPS and gRPC TLS routing at trusted ingress where required, and preserve the configured secure-cookie and trusted-proxy policy.
 
 Account Center exposes Prometheus metrics only inside the container networks at `account-center:8080/metrics`; the frontend returns `404` for that path. See the [monitoring rules and scrape topology](../monitoring/README.md).

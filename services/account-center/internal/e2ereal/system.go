@@ -120,6 +120,9 @@ func Run(ctx context.Context, cfg Config) (runErr error) {
 	if err := buildBinary(runCtx, platformRoot, platformBinary, "./cmd/platform-mihomo-service"); err != nil {
 		return err
 	}
+	if err := runCommand(runCtx, "Platform migration", platformBinary, platformRoot, []string{"-conf", platformConfig, "migrate"}, nil); err != nil {
+		return err
+	}
 	platformProcess, err := startProcess(runCtx, "Platform", platformBinary, platformRoot, []string{"-conf", platformConfig}, nil)
 	if err != nil {
 		return err

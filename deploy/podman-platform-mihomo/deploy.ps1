@@ -65,7 +65,10 @@ if ($privateUpstreamCA -eq "true") {
 Invoke-ImmutableComposeDeployment `
     -PodmanCompose $podmanCompose `
     -ComposeArguments $composeArguments.ToArray() `
-    -FailureMessage "Platform Mihomo deployment failed"
+    -FailureMessage "Platform Mihomo deployment failed" `
+    -ProjectName $instance `
+    -InfrastructureServices @("postgres", "redis") `
+    -BootstrapServices @("migrate")
 
 for ($attempt = 1; $attempt -le 60; $attempt++) {
     $status = & podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $instance 2>$null

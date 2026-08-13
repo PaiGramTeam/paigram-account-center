@@ -32,6 +32,18 @@ func buildBinary(ctx context.Context, moduleRoot, outputPath, packagePath string
 	return nil
 }
 
+func runCommand(ctx context.Context, name, executable, workdir string, args []string, environment []string) error {
+	command := exec.CommandContext(ctx, executable, args...)
+	command.Dir = workdir
+	command.Env = append(os.Environ(), environment...)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("run %s: %w", name, err)
+	}
+	return nil
+}
+
 func executablePath(directory, name string) string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"

@@ -1,31 +1,41 @@
 package seed
 
 import (
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	initmigrate "paigram/initialize/migrate"
 	"paigram/internal/casbin"
+	"paigram/internal/config"
 	"paigram/internal/model"
 	"paigram/internal/testutil"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
-	db := testutil.OpenPostgreSQLTestDB(t, "seed",
-		&model.Permission{},
-		&model.Role{},
-		&model.RolePermission{},
-		&model.User{},
-		&model.UserRole{},
-		&model.UserProfile{},
-		&model.UserEmail{},
-		&model.UserCredential{},
-	)
+	casbin.Reset()
+	t.Cleanup(casbin.Reset)
+	db := testutil.OpenPostgreSQLTestDB(t, "seed")
+	var databaseName string
+	require.NoError(t, db.Raw("SELECT current_database()").Scan(&databaseName).Error)
+	environment := testutil.LoadPostgreSQLTestEnv(t)
+	databaseConfig, err := pgx.ParseConfig(environment.DSN)
+	require.NoError(t, err)
+	databaseConfig.Database = databaseName
+	migrationDB := stdlib.OpenDB(*databaseConfig)
+	t.Cleanup(func() { _ = migrationDB.Close() })
+	require.NoError(t, initmigrate.Run(migrationDB, config.DatabaseConfig{
+		MigrationsDir: filepath.Join("..", "migrate", "sql"),
+	}))
 
 	return db
 }
@@ -374,10 +384,7 @@ func normalizePolicySet(policies [][]string) []string {
 func TestCreateDefaultAdmin(t *testing.T) {
 	db := setupTestDB(t)
 
-	// Seed roles first
-	err := SeedPermissions(db)
-	require.NoError(t, err)
-	err = SeedRoles(db)
+	err := Run(db)
 	require.NoError(t, err)
 
 	// Set test environment variables
@@ -428,10 +435,7 @@ func TestCreateDefaultAdmin(t *testing.T) {
 func TestCreateDefaultAdmin_Idempotent(t *testing.T) {
 	db := setupTestDB(t)
 
-	// Seed roles
-	err := SeedPermissions(db)
-	require.NoError(t, err)
-	err = SeedRoles(db)
+	err := Run(db)
 	require.NoError(t, err)
 
 	t.Setenv("ADMIN_EMAIL", "idempotent-admin@example.com")
@@ -473,8 +477,7 @@ func TestSeed_FailsClosedWhenAdminPasswordEmpty(t *testing.T) {
 	// to seed at all unless the operator supplies a password.
 	db := setupTestDB(t)
 
-	require.NoError(t, SeedPermissions(db))
-	require.NoError(t, SeedRoles(db))
+	require.NoError(t, Run(db))
 
 	t.Setenv("ADMIN_EMAIL", "")
 	t.Setenv("ADMIN_PASSWORD", "")
@@ -500,8 +503,7 @@ func TestCreateDefaultAdmin_RequiresExplicitPasswordEvenWhenEmailProvided(t *tes
 	// auto-generation; ADMIN_PASSWORD remains mandatory.
 	db := setupTestDB(t)
 
-	require.NoError(t, SeedPermissions(db))
-	require.NoError(t, SeedRoles(db))
+	require.NoError(t, Run(db))
 
 	t.Setenv("ADMIN_EMAIL", "ops@example.com")
 	t.Setenv("ADMIN_PASSWORD", "")
@@ -514,8 +516,7 @@ func TestCreateDefaultAdmin_RequiresExplicitPasswordEvenWhenEmailProvided(t *tes
 func TestCreateDefaultAdmin_CreatesReplacementWhenExistingAdminAssignmentIsInactive(t *testing.T) {
 	db := setupTestDB(t)
 
-	require.NoError(t, SeedPermissions(db))
-	require.NoError(t, SeedRoles(db))
+	require.NoError(t, Run(db))
 
 	var adminRole model.Role
 	require.NoError(t, db.Where("name = ?", model.RoleAdmin).First(&adminRole).Error)
@@ -540,4 +541,47 @@ func TestCreateDefaultAdmin_CreatesReplacementWhenExistingAdminAssignmentIsInact
 	var totalUsers int64
 	require.NoError(t, db.Model(&model.User{}).Count(&totalUsers).Error)
 	assert.Equal(t, int64(2), totalUsers)
+}
+
+func TestCreateDefaultAdmin_CreatesReplacementWhenExistingAdminIsSoftDeleted(t *testing.T) {
+	db := setupTestDB(t)
+	require.NoError(t, Run(db))
+
+	var adminRole model.Role
+	require.NoError(t, db.Where("name = ?", model.RoleAdmin).First(&adminRole).Error)
+	deletedAdmin := model.User{
+		PrimaryLoginType: model.LoginTypeEmail,
+		Status:           model.UserStatusActive,
+		DeletedAt:        gorm.DeletedAt{Time: time.Now(), Valid: true},
+	}
+	require.NoError(t, db.Create(&deletedAdmin).Error)
+	require.NoError(t, db.Create(&model.UserRole{
+		UserID: deletedAdmin.ID, RoleID: adminRole.ID, GrantedBy: deletedAdmin.ID,
+	}).Error)
+
+	t.Setenv("ADMIN_EMAIL", "replacement-after-delete@example.com")
+	t.Setenv("ADMIN_PASSWORD", "ReplacementAfterDelete123!")
+	require.NoError(t, CreateDefaultAdmin(db, 12))
+
+	var activeUsers int64
+	require.NoError(t, db.Model(&model.User{}).Where("status = ?", model.UserStatusActive).Count(&activeUsers).Error)
+	require.Equal(t, int64(1), activeUsers)
+}
+
+func TestSeedRolesRestoresRecoveryAdminMetadata(t *testing.T) {
+	db := setupTestDB(t)
+	require.NoError(t, Run(db))
+
+	var adminRole model.Role
+	require.NoError(t, db.Where("name = ?", model.RoleAdmin).First(&adminRole).Error)
+	require.NoError(t, db.Model(&adminRole).Updates(map[string]any{
+		"display_name": "Corrupted Admin",
+		"description":  "Corrupted role metadata",
+		"is_system":    false,
+	}).Error)
+
+	require.NoError(t, SeedRoles(db))
+	require.NoError(t, db.Where("name = ?", model.RoleAdmin).First(&adminRole).Error)
+	require.True(t, adminRole.IsSystem)
+	require.Equal(t, "Administrator", adminRole.DisplayName)
 }

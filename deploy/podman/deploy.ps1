@@ -70,7 +70,10 @@ $composeArguments = @("--env-file", ".env", "-p", $instance, "-f", "compose.yaml
 Invoke-ImmutableComposeDeployment `
     -PodmanCompose $podmanCompose `
     -ComposeArguments $composeArguments `
-    -FailureMessage "Podman Compose deployment failed"
+    -FailureMessage "Podman Compose deployment failed" `
+    -ProjectName $instance `
+    -InfrastructureServices @("postgres", "redis") `
+    -BootstrapServices @("migrate", "seed")
 
 foreach ($container in @("$instance-frontend")) {
     for ($attempt = 1; $attempt -le 60; $attempt++) {

@@ -30,6 +30,14 @@ func TestSetDefaultsIncludesSentry(t *testing.T) {
 	require.False(t, v.GetBool("auth.session_cookie_secure"))
 }
 
+func TestSetDefaultsDisablesImplicitDatabaseBootstrap(t *testing.T) {
+	v := viper.New()
+	setDefaults(v)
+
+	require.False(t, v.GetBool("database.auto_migrate"))
+	require.False(t, v.GetBool("database.auto_seed"))
+}
+
 func TestSetDefaultsExposesCorrelationHeaders(t *testing.T) {
 	v := viper.New()
 	setDefaults(v)
@@ -144,6 +152,37 @@ func TestResolveSecretFilesOverridesInlineValues(t *testing.T) {
 	require.Equal(t, "redis-secret", loaded.Redis.Password)
 	require.Equal(t, "oauth-secret", loaded.Auth.OAuthSigningKey)
 	require.Equal(t, "encryption-secret", loaded.Security.EncryptionKey)
+}
+
+func TestLoadDatabaseReadsOnlyDatabaseSecret(t *testing.T) {
+	directory := t.TempDir()
+	dsnFile := filepath.Join(directory, "database-dsn")
+	require.NoError(t, os.WriteFile(dsnFile, []byte("postgres://paigram:secret@postgres/paigram\n"), 0o600))
+	configuration := `
+database:
+  dsn_file: "` + filepath.ToSlash(dsnFile) + `"
+  migrations_dir: /opt/paigram/migrations
+redis:
+  password_file: /missing/redis-password
+auth:
+  service_ticket_signing_key_file: /missing/service-ticket-key
+security:
+  encryption_key_file: /missing/encryption-key
+`
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "config.yaml"), []byte(configuration), 0o600))
+
+	loaded, err := LoadDatabase(directory)
+	require.NoError(t, err)
+	require.Equal(t, "postgres://paigram:secret@postgres/paigram", loaded.Database.DSN)
+	require.Equal(t, "/opt/paigram/migrations", loaded.Database.MigrationsDir)
+}
+
+func TestLoadDatabaseRequiresDSN(t *testing.T) {
+	directory := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "config.yaml"), []byte("database: {}\n"), 0o600))
+
+	_, err := LoadDatabase(directory)
+	require.EqualError(t, err, "database.dsn is required")
 }
 
 // TestSetDefaultsIncludesOAuthSettings covers the Path D §3.2 +

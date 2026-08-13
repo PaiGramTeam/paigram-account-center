@@ -3,8 +3,10 @@
 package e2ereal
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -27,6 +29,21 @@ func TestNewFixtureIdentityUsesNormalizedUniqueCredentials(t *testing.T) {
 	if len(first.password) < 32 || !strings.Contains(first.password, "-aA1!") {
 		t.Fatal("fixture password does not meet the expected strength profile")
 	}
+}
+
+func TestRunCommandPropagatesExitFailure(t *testing.T) {
+	executable, arguments := failingCommand()
+	err := runCommand(context.Background(), "fixture failure", executable, t.TempDir(), arguments, nil)
+	if err == nil || !strings.Contains(err.Error(), "run fixture failure") {
+		t.Fatalf("runCommand() error = %v, want wrapped command failure", err)
+	}
+}
+
+func failingCommand() (string, []string) {
+	if runtime.GOOS == "windows" {
+		return "cmd.exe", []string{"/c", "exit", "17"}
+	}
+	return "/bin/sh", []string{"-c", "exit 17"}
 }
 
 func TestWriteStateRemovesTemporaryFileWhenPublishFails(t *testing.T) {

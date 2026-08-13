@@ -331,25 +331,7 @@ var (
 func Load(paths ...string) (*Config, error) {
 	var err error
 	cfgOnce.Do(func() {
-		v := viper.New()
-		v.SetConfigName("config")
-		v.SetConfigType("yaml")
-
-		setDefaults(v)
-
-		if len(paths) == 0 {
-			v.AddConfigPath(".")
-			v.AddConfigPath("./config")
-			v.AddConfigPath("./configs")
-		} else {
-			for _, path := range paths {
-				v.AddConfigPath(path)
-			}
-		}
-
-		v.SetEnvPrefix("PAI")
-		v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-		v.AutomaticEnv()
+		v := newViper(paths)
 
 		if readErr := v.ReadInConfig(); readErr != nil {
 			err = fmt.Errorf("read config: %w", readErr)
@@ -629,8 +611,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("database.log_mode", "info")
 	v.SetDefault("database.log_zap", true)
 	v.SetDefault("database.slow_threshold", 1000)
-	v.SetDefault("database.auto_migrate", true)
-	v.SetDefault("database.auto_seed", true)
+	v.SetDefault("database.auto_migrate", false)
+	v.SetDefault("database.auto_seed", false)
 	v.SetDefault("openapi.enabled", true)
 	v.SetDefault("openapi.path", "/openapi")
 

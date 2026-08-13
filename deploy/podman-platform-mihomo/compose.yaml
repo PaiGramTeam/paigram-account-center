@@ -32,6 +32,24 @@ services:
       retries: 20
     networks: [platform-private]
 
+  migrate:
+    image: "${PAI_PLATFORM_IMAGE:?set PAI_PLATFORM_IMAGE to an immutable image reference containing @sha256}"
+    container_name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-migrate"
+    profiles: [bootstrap]
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      PAI_DATA_DATABASE_DSN_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"
+    secrets:
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"
+    command: ["-conf", "/opt/platform-mihomo/config/config.yaml", "migrate"]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    networks: [platform-private]
+
   platform-mihomo:
     image: "${PAI_PLATFORM_IMAGE:?set PAI_PLATFORM_IMAGE to an immutable image reference containing @sha256}"
     container_name: "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}"

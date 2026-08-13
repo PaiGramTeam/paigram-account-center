@@ -123,7 +123,13 @@ func SeedRoles(db *gorm.DB) error {
 		err := db.Where("name = ?", r.Name).First(&role).Error
 
 		if err == nil {
-			// Role already exists, update permissions
+			if err := db.Model(&role).Updates(map[string]any{
+				"display_name": r.DisplayName,
+				"description":  r.Description,
+				"is_system":    r.IsSystem,
+			}).Error; err != nil {
+				return fmt.Errorf("update role %s metadata: %w", r.Name, err)
+			}
 			if err := updateRolePermissions(db, &role, r.Permissions); err != nil {
 				return fmt.Errorf("update role %s permissions: %w", r.Name, err)
 			}

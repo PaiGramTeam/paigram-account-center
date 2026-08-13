@@ -91,16 +91,11 @@ func CreateDefaultAdmin(db *gorm.DB, bcryptCost int) error {
 		return fmt.Errorf("check admin role: %w", err)
 	}
 
-	// Check if any active user has the admin role
-	var count int64
-	if err := db.Table("user_roles").
-		Joins("JOIN users ON users.id = user_roles.user_id").
-		Where("user_roles.role_id = ? AND users.status = ?", adminRole.ID, model.UserStatusActive).
-		Count(&count).Error; err != nil {
+	administratorExists, err := recoveryAdministratorExists(db)
+	if err != nil {
 		return fmt.Errorf("check existing admins: %w", err)
 	}
-
-	if count > 0 {
+	if administratorExists {
 		log.Printf("Admin user already exists, skipping creation")
 		return nil
 	}
@@ -123,6 +118,12 @@ func CreateDefaultAdmin(db *gorm.DB, bcryptCost int) error {
 	log.Println("  Rotate the password via the admin UI as soon as possible.")
 	log.Println("================================================================")
 	return nil
+}
+
+func recoveryAdministratorExists(db *gorm.DB) (bool, error) {
+	var exists bool
+	err := db.Raw("SELECT recovery_administrator_exists()").Scan(&exists).Error
+	return exists, err
 }
 
 // resolveBcryptCost clamps the cost into the safe [10,14] range.

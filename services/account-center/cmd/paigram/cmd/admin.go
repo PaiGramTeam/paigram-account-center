@@ -103,11 +103,10 @@ func validateNewPassword(p string) error {
 	return nil
 }
 
-// loadAppConfig wraps config.MustLoad so admin command paths share a
-// single load site (and we can stub it in tests if needed). Auto-migrate
-// and auto-seed are disabled because the CLI manages its own DB lifecycle.
+// loadAppConfig reads only database command settings so admin maintenance
+// never depends on runtime signing, transport, or cache secrets.
 func loadAppConfig() *config.Config {
-	return config.MustLoad("config")
+	return config.MustLoadDatabase("config")
 }
 
 func createAdmin(cmd *cobra.Command) {

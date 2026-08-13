@@ -89,9 +89,36 @@ func TestLoadBootstrapSecretFilesOverridesInlineValues(t *testing.T) {
 		Database: &conf.Data_Database{Dsn: "inline", DsnFile: dsnFile},
 		Redis:    &conf.Data_Redis{Password: "inline", PasswordFile: passwordFile},
 	}}
-	require.NoError(t, loadBootstrapSecretFiles(bootstrap))
+	require.NoError(t, loadDatabaseSecretFile(bootstrap))
+	require.NoError(t, loadRuntimeSecretFiles(bootstrap))
 	require.Equal(t, "postgres://secret", bootstrap.Data.Database.Dsn)
 	require.Equal(t, "redis-secret", bootstrap.Data.Redis.Password)
+}
+
+func TestMigrationSecretLoadingDoesNotReadRuntimeSecrets(t *testing.T) {
+	directory := t.TempDir()
+	dsnFile := filepath.Join(directory, "database-dsn")
+	require.NoError(t, os.WriteFile(dsnFile, []byte("postgres://secret\n"), 0o600))
+	bootstrap := &conf.Bootstrap{Data: &conf.Data{
+		Database: &conf.Data_Database{DsnFile: dsnFile},
+		Redis:    &conf.Data_Redis{PasswordFile: filepath.Join(directory, "missing-redis-password")},
+	}}
+
+	require.NoError(t, loadDatabaseSecretFile(bootstrap))
+	require.Equal(t, "postgres://secret", bootstrap.Data.Database.Dsn)
+}
+
+func TestParseCommand(t *testing.T) {
+	command, err := parseCommand(nil)
+	require.NoError(t, err)
+	require.Equal(t, "serve", command)
+
+	command, err = parseCommand([]string{"migrate"})
+	require.NoError(t, err)
+	require.Equal(t, "migrate", command)
+
+	_, err = parseCommand([]string{"migrate", "extra"})
+	require.EqualError(t, err, `unsupported command "migrate extra"`)
 }
 
 func TestUpstreamBaseURLResolvesFromPrefixedEnvironment(t *testing.T) {
