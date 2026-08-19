@@ -258,8 +258,8 @@ exit $LASTEXITCODE
         $output -join "`n" | Should Match "Recovered release verification passed"
         Test-Path -LiteralPath $evidenceFile | Should Be $true
         $invocations = Get-Content -LiteralPath (Join-Path $recoveredRoot "podman-invocations.log") -Raw
-        $invocations | Should Match ([regex]::Escape("wget -q -O - http://account-center:8080/livez"))
-        $invocations | Should Match ([regex]::Escape("wget -q -O - http://account-center:8080/readyz"))
+        $invocations | Should Match ([regex]::Escape("wget -Y off -q -O - http://account-center:8080/livez"))
+        $invocations | Should Match ([regex]::Escape("wget -Y off -q -O - http://account-center:8080/readyz"))
         $invocations | Should Match "platform-mihomo-healthcheck.*-timeout 5s(\r?\n|$)"
         $invocations | Should Match "platform-mihomo-healthcheck.*-service liveness"
     }

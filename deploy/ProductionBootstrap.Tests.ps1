@@ -22,4 +22,16 @@ Describe "Production database bootstrap" {
         $platformCompose | Should Match 'profiles: \[bootstrap\]'
         $platformCompose | Should Match 'command: \["-conf", "/opt/platform-mihomo/config/config.yaml", "migrate"\]'
     }
+
+    It "does not inherit ambient host proxy settings into application services" {
+        foreach ($name in @("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy")) {
+            ([regex]::Matches($accountCompose, "(?m)^      ${name}: `"`"$")).Count | Should Be 2
+            ([regex]::Matches($platformCompose, "(?m)^      ${name}: `"`"$")).Count | Should Be 1
+        }
+    }
+
+    It "disables proxy use in container-local health probes" {
+        $accountCompose | Should Match ([regex]::Escape('wget", "-Y", "off", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz'))
+        $accountCompose | Should Match ([regex]::Escape('wget", "-Y", "off", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/nginx-health'))
+    }
 }

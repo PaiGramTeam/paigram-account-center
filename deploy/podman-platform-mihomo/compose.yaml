@@ -58,6 +58,12 @@ services:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
     environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
       PAI_UPSTREAM_BASE_URL: "${PAI_MIHOMO_UPSTREAM_BASE_URL:?set the HTTPS Mihomo upstream URL}"
       PAI_DATA_DATABASE_DSN_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn"
       PAI_DATA_REDIS_PASSWORD_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"

@@ -166,7 +166,7 @@ function Assert-RecoveryAccountHealth {
     )
     $raw = Invoke-RecoveryPodmanText -Arguments @(
         "exec", $FrontendContainer,
-        "wget", "-q", "-O", "-", "http://account-center:8080$Path"
+        "wget", "-Y", "off", "-q", "-O", "-", "http://account-center:8080$Path"
     ) -FailureMessage "Account health probe failed for $Path"
     $response = $raw | ConvertFrom-Json
     if ($response.code -ne 200 -or $response.data.status -ne "ok") {
