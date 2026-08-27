@@ -21,7 +21,7 @@ import type {
 
 interface AuthState {
   loading: boolean
-  loginType: 'email' | 'oauth' | 'telegram' | null
+  loginType: 'email' | 'oauth' | null
 }
 
 export interface LoginWithEmailResult {
@@ -216,6 +216,9 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         if (purpose === 'bind') {
+          const restored = await this.bootstrapSession()
+          if (!restored) throw new Error('登录会话已失效，请重新登录后再绑定')
+
           const response = await authApi.handleOAuthCallback(provider, callbackData)
           if (!response.data.bound || response.data.purpose !== 'bind_login_method') {
             throw new Error('OAuth callback did not complete account binding')

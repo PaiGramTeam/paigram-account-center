@@ -39,6 +39,12 @@ func TestLookupReturnsLocalForPrivateIPs(t *testing.T) {
 	}
 }
 
+func TestLookupFailsClosedWithoutAProvider(t *testing.T) {
+	s := NewService()
+	_, err := s.Lookup("8.8.8.8")
+	require.ErrorIs(t, err, ErrProviderNotConfigured)
+}
+
 func TestLookupCachesPublicIPResult(t *testing.T) {
 	var calls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -121,9 +127,8 @@ func TestSetHTTPClientIgnoresNil(t *testing.T) {
 
 func TestSetAPIBaseURLIgnoresEmpty(t *testing.T) {
 	s := NewService()
-	originalBase := s.apiBaseURL
 	s.SetAPIBaseURL("")
-	require.Equal(t, originalBase, s.apiBaseURL, "empty base must be ignored, not overwrite the existing base")
+	require.Empty(t, s.apiBaseURL, "empty base must keep external lookup disabled")
 }
 
 func TestIsPrivateIP(t *testing.T) {

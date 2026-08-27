@@ -1362,12 +1362,12 @@
   {
     "kind": "column",
     "name": "public.user_credentials.access_token",
-    "detail": "position=6;type=text;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=7;type=text;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.created_at",
-    "detail": "position=12;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=13;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
@@ -1376,18 +1376,23 @@
   },
   {
     "kind": "column",
+    "name": "public.user_credentials.issuer",
+    "detail": "position=4;type=character varying(255);not_null=t;identity=;generated=;default=;collation="
+  },
+  {
+    "kind": "column",
     "name": "public.user_credentials.last_sync_at",
-    "detail": "position=10;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=11;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.metadata",
-    "detail": "position=11;type=text;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=12;type=text;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.password_hash",
-    "detail": "position=5;type=character varying(255);not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=6;type=character varying(255);not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -1397,27 +1402,27 @@
   {
     "kind": "column",
     "name": "public.user_credentials.provider_account_id",
-    "detail": "position=4;type=character varying(255);not_null=t;identity=;generated=;default=;collation="
+    "detail": "position=5;type=character varying(255);not_null=t;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.refresh_token",
-    "detail": "position=7;type=text;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=8;type=text;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.scopes",
-    "detail": "position=9;type=character varying(512);not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=10;type=character varying(512);not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.token_expiry",
-    "detail": "position=8;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
+    "detail": "position=9;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
     "name": "public.user_credentials.updated_at",
-    "detail": "position=13;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
+    "detail": "position=14;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
   {
     "kind": "column",
@@ -1546,11 +1551,6 @@
   },
   {
     "kind": "column",
-    "name": "public.user_oauth_states.consumed_at",
-    "detail": "position=14;type=timestamp with time zone;not_null=f;identity=;generated=;default=;collation="
-  },
-  {
-    "kind": "column",
     "name": "public.user_oauth_states.created_at",
     "detail": "position=12;type=timestamp with time zone;not_null=t;identity=;generated=;default=CURRENT_TIMESTAMP;collation="
   },
@@ -1563,11 +1563,6 @@
     "kind": "column",
     "name": "public.user_oauth_states.id",
     "detail": "position=1;type=bigint;not_null=t;identity=;generated=;default=nextval('user_oauth_states_id_seq'::regclass);collation="
-  },
-  {
-    "kind": "column",
-    "name": "public.user_oauth_states.metadata",
-    "detail": "position=13;type=jsonb;not_null=f;identity=;generated=;default=;collation="
   },
   {
     "kind": "column",
@@ -2361,13 +2356,18 @@
   },
   {
     "kind": "constraint",
+    "name": "public.user_credentials.chk_user_credentials_issuer_nonempty",
+    "detail": "type=c;deferrable=f;deferred=f;validated=t;definition=CHECK (btrim(issuer::text) \u003c\u003e ''::text)"
+  },
+  {
+    "kind": "constraint",
     "name": "public.user_credentials.fk_user_credentials_user",
     "detail": "type=f;deferrable=f;deferred=f;validated=t;definition=FOREIGN KEY (user_id) REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE"
   },
   {
     "kind": "constraint",
-    "name": "public.user_credentials.uniq_provider_account",
-    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (provider, provider_account_id)"
+    "name": "public.user_credentials.uniq_issuer_subject",
+    "detail": "type=u;deferrable=f;deferred=f;validated=t;definition=UNIQUE (issuer, provider_account_id)"
   },
   {
     "kind": "constraint",
@@ -3176,8 +3176,8 @@
   },
   {
     "kind": "index",
-    "name": "public.user_credentials.uniq_provider_account",
-    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_provider_account ON public.user_credentials USING btree (provider, provider_account_id)"
+    "name": "public.user_credentials.uniq_issuer_subject",
+    "detail": "primary=f;unique=t;valid=t;ready=t;definition=CREATE UNIQUE INDEX uniq_issuer_subject ON public.user_credentials USING btree (issuer, provider_account_id)"
   },
   {
     "kind": "index",

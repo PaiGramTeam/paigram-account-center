@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"paigram/internal/config"
+	"paigram/internal/model"
 )
 
 // TestHandlerVerifyIDToken_NonTelegramUsesStrictOIDCVerifier exercises the
@@ -70,7 +71,7 @@ func TestHandlerVerifyIDToken_NonTelegramUsesStrictOIDCVerifier(t *testing.T) {
 			},
 			Nonce: "expected-nonce",
 		}, "google-test-kid", priv)
-		claims, err := h.verifyIDToken(context.Background(), "google", good, providerCfg, "expected-nonce")
+		claims, err := h.verifyIDToken(context.Background(), "custom", good, providerCfg, "expected-nonce")
 		require.NoError(t, err)
 		require.NotNil(t, claims)
 		assert.Equal(t, "google-user-1", claims.Subject)
@@ -88,7 +89,7 @@ func TestHandlerVerifyIDToken_NonTelegramUsesStrictOIDCVerifier(t *testing.T) {
 				IssuedAt:  jwt.NewNumericDate(now),
 			},
 		}, "google-test-kid", priv)
-		_, err := h.verifyIDToken(context.Background(), "google", nonceless, providerCfg, "expected-nonce")
+		_, err := h.verifyIDToken(context.Background(), "custom", nonceless, providerCfg, "expected-nonce")
 		require.Error(t, err)
 	})
 
@@ -105,7 +106,7 @@ func TestHandlerVerifyIDToken_NonTelegramUsesStrictOIDCVerifier(t *testing.T) {
 			},
 			Nonce: "expected-nonce",
 		}, "google-test-kid", other)
-		_, err = h.verifyIDToken(context.Background(), "google", bad, providerCfg, "expected-nonce")
+		_, err = h.verifyIDToken(context.Background(), "custom", bad, providerCfg, "expected-nonce")
 		require.Error(t, err)
 	})
 
@@ -139,10 +140,30 @@ func TestHandlerVerifyIDToken_EmptyTokenReturnsNilWithNoError(t *testing.T) {
 	assert.Nil(t, claims)
 }
 
+func TestHandlerVerifyIDToken_OIDCProviderRequiresIDToken(t *testing.T) {
+	h := &Handler{oidcVerifiers: newOIDCVerifierCache()}
+
+	for _, testCase := range []struct {
+		name     string
+		provider string
+		config   config.OAuthProviderConfig
+	}{
+		{name: "known provider", provider: "google"},
+		{name: "configured JWKS", provider: "custom", config: config.OAuthProviderConfig{JWKSURL: "https://issuer.example/jwks"}},
+		{name: "openid scope", provider: "custom", config: config.OAuthProviderConfig{Scopes: []string{"profile", "openid"}}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			claims, err := h.verifyIDToken(context.Background(), testCase.provider, "", testCase.config, "nonce")
+			require.Error(t, err)
+			assert.Nil(t, claims)
+		})
+	}
+}
+
 // TestVerifyTelegramIDToken_RejectsEmptyNonceClaimWhenExpected is a
 // regression guard for Critical #2 of the C2 review.
 //
-// Before the fix, verifyTelegramIDToken's nonce check was:
+// The shared verifier must reject an empty nonce when a nonce is expected.
 //
 //	if expectedNonce != "" && claims.Nonce != "" && !secsubtle.StringEqual(...)
 //
@@ -155,13 +176,6 @@ func TestVerifyTelegramIDToken_RejectsEmptyNonceClaimWhenExpected(t *testing.T) 
 	// Wire up a fake Telegram JWKS server signed by a fresh RSA key.
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-
-	originalJWKSURL := telegramOIDCJWKSURL
-	originalIssuer := telegramOIDCIssuer
-	t.Cleanup(func() {
-		telegramOIDCJWKSURL = originalJWKSURL
-		telegramOIDCIssuer = originalIssuer
-	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		payload := map[string]any{
@@ -176,15 +190,14 @@ func TestVerifyTelegramIDToken_RejectsEmptyNonceClaimWhenExpected(t *testing.T) 
 	}))
 	defer server.Close()
 
-	telegramOIDCJWKSURL = server.URL
-	telegramOIDCIssuer = "https://issuer.example"
+	issuer := model.TelegramIdentityIssuer
 
 	// Construct a properly-signed Telegram id_token that DOES NOT carry a
 	// nonce claim (i.e. claims.Nonce == "" after parsing).
 	now := time.Now()
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, oidcIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    telegramOIDCIssuer,
+			Issuer:    issuer,
 			Subject:   "telegram-user-no-nonce",
 			Audience:  jwt.ClaimStrings{"123456789"},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
@@ -199,7 +212,12 @@ func TestVerifyTelegramIDToken_RejectsEmptyNonceClaimWhenExpected(t *testing.T) 
 	// Server expected a specific nonce. The strict policy MUST refuse a
 	// token that omits the nonce claim — accepting it would let an attacker
 	// replay an id_token across sessions.
-	_, err = verifyTelegramIDToken(context.Background(), idToken, "123456789", "expected-nonce-abc123")
+	h := &Handler{oidcVerifiers: newOIDCVerifierCache()}
+	_, err = h.verifyIDToken(context.Background(), "telegram", idToken, config.OAuthProviderConfig{
+		ClientID: "123456789",
+		Issuer:   issuer,
+		JWKSURL:  server.URL,
+	}, "expected-nonce-abc123")
 	require.Error(t, err, "telegram id_token with no nonce claim must be rejected when a nonce was expected")
 	assert.Contains(t, strings.ToLower(err.Error()), "nonce", "error should reference the nonce check; got: %v", err)
 }
@@ -211,13 +229,6 @@ func TestVerifyTelegramIDToken_RejectsEmptyNonceClaimWhenExpected(t *testing.T) 
 func TestVerifyTelegramIDToken_AcceptsMatchingNonce(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-
-	originalJWKSURL := telegramOIDCJWKSURL
-	originalIssuer := telegramOIDCIssuer
-	t.Cleanup(func() {
-		telegramOIDCJWKSURL = originalJWKSURL
-		telegramOIDCIssuer = originalIssuer
-	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		payload := map[string]any{
@@ -232,13 +243,12 @@ func TestVerifyTelegramIDToken_AcceptsMatchingNonce(t *testing.T) {
 	}))
 	defer server.Close()
 
-	telegramOIDCJWKSURL = server.URL
-	telegramOIDCIssuer = "https://issuer.example"
+	issuer := model.TelegramIdentityIssuer
 
 	now := time.Now()
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, oidcIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    telegramOIDCIssuer,
+			Issuer:    issuer,
 			Subject:   "telegram-user-with-nonce",
 			Audience:  jwt.ClaimStrings{"123456789"},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
@@ -250,7 +260,12 @@ func TestVerifyTelegramIDToken_AcceptsMatchingNonce(t *testing.T) {
 	idToken, err := tok.SignedString(privateKey)
 	require.NoError(t, err)
 
-	claims, err := verifyTelegramIDToken(context.Background(), idToken, "123456789", "expected-nonce-abc123")
+	h := &Handler{oidcVerifiers: newOIDCVerifierCache()}
+	claims, err := h.verifyIDToken(context.Background(), "telegram", idToken, config.OAuthProviderConfig{
+		ClientID: "123456789",
+		Issuer:   issuer,
+		JWKSURL:  server.URL,
+	}, "expected-nonce-abc123")
 	require.NoError(t, err)
 	require.NotNil(t, claims)
 	assert.Equal(t, "telegram-user-with-nonce", claims.Subject)

@@ -46,7 +46,8 @@ database:
   log_mode: "info"
   log_zap: true
   slow_threshold: 200
-  auto_migrate: true
+  auto_migrate: false
+  auto_seed: false
 
 openapi:
   enabled: true
@@ -86,7 +87,9 @@ auth:
     google:
       client_id: "your-google-client-id"
       client_secret: "your-google-client-secret"
-      redirect_url: "http://localhost:8080/api/v1/auth/oauth/google/callback"
+      redirect_url: "http://localhost:8080/auth/callback/google"
+      allowed_redirect_urls:
+        - "http://localhost:8080/admin/auth/callback/google"
       auth_url: "https://accounts.google.com/o/oauth2/v2/auth"
       token_url: "https://oauth2.googleapis.com/token"
       user_info_url: "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -97,7 +100,9 @@ auth:
     github:
       client_id: "your-github-client-id"
       client_secret: "your-github-client-secret"
-      redirect_url: "http://localhost:8080/api/v1/auth/oauth/github/callback"
+      redirect_url: "http://localhost:8080/auth/callback/github"
+      allowed_redirect_urls:
+        - "http://localhost:8080/admin/auth/callback/github"
       auth_url: "https://github.com/login/oauth/authorize"
       token_url: "https://github.com/login/oauth/access_token"
       user_info_url: "https://api.github.com/user"
@@ -106,7 +111,7 @@ auth:
     telegram:
       client_id: "your-telegram-client-id"
       client_secret: "your-telegram-client-secret"
-      redirect_url: "http://localhost:8080/api/v1/auth/oauth/telegram/callback"
+      redirect_url: "http://localhost:8080/auth/callback/telegram"
       auth_url: "https://oauth.telegram.org/auth"
       token_url: "https://oauth.telegram.org/token"
       scopes:

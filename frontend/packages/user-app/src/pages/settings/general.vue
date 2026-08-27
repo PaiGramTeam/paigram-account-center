@@ -25,13 +25,19 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
 import { Message } from '@arco-design/web-vue'
+import { changeLocale, locale, useAppStore, type LocaleType } from '@paigram/shared-components'
 
-const form = reactive({
-  language: 'zh-CN',
-  theme: 'light',
+type ThemeMode = 'light' | 'dark' | 'auto'
+
+const appStore = useAppStore()
+const form = reactive<{ language: LocaleType; theme: ThemeMode }>({
+  language: locale.value as LocaleType,
+  theme: appStore.theme,
 })
 
 const handleSave = (): void => {
+  changeLocale(form.language)
+  appStore.setTheme(form.theme)
   Message.success('设置已保存')
 }
 </script>

@@ -756,6 +756,7 @@ func (h *Handler) CreateUser(c *gin.Context) {
 		credential := model.UserCredential{
 			UserID:            user.ID,
 			Provider:          string(model.LoginTypeEmail),
+			Issuer:            model.LocalEmailIdentityIssuer,
 			ProviderAccountID: email,
 			PasswordHash:      string(hashedPassword),
 		}

@@ -89,6 +89,7 @@ import { Message } from '@arco-design/web-vue'
 import { IconGithub, IconGoogle } from '@arco-design/web-vue/es/icon'
 import { AuthTwoFactorStep, TurnstileWidget, useUserStore } from '@paigram/shared-components'
 import { resolveAdminPostLoginRoute, useAuthStore } from '@/stores/auth'
+import { isSafeInternalPath } from '@/utils/navigation'
 import type { LoginEmailRequest } from '@paigram/shared-components'
 
 const route = useRoute()
@@ -198,9 +199,9 @@ const handleOAuthLogin = async (provider: string): Promise<void> => {
   try {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     const callbackURL = new URL(`${import.meta.env.BASE_URL}auth/callback/${provider}`, window.location.origin)
-    if (redirect) {
-      callbackURL.searchParams.set('redirect_to', redirect)
-    }
+    const returnKey = `oauth-admin-return:${provider}`
+    if (isSafeInternalPath(redirect)) sessionStorage.setItem(returnKey, redirect)
+    else sessionStorage.removeItem(returnKey)
 
     const authURL = await authStore.initiateOAuth(provider, callbackURL.toString())
     window.location.href = authURL

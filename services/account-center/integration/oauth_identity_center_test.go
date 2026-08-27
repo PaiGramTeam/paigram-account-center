@@ -16,6 +16,86 @@ import (
 	"paigram/internal/model"
 )
 
+func TestOAuthLoginKeysExternalIdentityByIssuerAndSubject(t *testing.T) {
+	provider := newIntegrationOAuthProvider(t)
+	stack := newIntegrationStackWithConfig(t, func(cfg *config.Config) {
+		cfg.Auth.OAuthStateTTLSeconds = 300
+		cfg.Auth.DefaultOAuthRedirectURL = "https://app.example.com/auth/callback"
+		cfg.Auth.AllowedOAuthProviders = []string{"tenant-a", "tenant-b"}
+		cfg.Auth.OAuthProviders = map[string]config.OAuthProviderConfig{
+			"tenant-a": integrationOAuthProviderConfig(provider, "https://tenant-a.example"),
+			"tenant-b": integrationOAuthProviderConfig(provider, "https://tenant-b.example"),
+		}
+	})
+
+	firstUserID := oauthLoginThroughHTTP(t, stack, "tenant-a")
+	secondUserID := oauthLoginThroughHTTP(t, stack, "tenant-b")
+	replayedFirstUserID := oauthLoginThroughHTTP(t, stack, "tenant-a")
+
+	require.NotEqual(t, firstUserID, secondUserID)
+	require.Equal(t, firstUserID, replayedFirstUserID)
+
+	var credentials []model.UserCredential
+	require.NoError(t, stack.DB.Where("provider_account_id = ?", "123456789").Order("issuer ASC").Find(&credentials).Error)
+	require.Len(t, credentials, 2)
+	assert.Equal(t, "https://tenant-a.example", credentials[0].Issuer)
+	assert.Equal(t, "https://tenant-b.example", credentials[1].Issuer)
+}
+
+func TestUserCredentialBatchPasswordUpdateDoesNotRequireIdentityFields(t *testing.T) {
+	stack := newIntegrationStack(t)
+	user := model.User{Status: model.UserStatusActive, PrimaryLoginType: model.LoginTypeEmail}
+	require.NoError(t, stack.DB.Create(&user).Error)
+	credential := model.UserCredential{
+		UserID:            user.ID,
+		Provider:          string(model.LoginTypeEmail),
+		ProviderAccountID: "batch-update@example.com",
+		PasswordHash:      "old",
+	}
+	require.NoError(t, stack.DB.Create(&credential).Error)
+
+	require.NoError(t, stack.DB.Model(&model.UserCredential{}).
+		Where("id = ?", credential.ID).
+		Update("password_hash", "new").Error)
+
+	var persisted model.UserCredential
+	require.NoError(t, stack.DB.First(&persisted, credential.ID).Error)
+	assert.Equal(t, "new", persisted.PasswordHash)
+}
+
+func TestUserCredentialCreateCanonicalizesBuiltInIssuer(t *testing.T) {
+	stack := newIntegrationStack(t)
+	user := model.User{Status: model.UserStatusActive, PrimaryLoginType: model.LoginTypeGithub}
+	require.NoError(t, stack.DB.Create(&user).Error)
+	credential := model.UserCredential{
+		UserID:            user.ID,
+		Provider:          " GitHub ",
+		Issuer:            "https://attacker.example",
+		ProviderAccountID: "canonical-issuer-subject",
+	}
+
+	require.NoError(t, stack.DB.Create(&credential).Error)
+
+	var persisted model.UserCredential
+	require.NoError(t, stack.DB.First(&persisted, credential.ID).Error)
+	assert.Equal(t, string(model.LoginTypeGithub), persisted.Provider)
+	assert.Equal(t, model.GitHubIdentityIssuer, persisted.Issuer)
+}
+
+func TestUserCredentialCreateRejectsMissingCustomIssuer(t *testing.T) {
+	stack := newIntegrationStack(t)
+	user := model.User{Status: model.UserStatusActive, PrimaryLoginType: model.LoginType("custom")}
+	require.NoError(t, stack.DB.Create(&user).Error)
+	credential := model.UserCredential{
+		UserID:            user.ID,
+		Provider:          "custom",
+		ProviderAccountID: "missing-issuer-subject",
+	}
+
+	err := stack.DB.Create(&credential).Error
+	require.ErrorIs(t, err, model.ErrCredentialIssuerRequired)
+}
+
 func TestOAuthBindFlowRejectsProviderAlreadyBoundToAnotherUser(t *testing.T) {
 	provider := newIntegrationOAuthProvider(t)
 
@@ -43,14 +123,14 @@ func TestOAuthBindFlowRejectsProviderAlreadyBoundToAnotherUser(t *testing.T) {
 	credential := model.UserCredential{
 		UserID:            ownerID,
 		Provider:          "github",
-		ProviderAccountID: "github-user-123",
+		ProviderAccountID: "123456789",
 	}
 	require.NoError(t, credential.SetAccessToken("bound-access-token"))
 	require.NoError(t, credential.SetRefreshToken("bound-refresh-token"))
 	require.NoError(t, stack.DB.Create(&credential).Error)
 
 	initRes := performJSONRequest(t, stack.Router, http.MethodPut, "/api/v1/me/login-methods/github", map[string]any{
-		"redirect_to": "https://app.example.com/settings/login-methods",
+		"redirect_to": "https://app.example.com/auth/callback",
 	}, authHeaders(binderAccessToken))
 	require.Equal(t, http.StatusOK, initRes.Code, initRes.Body.String())
 
@@ -103,7 +183,7 @@ func TestOAuthBindFlowRejectsReplacingExistingProviderAccountOnSameUser(t *testi
 	require.NoError(t, stack.DB.Create(&credential).Error)
 
 	initRes := performJSONRequest(t, stack.Router, http.MethodPut, "/api/v1/me/login-methods/github", map[string]any{
-		"redirect_to": "https://app.example.com/settings/login-methods",
+		"redirect_to": "https://app.example.com/auth/callback",
 	}, authHeaders(binderAccessToken))
 	require.Equal(t, http.StatusOK, initRes.Code, initRes.Body.String())
 
@@ -149,7 +229,7 @@ func TestOAuthBindFlowRequiresAuthenticatedSessionForCallback(t *testing.T) {
 	_, otherAccessToken, _, _, _ := registerVerifyAndLogin(t, stack, "oauth-bind-callback-other")
 
 	initRes := performJSONRequest(t, stack.Router, http.MethodPut, "/api/v1/me/login-methods/github", map[string]any{
-		"redirect_to": "https://app.example.com/settings/login-methods",
+		"redirect_to": "https://app.example.com/auth/callback",
 	}, authHeaders(binderAccessToken))
 	require.Equal(t, http.StatusOK, initRes.Code, initRes.Body.String())
 
@@ -209,7 +289,7 @@ func TestOAuthBindFlowWrongUserDoesNotConsumeState(t *testing.T) {
 	_, otherAccessToken, _, _, _ := registerVerifyAndLogin(t, stack, "oauth-bind-retry-other")
 
 	initRes := performJSONRequest(t, stack.Router, http.MethodPut, "/api/v1/me/login-methods/github", map[string]any{
-		"redirect_to": "https://app.example.com/settings/login-methods",
+		"redirect_to": "https://app.example.com/auth/callback",
 	}, authHeaders(binderAccessToken))
 	require.Equal(t, http.StatusOK, initRes.Code, initRes.Body.String())
 
@@ -268,16 +348,20 @@ func newIntegrationOAuthProvider(t *testing.T) *integrationOAuthProvider {
 
 	userInfoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"id":         "github-user-123",
-			"name":       "GitHub Integration User",
-			"login":      "integration-user",
-			"avatar_url": "https://avatars.example.com/u/123",
+			"id":             123456789,
+			"email":          "same-person@example.com",
+			"email_verified": true,
+			"name":           "GitHub Integration User",
+			"login":          "integration-user",
+			"avatar_url":     "https://avatars.example.com/u/123",
 		}))
 	}))
 	t.Cleanup(userInfoServer.Close)
 	provider.userInfoURL = userInfoServer.URL
 
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		require.NoError(t, request.ParseForm())
+		assert.Equal(t, "https://app.example.com/auth/callback", request.Form.Get("redirect_uri"))
 		_, err := w.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer","expires_in":3600,"scope":"read:user"}`))
 		require.NoError(t, err)
 	}))
@@ -285,4 +369,36 @@ func newIntegrationOAuthProvider(t *testing.T) *integrationOAuthProvider {
 	provider.tokenURL = tokenServer.URL
 
 	return provider
+}
+
+func integrationOAuthProviderConfig(provider *integrationOAuthProvider, issuer string) config.OAuthProviderConfig {
+	return config.OAuthProviderConfig{
+		ClientID:     provider.clientID,
+		ClientSecret: provider.clientSecret,
+		RedirectURL:  "https://app.example.com/auth/callback",
+		AuthURL:      issuer + "/auth",
+		TokenURL:     provider.tokenURL,
+		UserInfoURL:  provider.userInfoURL,
+		Issuer:       issuer,
+	}
+}
+
+func oauthLoginThroughHTTP(t *testing.T, stack *integrationStack, provider string) uint64 {
+	t.Helper()
+	initResponse := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/auth/oauth/"+provider+"/init", map[string]any{
+		"redirect_to": "https://app.example.com/auth/callback",
+	}, nil)
+	require.Equal(t, http.StatusOK, initResponse.Code, initResponse.Body.String())
+	state, _ := decodeResponseData(t, initResponse)["state"].(string)
+	require.NotEmpty(t, state)
+
+	callbackResponse := performJSONRequest(t, stack.Router, http.MethodPost, "/api/v1/auth/oauth/"+provider+"/callback", map[string]any{
+		"state": state,
+		"code":  "provider-code",
+	}, nil)
+	require.Equal(t, http.StatusOK, callbackResponse.Code, callbackResponse.Body.String())
+	userID, ok := decodeResponseData(t, callbackResponse)["user_id"].(float64)
+	require.True(t, ok)
+	require.Positive(t, userID)
+	return uint64(userID)
 }

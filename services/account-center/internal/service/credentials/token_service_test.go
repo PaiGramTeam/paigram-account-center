@@ -1,6 +1,7 @@
 package credentials
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -299,7 +300,7 @@ func TestTokenService_ValidateRejectsTamperedSignature(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tampered := flipLastChar(issued.AccessToken)
+	tampered := tamperSignature(issued.AccessToken)
 	require.NotEqual(t, issued.AccessToken, tampered)
 
 	_, err = tokenSvc.ValidateAccessToken(tampered, "mihomo.sync")
@@ -360,16 +361,19 @@ func mintExpiredToken(t *testing.T, clientID, audience, issuer string) string {
 	return signed
 }
 
-// flipLastChar swaps the final character of the JWT with a different
-// base64url character so the signature segment no longer verifies.
-func flipLastChar(token string) string {
-	if token == "" {
+// tamperSignature changes the first encoded signature character, which always
+// changes decoded signature bits. Changing the final character can alter only
+// unused Base64URL padding bits and leave the decoded signature unchanged.
+func tamperSignature(token string) string {
+	separator := strings.LastIndexByte(token, '.')
+	if separator < 0 || separator == len(token)-1 {
 		return token
 	}
-	last := token[len(token)-1]
+	signatureStart := separator + 1
+	first := token[signatureStart]
 	replacement := byte('A')
-	if last == 'A' {
+	if first == 'A' {
 		replacement = 'B'
 	}
-	return token[:len(token)-1] + string(replacement)
+	return token[:signatureStart] + string(replacement) + token[signatureStart+1:]
 }

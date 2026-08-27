@@ -29,15 +29,142 @@ class ChannelBus {
   }
 }
 
+class OutOfOrderChannelBus extends ChannelBus {
+  constructor(private readonly afterAuthenticated: () => void) {
+    super()
+  }
+  override channel() {
+    return {
+      postMessage: (data: unknown) => {
+        const type = (data as { type?: unknown } | null)?.type
+        if (type === 'request') return
+        queueMicrotask(() => {
+          this.listeners.forEach((listener) => listener({ data }))
+          if (type === 'authenticated') this.afterAuthenticated()
+        })
+      },
+      addEventListener: (_type: 'message', listener: (event: { data: unknown }) => void) =>
+        this.listeners.add(listener),
+      removeEventListener: (_type: 'message', listener: (event: { data: unknown }) => void) =>
+        this.listeners.delete(listener),
+    }
+  }
+}
+
+class LossyChannelBus extends ChannelBus {
+  private dropAuthenticated = false
+  private requestsToDrop = 0
+
+  dropNextHandoff(requestsToDrop: number): void {
+    this.dropAuthenticated = true
+    this.requestsToDrop = requestsToDrop
+  }
+
+  override channel() {
+    return {
+      postMessage: (data: unknown) => {
+        const type = (data as { type?: unknown } | null)?.type
+        if (type === 'authenticated' && this.dropAuthenticated) {
+          this.dropAuthenticated = false
+          return
+        }
+        if (type === 'request' && this.requestsToDrop > 0) {
+          this.requestsToDrop -= 1
+          return
+        }
+        queueMicrotask(() => this.listeners.forEach((listener) => listener({ data })))
+      },
+      addEventListener: (_type: 'message', listener: (event: { data: unknown }) => void) =>
+        this.listeners.add(listener),
+      removeEventListener: (_type: 'message', listener: (event: { data: unknown }) => void) =>
+        this.listeners.delete(listener),
+    }
+  }
+}
+
+class DelayedRequestChannelBus extends ChannelBus {
+  constructor(private readonly requestDelayMs: number) {
+    super()
+  }
+
+  override channel() {
+    return {
+      postMessage: (data: unknown) => {
+        const deliver = () => this.listeners.forEach((listener) => listener({ data }))
+        if ((data as { type?: unknown } | null)?.type === 'request') {
+          setTimeout(deliver, this.requestDelayMs)
+          return
+        }
+        queueMicrotask(deliver)
+      },
+      addEventListener: (_type: 'message', listener: (event: { data: unknown }) => void) =>
+        this.listeners.add(listener),
+      removeEventListener: (_type: 'message', listener: (event: { data: unknown }) => void) =>
+        this.listeners.delete(listener),
+    }
+  }
+}
+
+class StorageEvents {
+  private readonly listeners = new Set<(event: { key: string | null; newValue: string | null }) => void>()
+
+  addEventListener(_type: 'storage', listener: (event: { key: string | null; newValue: string | null }) => void) {
+    this.listeners.add(listener)
+  }
+
+  removeEventListener(_type: 'storage', listener: (event: { key: string | null; newValue: string | null }) => void) {
+    this.listeners.delete(listener)
+  }
+
+  dispatch(newValue: string | null) {
+    for (const listener of this.listeners) listener({ key: 'paigram.browser-session.v1', newValue })
+  }
+}
+
+class ReplicatedStorage {
+  value: string | null = null
+
+  constructor(private readonly events?: StorageEvents) {}
+
+  getItem(): string | null {
+    return this.value
+  }
+
+  setItem(_key: string, value: string): void {
+    this.value = value
+  }
+
+  replicateFrom(source: ReplicatedStorage): void {
+    this.value = source.value
+    this.events?.dispatch(this.value)
+  }
+}
+
 class LockQueue {
   pending = Promise.resolve()
-  request<T>(_name: string, callback: () => Promise<T>): Promise<T> {
+  outstanding = 0
+
+  request<T>(_name: string, callback: () => Promise<T>): Promise<T>
+  request<T>(_name: string, _options: { ifAvailable: true }, callback: (lock: object | null) => Promise<T>): Promise<T>
+  request<T>(
+    _name: string,
+    optionsOrCallback: { ifAvailable: true } | (() => Promise<T>),
+    conditionalCallback?: (lock: object | null) => Promise<T>
+  ): Promise<T> {
+    if (typeof optionsOrCallback !== 'function' && this.outstanding > 0) {
+      return Promise.resolve().then(() => conditionalCallback!(null))
+    }
+    const callback =
+      typeof optionsOrCallback === 'function' ? optionsOrCallback : () => conditionalCallback!({ name: _name })
+    this.outstanding += 1
     const result = this.pending.then(callback)
     this.pending = result.then(
       () => undefined,
       () => undefined
     )
-    return result
+    return result.finally(() => {
+      this.outstanding -= 1
+    })
   }
 }
 
@@ -89,6 +216,207 @@ describe('cross-tab browser session broker', () => {
     expect(marker).not.toContain('userId')
     first.dispose()
     second.dispose()
+  })
+
+  test('accepts an authenticated broadcast that arrives before its storage marker', async () => {
+    const firstStorage = new ReplicatedStorage()
+    const secondStorageEvents = new StorageEvents()
+    const secondStorage = new ReplicatedStorage(secondStorageEvents)
+    const bus = new OutOfOrderChannelBus(() => secondStorage.replicateFrom(firstStorage))
+    const locks = new LockQueue()
+    const first = new BrowserSessionBroker({
+      source: firstSource,
+      storage: firstStorage,
+      channel: bus.channel(),
+      locks,
+    })
+    first.establish({ accessToken: 'expired-access-token', userId: 42 })
+    await Promise.resolve()
+    secondStorage.replicateFrom(firstStorage)
+    const second = new BrowserSessionBroker({
+      source: secondSource,
+      storage: secondStorage,
+      storageEvents: secondStorageEvents,
+      channel: bus.channel(),
+      locks,
+    })
+    let refreshes = 0
+    const refresh = async () => {
+      refreshes += 1
+      return { accessToken: 'shared-access-token', userId: 42 }
+    }
+
+    const sessions = await Promise.all([
+      first.refresh(refresh, { rejectedAccessToken: 'expired-access-token' }),
+      second.refresh(refresh, { rejectedAccessToken: 'expired-access-token' }),
+    ])
+
+    expect(refreshes).toBe(1)
+    expect(sessions).toEqual([
+      { accessToken: 'shared-access-token', userId: 42 },
+      { accessToken: 'shared-access-token', userId: 42 },
+    ])
+    first.dispose()
+    second.dispose()
+  })
+
+  test('rechecks a newer storage marker after an old snapshot lookup times out', async () => {
+    const producerStorage = new ReplicatedStorage()
+    const consumerStorageEvents = new StorageEvents()
+    const consumerStorage = new ReplicatedStorage(consumerStorageEvents)
+    const bus = new OutOfOrderChannelBus(() => {
+      setTimeout(() => consumerStorage.replicateFrom(producerStorage), 10)
+    })
+    const locks = new LockQueue()
+    const producer = new BrowserSessionBroker({
+      source: secondSource,
+      storage: producerStorage,
+      channel: bus.channel(),
+      locks,
+      requestTimeoutMs: 100,
+    })
+    producer.establish({ accessToken: 'expired-access-token', userId: 42 })
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    consumerStorage.replicateFrom(producerStorage)
+    const consumer = new BrowserSessionBroker({
+      source: firstSource,
+      storage: consumerStorage,
+      storageEvents: consumerStorageEvents,
+      channel: bus.channel(),
+      locks,
+      requestTimeoutMs: 100,
+    })
+    let refreshes = 0
+    const refresh = async () => {
+      refreshes += 1
+      return { accessToken: 'shared-access-token', userId: 42 }
+    }
+
+    const sessions = await Promise.all([
+      producer.refresh(refresh, { rejectedAccessToken: 'expired-access-token' }),
+      consumer.refresh(refresh, { rejectedAccessToken: 'expired-access-token' }),
+    ])
+
+    expect(refreshes).toBe(1)
+    expect(sessions).toEqual([
+      { accessToken: 'shared-access-token', userId: 42 },
+      { accessToken: 'shared-access-token', userId: 42 },
+    ])
+    producer.dispose()
+    consumer.dispose()
+  })
+
+  test('waits beyond the normal snapshot window when another tab held the refresh lock', async () => {
+    const producerStorage = new ReplicatedStorage()
+    const consumerStorageEvents = new StorageEvents()
+    const consumerStorage = new ReplicatedStorage(consumerStorageEvents)
+    const bus = new OutOfOrderChannelBus(() => {
+      setTimeout(() => consumerStorage.replicateFrom(producerStorage), 300)
+    })
+    const locks = new LockQueue()
+    const producer = new BrowserSessionBroker({
+      source: secondSource,
+      storage: producerStorage,
+      channel: bus.channel(),
+      locks,
+      requestTimeoutMs: 50,
+    })
+    producer.establish({ accessToken: 'expired-access-token', userId: 42 })
+    await new Promise((resolve) => setTimeout(resolve, 310))
+    consumerStorage.replicateFrom(producerStorage)
+    const consumer = new BrowserSessionBroker({
+      source: firstSource,
+      storage: consumerStorage,
+      storageEvents: consumerStorageEvents,
+      channel: bus.channel(),
+      locks,
+      requestTimeoutMs: 50,
+    })
+    let refreshes = 0
+    const refreshStarted = Promise.withResolvers<void>()
+    const releaseRefresh = Promise.withResolvers<void>()
+    const refresh = async () => {
+      refreshes += 1
+      refreshStarted.resolve()
+      await releaseRefresh.promise
+      return { accessToken: 'shared-access-token', userId: 42 }
+    }
+
+    const producerRefresh = producer.refresh(refresh, { rejectedAccessToken: 'expired-access-token' })
+    await refreshStarted.promise
+    const consumerRefresh = consumer.refresh(refresh, { rejectedAccessToken: 'expired-access-token' })
+    releaseRefresh.resolve()
+    const sessions = await Promise.all([producerRefresh, consumerRefresh])
+
+    expect(refreshes).toBe(1)
+    expect(sessions).toEqual([
+      { accessToken: 'shared-access-token', userId: 42 },
+      { accessToken: 'shared-access-token', userId: 42 },
+    ])
+    producer.dispose()
+    consumer.dispose()
+  })
+
+  test('retries a missed cross-tab handoff without rotating the refresh cookie again', async () => {
+    const storage = new SharedStorage()
+    const bus = new LossyChannelBus()
+    const locks = new LockQueue()
+    const first = new BrowserSessionBroker({
+      source: firstSource,
+      storage,
+      channel: bus.channel(),
+      locks,
+      requestTimeoutMs: 100,
+    })
+    first.establish({ accessToken: 'expired-access-token', userId: 42 })
+    await Promise.resolve()
+    const second = new BrowserSessionBroker({
+      source: secondSource,
+      storage,
+      channel: bus.channel(),
+      locks,
+      requestTimeoutMs: 100,
+    })
+    bus.dropNextHandoff(1)
+    let refreshes = 0
+    const refresh = async () => {
+      refreshes += 1
+      return { accessToken: 'shared-access-token', userId: 42 }
+    }
+
+    const sessions = await Promise.all([
+      first.refresh(refresh, { rejectedAccessToken: 'expired-access-token' }),
+      second.refresh(refresh, { rejectedAccessToken: 'expired-access-token' }),
+    ])
+
+    expect(refreshes).toBe(1)
+    expect(sessions).toEqual([
+      { accessToken: 'shared-access-token', userId: 42 },
+      { accessToken: 'shared-access-token', userId: 42 },
+    ])
+    first.dispose()
+    second.dispose()
+  })
+
+  test('waits for a delayed live-tab snapshot before rotating the refresh cookie', async () => {
+    const storage = new SharedStorage()
+    const bus = new DelayedRequestChannelBus(300)
+    const locks = new LockQueue()
+    const producer = new BrowserSessionBroker({ source: firstSource, storage, channel: bus.channel(), locks })
+    producer.establish({ accessToken: 'shared-access-token', userId: 42 })
+    await Promise.resolve()
+    const consumer = new BrowserSessionBroker({ source: secondSource, storage, channel: bus.channel(), locks })
+    let refreshes = 0
+
+    const session = await consumer.refresh(async () => {
+      refreshes += 1
+      return { accessToken: 'unexpected-access-token', userId: 42 }
+    })
+
+    expect(refreshes).toBe(0)
+    expect(session).toEqual({ accessToken: 'shared-access-token', userId: 42 })
+    producer.dispose()
+    consumer.dispose()
   })
 
   test('broadcasts logout and refuses silent refresh until an explicit login', async () => {

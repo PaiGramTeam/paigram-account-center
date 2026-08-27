@@ -373,7 +373,14 @@ switch ($Task) {
             throw "Real-browser acceptance must not intercept or mock application requests"
         }
         Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command { bun install --frozen-lockfile } -FailureMessage "Frontend install failed"
-        Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command { bunx playwright install --with-deps chromium } -FailureMessage "Chromium install failed"
+        $browser = $env:PAI_E2E_BROWSER
+        if ([string]::IsNullOrWhiteSpace($browser)) {
+            $browser = "chromium"
+        }
+        if ($browser -notin @("chromium", "firefox", "webkit")) {
+            throw "PAI_E2E_BROWSER must be chromium, firefox, or webkit"
+        }
+        Invoke-InDirectory -Path "$repositoryRoot/frontend" -Command { bunx playwright install --with-deps $browser } -FailureMessage "$browser install failed"
         $playwrightResult = Join-Path ([IO.Path]::GetTempPath()) "paigram-real-browser-$([guid]::NewGuid().ToString('N')).xml"
         try {
             $env:PAI_E2E_JUNIT_PATH = $playwrightResult

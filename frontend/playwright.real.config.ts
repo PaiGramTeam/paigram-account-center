@@ -1,5 +1,18 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const browserName = process.env.PAI_E2E_BROWSER?.trim() || 'chromium'
+const browserDevices = {
+  chromium: devices['Desktop Chrome'],
+  firefox: devices['Desktop Firefox'],
+  webkit: devices['Desktop Safari'],
+} as const
+
+if (!(browserName in browserDevices)) {
+  throw new Error(`Unsupported real-browser project: ${browserName}`)
+}
+
+const browserDevice = browserDevices[browserName as keyof typeof browserDevices]
+
 export default defineConfig({
   testDir: './tests/e2e-real',
   fullyParallel: false,
@@ -15,9 +28,9 @@ export default defineConfig({
     : 'line',
   projects: [
     {
-      name: 'chromium-real-system',
+      name: `${browserName}-real-system`,
       use: {
-        ...devices['Desktop Chrome'],
+        ...browserDevice,
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
       },

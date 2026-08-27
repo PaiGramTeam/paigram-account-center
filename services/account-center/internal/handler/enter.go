@@ -17,7 +17,6 @@ import (
 	handlerOAuth "paigram/internal/handler/oauth"
 	handlerPlatform "paigram/internal/handler/platform"
 	handlerPlatformBinding "paigram/internal/handler/platformbinding"
-	handlerTelegramOIDC "paigram/internal/handler/telegramoidc"
 	handlerUser "paigram/internal/handler/user"
 	"paigram/internal/logging"
 	"paigram/internal/platformtransport"
@@ -34,9 +33,7 @@ import (
 	serviceMe "paigram/internal/service/me"
 	servicePlatform "paigram/internal/service/platform"
 	servicePlatformBinding "paigram/internal/service/platformbinding"
-	serviceSession "paigram/internal/service/session"
 	serviceSystemConfig "paigram/internal/service/systemconfig"
-	serviceTelegramOIDC "paigram/internal/service/telegramoidc"
 	serviceUser "paigram/internal/service/user"
 	"paigram/internal/serviceticket"
 	"paigram/internal/sessioncache"
@@ -57,16 +54,8 @@ type ApiGroup struct {
 	// endpoint plus the admin CRUD for service_credentials rows. It
 	// replaces the pre-Path-D MachineIdentityApiGroup (Path D §3.1).
 	OAuthApiGroup handlerOAuth.ApiGroup
-	// TelegramOIDCApiGroup serves the Telegram OIDC login flow
-	// (/auth/telegram/start + /auth/telegram/callback). See
-	// docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.3.
-	// Optional at runtime: nil OIDC pointer disables the wired routes (see
-	// InitializeApiGroups below for the empty-config branch).
-	TelegramOIDCApiGroup handlerTelegramOIDC.ApiGroup
-	// MeIdentitiesApiGroup serves the authenticated user's view of their
-	// linked Telegram identities (GET/DELETE /me/bot-identities). It reads
-	// the same bot_identities table populated by the OIDC callback above
-	// but does NOT itself require the OIDC client to be configured.
+	// MeIdentitiesApiGroup serves the authenticated user's view of linked
+	// bot entry identities (GET/DELETE /me/bot-identities).
 	MeIdentitiesApiGroup handlerMeIdentities.ApiGroup
 }
 
@@ -74,13 +63,7 @@ type ApiGroup struct {
 var ApiGroupApp = new(ApiGroup)
 
 // InitializeApiGroups sets up all handler groups with dependencies.
-//
-// telegramOIDCCfg is opt-in: when all three credential fields are empty,
-// the OIDC client is NOT constructed and the /auth/telegram/* routes
-// become non-functional 500s. Deployments that don't use Telegram OIDC
-// can leave the config block unset; they only need to validate it
-// through config.Validate when they DO opt in. See spec §5.5.
-func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, frontendCfg config.FrontendConfig, platformControlCfg config.PlatformControlConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer) error {
+func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, frontendCfg config.FrontendConfig, platformControlCfg config.PlatformControlConfig, securityCfg config.SecurityConfig, ticketSigner serviceticket.Signer) error {
 	if db == nil {
 		return errors.New("initialize api groups: db is nil")
 	}
@@ -94,10 +77,10 @@ func InitializeApiGroups(db *gorm.DB, cache sessioncache.Store, authCfg config.A
 	if err != nil {
 		return err
 	}
-	return InitializeApiGroupsWithTransport(db, cache, authCfg, frontendCfg, securityCfg, telegramOIDCCfg, ticketSigner, controlDialer)
+	return InitializeApiGroupsWithTransport(db, cache, authCfg, frontendCfg, securityCfg, ticketSigner, controlDialer)
 }
 
-func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, frontendCfg config.FrontendConfig, securityCfg config.SecurityConfig, telegramOIDCCfg config.TelegramOIDCConfig, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) error {
+func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, authCfg config.AuthConfig, frontendCfg config.FrontendConfig, securityCfg config.SecurityConfig, ticketSigner serviceticket.Signer, controlDialer platformtransport.DialFunc) error {
 	if db == nil {
 		return errors.New("initialize api groups: db is nil")
 	}
@@ -147,53 +130,13 @@ func InitializeApiGroupsWithTransport(db *gorm.DB, cache sessioncache.Store, aut
 	ApiGroupApp.AdminAuditApiGroup = *handlerAdminAudit.NewApiGroup(&service.ServiceGroupApp.AuditGroup)
 	ApiGroupApp.OAuthApiGroup = *handlerOAuth.NewApiGroup(&service.ServiceGroupApp.CredentialsServiceGroup)
 
-	// Phase 5 Sub-project 1: Telegram OIDC login + bot identity linking.
-	//
-	// botlink + session are NEW packages (A3.1 / A4) that own their own
-	// *gorm.DB handle; they are NOT exposed through service.ServiceGroupApp
-	// because nothing else in the codebase consumes them today. Construct
-	// them locally so the wiring chain stays self-contained.
-	//
-	// FindOrCreateOIDC is a method on the existing
-	// service.ServiceGroupApp.UserServiceGroup.UserService (A3 added it
-	// in-place); we pass that same instance so identity rows + user rows
-	// stay coherent across the legacy /auth/oauth/* and the new
-	// /auth/telegram/* paths.
 	logger := logging.Logger()
 	botlinkSvc := serviceBotLink.NewService(db, logger)
 	entryIdentitySvc := serviceEntryIdentity.NewService(db, logger, serviceEntryIdentity.Config{
 		FrontendBaseURL:  frontendCfg.BaseURL,
 		GrantInvalidator: &service.ServiceGroupApp.PlatformServiceGroup.PlatformService,
 	})
-	sessionSvc := serviceSession.NewService(db, logger)
 	ApiGroupApp.MeIdentitiesApiGroup = *handlerMeIdentities.NewApiGroup(botlinkSvc, logger, entryIdentitySvc)
-	if telegramOIDCCfg.ClientID != "" || telegramOIDCCfg.ClientSecret != "" || telegramOIDCCfg.RedirectURI != "" {
-		oidcClient := serviceTelegramOIDC.NewClient(serviceTelegramOIDC.Config{
-			ClientID:     telegramOIDCCfg.ClientID,
-			ClientSecret: telegramOIDCCfg.ClientSecret,
-			RedirectURI:  telegramOIDCCfg.RedirectURI,
-			// Test-only seam (A7): production configs leave the four
-			// endpoint overrides empty so service/telegramoidc/config.go
-			// applyDefaults pins them to oauth.telegram.org. Integration
-			// tests inject a httptest.Server URL via in-process Config
-			// literal construction; no file/env path reaches these
-			// fields. See config.TelegramOIDCConfig godoc.
-			AuthorizeEndpoint: telegramOIDCCfg.AuthorizeEndpoint,
-			TokenEndpoint:     telegramOIDCCfg.TokenEndpoint,
-			JWKSEndpoint:      telegramOIDCCfg.JWKSEndpoint,
-			ExpectedIssuer:    telegramOIDCCfg.ExpectedIssuer,
-		}, logger)
-		stateStore := serviceTelegramOIDC.NewStateStore(db, logger)
-		ApiGroupApp.TelegramOIDCApiGroup = *handlerTelegramOIDC.NewApiGroup(
-			db,
-			oidcClient,
-			stateStore,
-			&service.ServiceGroupApp.UserServiceGroup.UserService,
-			sessionSvc,
-			botlinkSvc,
-			logger,
-		)
-	}
 
 	return nil
 }

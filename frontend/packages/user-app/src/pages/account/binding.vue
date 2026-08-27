@@ -222,7 +222,10 @@ const handleBindOAuth = async (provider: string): Promise<void> => {
   }
 
   try {
-    const response = await profileApi.bindAccount(userId, { provider })
+    const response = await profileApi.bindAccount(userId, {
+      provider,
+      redirect_to: `${window.location.origin}/auth/callback/${provider}`,
+    })
     sessionStorage.setItem(`oauth-bind:${response.data.state}`, provider)
     window.location.assign(response.data.auth_url)
   } catch (error) {

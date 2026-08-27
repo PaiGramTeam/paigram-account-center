@@ -7,6 +7,10 @@ export default {
   'menu.account.info': '账号信息',
   'menu.account.security': '安全设置',
   'menu.account.binding': '账号绑定',
+  'menu.account.logs': '操作记录',
+  'menu.settings': '设置',
+  'menu.settings.general': '通用设置',
+  'menu.settings.security': '安全设置',
   'menu.platformAccounts': '平台账号',
   'menu.apps': '应用授权',
   'menu.services': '服务注册',
@@ -20,6 +24,7 @@ export default {
   'menu.system.settings': '系统配置',
 
   // Common
+  'common.home': '首页',
   'common.login': '登录',
   'common.logout': '退出登录',
   'common.username': '用户名',

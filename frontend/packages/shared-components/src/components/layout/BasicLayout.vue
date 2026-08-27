@@ -283,7 +283,6 @@ watch(
     openKeys.value = matched
       .filter((item) => item.name && item.name !== route.name)
       .map((item) => (item.name ? String(item.name) : item.path))
-    console.log('展开的菜单:', openKeys.value)
   },
   { immediate: true }
 )
@@ -307,15 +306,11 @@ const toggleFullScreen = () => {
 }
 
 const handleMenuClick = (key: string) => {
-  console.log('菜单点击:', key)
-
   const route = router.getRoutes().find((r) => r.name === key)
   if (route) {
-    console.log('找到路由，路径:', route.path)
-    router.push({ name: key })
+    void router.push({ name: key })
   } else {
-    console.log('作为路径处理:', key)
-    router.push(key)
+    void router.push(key)
   }
 
   emit('menu-click', key)

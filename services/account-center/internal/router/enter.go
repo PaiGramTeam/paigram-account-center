@@ -15,7 +15,6 @@ import (
 	routerOAuth "paigram/internal/router/oauth"
 	routerPlatform "paigram/internal/router/platform"
 	routerPlatformBinding "paigram/internal/router/platformbinding"
-	routerTelegramOIDC "paigram/internal/router/telegramoidc"
 	routerUser "paigram/internal/router/user"
 )
 
@@ -35,10 +34,6 @@ type RouterGroup struct {
 	// MachineIdentityRouterGroup (which also served /.well-known/jwks.json
 	// and /me/consumer-identities — both removed in Path D §3.1).
 	OAuthRouterGroup routerOAuth.RouterGroup
-	// TelegramOIDCRouterGroup serves the Telegram OIDC login flow on the
-	// UNAUTHENTICATED v1 group via InitPublic (see router.go::New). Spec:
-	// docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.5
-	TelegramOIDCRouterGroup routerTelegramOIDC.RouterGroup
 	// MeIdentitiesRouterGroup serves /me/bot-identities on the
 	// session-authenticated /me group via InitializeRouterGroups below.
 	MeIdentitiesRouterGroup routerMeIdentities.RouterGroup
@@ -59,10 +54,8 @@ func InitializeRouterGroups(rg *httpserver.Group, db *gorm.DB, authCfg config.Au
 	RouterGroupApp.AdminSystemRouterGroup.Register(rg, db)
 	RouterGroupApp.AdminAuditRouterGroup.Register(rg, db)
 
-	// Phase 5 Sub-project 1: /me/bot-identities on the same protected
-	// /me/* tree. AuthMiddleware (post-A4.1-A) accepts either the
-	// Authorization: Bearer token or the ac_session cookie, so OIDC-issued
-	// sessions reach this handler with userID set without extra glue.
+	// Bot entry identities use the same protected /me tree as other owner
+	// resources.
 	RouterGroupApp.MeIdentitiesRouterGroup.Register(rg, db)
 
 	// Initialize platform router group

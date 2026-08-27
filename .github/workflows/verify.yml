@@ -236,12 +236,17 @@ jobs:
         run: ./scripts/verify-ci.ps1 -Task frontend
 
   real-browser:
-    name: Production browser system acceptance
+    name: Production browser system acceptance (${{ matrix.browser }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     env:
       PAI_TESTCONTAINERS_PROVIDER: docker
       PAI_E2E_CONTAINER_CLI: docker
+      PAI_E2E_BROWSER: ${{ matrix.browser }}
       PAI_INTEGRATION_POSTGRES_IMAGE: public.ecr.aws/docker/library/postgres@sha256:0fc5c901ec0a3c55ce70b99b040daeb89d5b35b61febbced1b4b24dbc3153ec8
       PAI_INTEGRATION_REDIS_IMAGE: public.ecr.aws/docker/library/redis@sha256:b1addbe72465a718643cff9e60a58e6df1841e29d6d7d60c9a85d8d72f08d1a7
     steps:

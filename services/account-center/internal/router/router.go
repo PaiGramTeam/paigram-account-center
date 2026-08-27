@@ -132,7 +132,7 @@ func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncac
 	v1 := runtime.V1
 
 	// Initialize handler groups with dependencies (also seeds loginrisk + geolocation subgroups).
-	if err := handler.InitializeApiGroupsWithTransport(db, cache, authCfg, cfg.Frontend, cfg.Security, cfg.TelegramOIDC, ticketSigner, controlDialer); err != nil {
+	if err := handler.InitializeApiGroupsWithTransport(db, cache, authCfg, cfg.Frontend, cfg.Security, ticketSigner, controlDialer); err != nil {
 		return nil, fmt.Errorf("initialize api groups: %w", err)
 	}
 	handler.ApiGroupApp.AuthApiGroup = *authhandler.NewApiGroup(
@@ -141,16 +141,6 @@ func NewWithRuntimeDependenciesAndReadiness(cfg *config.Config, cache sessioncac
 		&service.ServiceGroupApp.LoginRiskServiceGroup,
 	)
 	RouterGroupApp.OAuthRouterGroup.RegisterPublic(v1)
-	// Phase 5 Sub-project 1: mount /auth/telegram/start + /auth/telegram/callback
-	// on the unauthenticated v1 group. Both handlers ARE session establishment
-	// endpoints; wrapping them in AuthMiddleware would create a chicken-and-egg
-	// deadlock. When telegram_oidc credentials are unset at boot, the underlying
-	// TelegramOIDCApiGroup.OIDC pointer is nil and these routes are NOT mounted.
-	// Spec: docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.5
-	if handler.ApiGroupApp.TelegramOIDCApiGroup.OIDC != nil {
-		RouterGroupApp.TelegramOIDCRouterGroup.RegisterPublic(v1)
-	}
-
 	// Public routes - no authentication required
 	authHandler := &handler.ApiGroupApp.AuthApiGroup.Handler
 	authGroup := v1.Group("/auth")

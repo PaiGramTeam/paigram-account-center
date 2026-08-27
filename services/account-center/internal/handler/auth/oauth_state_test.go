@@ -197,7 +197,7 @@ func TestInitiateOAuth_PersistsClientIPAndUserAgent(t *testing.T) {
 		h.StartBindLoginMethod(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/login-methods/telegram", bytes.NewBufferString(`{"redirect_to":"https://app.example.com/settings/login-methods"}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/login-methods/telegram", bytes.NewBufferString(`{"redirect_to":"https://app.example.com/auth/callback"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 V23-Init")
 	req.RemoteAddr = "203.0.113.7:54321"

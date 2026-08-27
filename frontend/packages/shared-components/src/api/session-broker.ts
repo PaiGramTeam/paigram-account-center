@@ -46,6 +46,7 @@ interface SessionStorage {
 
 interface SessionLockManager {
   request<T>(name: string, callback: () => Promise<T>): Promise<T>
+  request<T>(name: string, options: { ifAvailable: true }, callback: (lock: object | null) => Promise<T>): Promise<T>
 }
 
 interface StorageEventLike {
@@ -69,6 +70,8 @@ export interface BrowserSessionBrokerOptions {
 
 const markerKey = 'paigram.browser-session.v1'
 const lockName = 'paigram.browser-session.refresh.v1'
+const snapshotRequestRetryMs = 25
+const sessionHandoffTimeoutMs = 5_000
 const revisionPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export class BrowserSessionEndedError extends Error {
@@ -99,6 +102,7 @@ export class BrowserSessionBroker {
   private readonly requestTimeoutMs: number
   private readonly subscribers = new Set<(event: BrowserSessionEvent) => void>()
   private current: { revision: string; sessionId: string; session: BrowserSessionSnapshot } | null = null
+  private pendingAuthenticated: Extract<SessionMessage, { type: 'authenticated' }> | null = null
   private lastNotifiedRevision = ''
 
   constructor(options: BrowserSessionBrokerOptions = {}) {
@@ -107,7 +111,7 @@ export class BrowserSessionBroker {
     this.storage = options.storage
     this.storageEvents = options.storageEvents
     this.locks = options.locks
-    this.requestTimeoutMs = options.requestTimeoutMs ?? 250
+    this.requestTimeoutMs = options.requestTimeoutMs ?? sessionHandoffTimeoutMs
     this.channel?.addEventListener('message', this.onMessage)
     this.storageEvents?.addEventListener('storage', this.onStorage)
   }
@@ -202,7 +206,7 @@ export class BrowserSessionBroker {
 
   invalidateIfCurrent(accessToken: string, afterInvalidate?: () => void | Promise<void>): Promise<boolean> {
     return this.exclusive(async () => {
-      const marker = this.readMarker()
+      let marker = this.readMarker()
       if (
         !accessToken ||
         marker?.state !== 'authenticated' ||
@@ -224,14 +228,38 @@ export class BrowserSessionBroker {
     this.assertCoordinationCapabilities()
     const baseline = this.readMarker()
     if (baseline?.state === 'ended') throw new BrowserSessionEndedError()
-    return this.exclusive(async () => {
-      const marker = this.readMarker()
+    return this.exclusiveRefresh(async (contended) => {
+      if (contended) {
+        const handoff = await this.snapshotAfterContention(baseline?.revision)
+        if (handoff && handoff.accessToken !== options.rejectedAccessToken) {
+          options.commit?.(handoff)
+          return handoff
+        }
+        if (this.readMarker()?.state === 'ended') throw new BrowserSessionEndedError()
+        throw new BrowserSessionCapabilityError()
+      }
+      let marker = this.readMarker()
       if (marker?.state === 'ended') throw new BrowserSessionEndedError()
       if (marker?.state === 'authenticated') {
         const cached = await this.snapshotForRevision(marker.revision)
         if (cached && cached.accessToken !== options.rejectedAccessToken) {
           options.commit?.(cached)
           return cached
+        }
+        const previousRevision = marker.revision
+        marker = this.readMarker()
+        if (marker?.state === 'ended') throw new BrowserSessionEndedError()
+        if (marker?.state === 'authenticated' && marker.revision !== previousRevision) {
+          const current = await this.snapshotForRevision(marker.revision)
+          if (current && current.accessToken !== options.rejectedAccessToken) {
+            options.commit?.(current)
+            return current
+          }
+        }
+        if (marker?.state !== 'authenticated') throw new BrowserSessionCapabilityError()
+        if (baseline?.revision !== marker.revision) throw new BrowserSessionCapabilityError()
+        if (this.pendingAuthenticated && this.pendingAuthenticated.revision !== marker.revision) {
+          throw new BrowserSessionCapabilityError()
         }
       }
       const sessionId = marker?.state === 'authenticated' && marker.sessionId ? marker.sessionId : createRevision()
@@ -297,6 +325,16 @@ export class BrowserSessionBroker {
     return this.locks!.request(lockName, callback)
   }
 
+  private async exclusiveRefresh<T>(callback: (contended: boolean) => Promise<T>): Promise<T> {
+    this.assertCoordinationCapabilities()
+    const immediate = await this.locks!.request(lockName, { ifAvailable: true }, async (lock) => {
+      if (!lock) return { acquired: false as const }
+      return { acquired: true as const, value: await callback(false) }
+    })
+    if (immediate.acquired) return immediate.value
+    return this.locks!.request(lockName, () => callback(true))
+  }
+
   private assertCoordinationCapabilities(): void {
     if (!this.hasCoordinationCapabilities()) throw new BrowserSessionCapabilityError()
   }
@@ -306,24 +344,49 @@ export class BrowserSessionBroker {
   }
 
   private async snapshotForRevision(revision: string): Promise<BrowserSessionSnapshot | null> {
-    if (this.current?.revision === revision) return this.current.session
-    if (!this.channel) return null
+    return this.waitForSnapshot(revision, this.requestTimeoutMs, (event) => event.revision === revision)
+  }
+
+  private async snapshotAfterContention(baselineRevision: string | undefined): Promise<BrowserSessionSnapshot | null> {
+    return this.waitForSnapshot(
+      baselineRevision ?? this.source,
+      sessionHandoffTimeoutMs,
+      (event) => event.revision !== baselineRevision
+    )
+  }
+
+  private async waitForSnapshot(
+    requestRevision: string,
+    timeoutMs: number,
+    accepts: (event: Extract<BrowserSessionEvent, { type: 'authenticated' }>) => boolean
+  ): Promise<BrowserSessionSnapshot | null> {
+    const current = this.currentEvent()
+    if (current?.type === 'authenticated' && accepts(current)) return current.session
+    if (current?.type === 'ended' || !this.channel) return null
     return new Promise((resolve) => {
       let settled = false
+      let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+      let retryTimer: ReturnType<typeof setInterval> | undefined
       const finish = (session: BrowserSessionSnapshot | null) => {
         if (settled) return
         settled = true
-        windowClearTimeout(timer)
+        if (timeoutTimer) windowClearTimeout(timeoutTimer)
+        if (retryTimer) windowClearInterval(retryTimer)
         unsubscribe()
         resolve(session)
       }
       const unsubscribe = this.subscribe((event) => {
-        if (event.type === 'authenticated' && event.revision === revision) finish(event.session)
+        if (event.type === 'authenticated' && accepts(event)) finish(event.session)
         if (event.type === 'ended') finish(null)
       })
-      const timer = windowSetTimeout(() => finish(null), this.requestTimeoutMs)
-      this.channel?.postMessage({ version: 1, source: this.source, type: 'request', revision })
-      if (this.current?.revision === revision) finish(this.current.session)
+      const requestSnapshot = () =>
+        this.channel?.postMessage({ version: 1, source: this.source, type: 'request', revision: requestRevision })
+      timeoutTimer = windowSetTimeout(() => finish(null), timeoutMs)
+      retryTimer = windowSetInterval(requestSnapshot, snapshotRequestRetryMs)
+      requestSnapshot()
+      const latest = this.currentEvent()
+      if (latest?.type === 'authenticated' && accepts(latest)) finish(latest.session)
+      if (latest?.type === 'ended') finish(null)
     })
   }
 
@@ -331,24 +394,33 @@ export class BrowserSessionBroker {
     const message = parseMessage(event.data)
     if (!message || message.source === this.source) return
     if (message.type === 'request') {
-      if (this.current?.revision === message.revision) {
+      const marker = this.readMarker()
+      if (
+        this.current &&
+        marker?.state === 'authenticated' &&
+        marker.revision === this.current.revision &&
+        marker.sessionId === this.current.sessionId
+      ) {
         this.channel?.postMessage({
           version: 1,
           source: this.source,
           type: 'authenticated',
-          revision: message.revision,
+          revision: this.current.revision,
           sessionId: this.current.sessionId,
           session: this.current.session,
         })
       }
       return
     }
-    const marker = this.readMarker()
-    if (!marker || marker.revision !== message.revision || marker.state !== message.type) return
     if (message.type === 'authenticated') {
-      if (marker.sessionId !== message.sessionId) return
-      this.current = { revision: message.revision, sessionId: message.sessionId, session: message.session }
-    } else this.current = null
+      this.pendingAuthenticated = message
+      this.acceptPendingAuthenticated(this.readMarker())
+      return
+    }
+    const marker = this.readMarker()
+    if (!marker || marker.revision !== message.revision || marker.state !== 'ended') return
+    this.pendingAuthenticated = null
+    this.current = null
     this.notify(message)
   }
 
@@ -357,13 +429,31 @@ export class BrowserSessionBroker {
     const marker = parseMarker(event.newValue)
     if (!marker) return
     if (marker.state === 'ended') {
+      this.pendingAuthenticated = null
       this.current = null
       this.notify({ type: 'ended', revision: marker.revision })
       return
     }
+    if (this.acceptPendingAuthenticated(marker)) return
     if (this.current?.revision !== marker.revision) {
       void this.snapshotForRevision(marker.revision)
     }
+  }
+
+  private acceptPendingAuthenticated(marker: SessionMarker | null): boolean {
+    const pending = this.pendingAuthenticated
+    if (
+      !pending ||
+      marker?.state !== 'authenticated' ||
+      marker.revision !== pending.revision ||
+      marker.sessionId !== pending.sessionId
+    ) {
+      return false
+    }
+    this.pendingAuthenticated = null
+    this.current = { revision: pending.revision, sessionId: pending.sessionId, session: pending.session }
+    this.notify(pending)
+    return true
   }
 
   private notify(event: BrowserSessionEvent): void {
@@ -456,6 +546,14 @@ function windowSetTimeout(callback: () => void, milliseconds: number): ReturnTyp
 
 function windowClearTimeout(timer: ReturnType<typeof setTimeout>): void {
   globalThis.clearTimeout(timer)
+}
+
+function windowSetInterval(callback: () => void, milliseconds: number): ReturnType<typeof setInterval> {
+  return globalThis.setInterval(callback, milliseconds)
+}
+
+function windowClearInterval(timer: ReturnType<typeof setInterval>): void {
+  globalThis.clearInterval(timer)
 }
 
 function createBrowserBroker(): BrowserSessionBroker {

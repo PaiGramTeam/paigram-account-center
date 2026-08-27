@@ -32,6 +32,8 @@ DROP TABLE IF EXISTS platform_services CASCADE;
 DROP TABLE IF EXISTS entry_identity_unlink_operations CASCADE;
 DROP TABLE IF EXISTS entry_identity_link_challenges CASCADE;
 DROP TABLE IF EXISTS service_credentials CASCADE;
+DROP TABLE IF EXISTS bot_route_audit CASCADE;
+DROP TABLE IF EXISTS bot_routes CASCADE;
 DROP TABLE IF EXISTS bot_identities CASCADE;
 DROP TABLE IF EXISTS bots CASCADE;
 DROP TABLE IF EXISTS casbin_rule CASCADE;

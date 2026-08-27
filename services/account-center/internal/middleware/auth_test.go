@@ -19,7 +19,6 @@ import (
 	"paigram/internal/config"
 	"paigram/internal/model"
 	"paigram/internal/response"
-	"paigram/internal/service/session"
 	"paigram/internal/sessioncache"
 )
 
@@ -32,7 +31,7 @@ var authTestDBCounter atomic.Uint64
 // Raw DDL is used rather than AutoMigrate because model.User declares
 // database-specific column defaults that
 // SQLite cannot parse. The model.UserSession schema is mirrored
-// directly from service/session.newTestDB for consistency.
+// directly so the middleware contract stays independent of migrations.
 func setupAuthMiddlewareDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dsn := fmt.Sprintf("file:auth_mw_%s_%d?mode=memory&cache=shared",
@@ -156,33 +155,10 @@ func decodeAuthSuccessUserID(t *testing.T, recorder *httptest.ResponseRecorder) 
 	return uid
 }
 
-// TestAuthMiddleware_CookieFallback exercises the spec §6.1 change that
-// AuthMiddleware accepts the HttpOnly session cookie issued by
-// service/session.Service.Issue as a fallback when no Authorization
-// header is present, while preserving the existing Bearer-header
-// contract.
-func TestAuthMiddleware_CookieFallback(t *testing.T) {
+func TestAuthMiddlewareRequiresBearerHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	t.Run("cookie only succeeds and reaches handler", func(t *testing.T) {
-		db := setupAuthMiddlewareDB(t)
-		restore := setMiddlewareTestServiceGroup(t, db)
-		defer restore()
-
-		const token = "cookie-token-ok-1"
-		userID := seedActiveUserAndSession(t, db, token)
-
-		router := buildAuthMiddlewareRouter()
-		req := httptest.NewRequest(http.MethodGet, "/whoami", nil)
-		req.AddCookie(&http.Cookie{Name: session.SessionCookieName, Value: token})
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, req)
-
-		require.Equalf(t, http.StatusOK, recorder.Code, "body: %s", recorder.Body.String())
-		assert.Equal(t, float64(userID), decodeAuthSuccessUserID(t, recorder))
-	})
-
-	t.Run("no header and no cookie returns MISSING_TOKEN", func(t *testing.T) {
+	t.Run("missing header is rejected", func(t *testing.T) {
 		db := setupAuthMiddlewareDB(t)
 		restore := setMiddlewareTestServiceGroup(t, db)
 		defer restore()
@@ -196,45 +172,14 @@ func TestAuthMiddleware_CookieFallback(t *testing.T) {
 		assert.Equal(t, "MISSING_TOKEN", decodeAuthErrorCode(t, recorder))
 	})
 
-	t.Run("header takes precedence when both present", func(t *testing.T) {
+	t.Run("malformed authorization header is rejected", func(t *testing.T) {
 		db := setupAuthMiddlewareDB(t)
 		restore := setMiddlewareTestServiceGroup(t, db)
 		defer restore()
-
-		// Seed a session for the BEARER token only. The cookie carries
-		// a value that has no matching session row; if the middleware
-		// (incorrectly) used the cookie, the request would 401.
-		const bearerToken = "bearer-token-wins-1"
-		const cookieToken = "stale-cookie-should-be-ignored"
-		userID := seedActiveUserAndSession(t, db, bearerToken)
-
-		router := buildAuthMiddlewareRouter()
-		req := httptest.NewRequest(http.MethodGet, "/whoami", nil)
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
-		req.AddCookie(&http.Cookie{Name: session.SessionCookieName, Value: cookieToken})
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, req)
-
-		require.Equalf(t, http.StatusOK, recorder.Code, "body: %s", recorder.Body.String())
-		assert.Equal(t, float64(userID), decodeAuthSuccessUserID(t, recorder))
-	})
-
-	t.Run("malformed authorization header does not silently fall through to cookie", func(t *testing.T) {
-		db := setupAuthMiddlewareDB(t)
-		restore := setMiddlewareTestServiceGroup(t, db)
-		defer restore()
-
-		// Even if a valid cookie is also present, a malformed
-		// Authorization header MUST 401 with INVALID_TOKEN_FORMAT.
-		// Otherwise a buggy / hostile client could probe Bearer parsing
-		// and then silently downgrade to the cookie auth path.
-		const cookieToken = "valid-cookie-but-header-wins"
-		seedActiveUserAndSession(t, db, cookieToken)
 
 		router := buildAuthMiddlewareRouter()
 		req := httptest.NewRequest(http.MethodGet, "/whoami", nil)
 		req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
-		req.AddCookie(&http.Cookie{Name: session.SessionCookieName, Value: cookieToken})
 		recorder := httptest.NewRecorder()
 		router.ServeHTTP(recorder, req)
 

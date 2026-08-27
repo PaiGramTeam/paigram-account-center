@@ -122,6 +122,7 @@ func (h *Handler) RegisterEmail(c *gin.Context) {
 		credential := model.UserCredential{
 			UserID:            user.ID,
 			Provider:          string(model.LoginTypeEmail),
+			Issuer:            model.LocalEmailIdentityIssuer,
 			ProviderAccountID: email,
 			PasswordHash:      passwordHash,
 		}

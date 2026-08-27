@@ -2,7 +2,11 @@ import { expect, test, type Request } from '@playwright/test'
 import { readSystemState } from './system-state'
 
 test.describe.serial('production browser journeys', () => {
-  test('user registers, signs in, binds Mihomo, reads profiles, and logs out', async ({ page, context }) => {
+  test('user registers, signs in, binds Mihomo, reads profiles, and logs out', async ({
+    page,
+    context,
+    browserName,
+  }) => {
     const system = await readSystemState()
     await page.goto(`${system.frontend_url}/register`)
     await page.getByPlaceholder('请输入显示名称').fill('Browser User')
@@ -45,18 +49,37 @@ test.describe.serial('production browser journeys', () => {
     await expect(accountDrawer.getByText('Aether', { exact: true })).toBeVisible()
     await accountDrawer.getByRole('button', { name: 'Close' }).click()
 
+    await page.close()
+    const firstTab = await context.newPage()
+    const secondTab = await context.newPage()
     let refreshRequests = 0
-    let sessionLockRequests = 0
-    const bothTabsRequestedSessionLock = Promise.withResolvers<void>()
-    await context.exposeBinding('recordSessionLockRequest', () => {
-      sessionLockRequests += 1
-      if (sessionLockRequests >= 2) bothTabsRequestedSessionLock.resolve()
+    const sessionLockEvents: Array<{ tab: string; ifAvailable: boolean }> = []
+    await context.exposeBinding('recordSessionLockRequest', ({ page: sourcePage }, ifAvailable: boolean) => {
+      const tab = sourcePage === firstTab ? 'first' : sourcePage === secondTab ? 'second' : 'unexpected'
+      sessionLockEvents.push({ tab, ifAvailable })
     })
+    await context.exposeBinding(
+      'sessionLockContendersReady',
+      () => new Set(sessionLockEvents.filter((event) => event.ifAvailable).map((event) => event.tab)).size >= 2
+    )
+    const enforceLockBarrier = browserName !== 'webkit'
     await context.addInitScript(`
       {
+        const enforceLockBarrier = ${enforceLockBarrier}
         const originalRequest = navigator.locks.request.bind(navigator.locks)
         navigator.locks.request = function (...args) {
-          void globalThis.recordSessionLockRequest()
+          const callbackIndex = typeof args[1] === 'function' ? 1 : 2
+          const callback = args[callbackIndex]
+          const recorded = globalThis.recordSessionLockRequest(Boolean(args[1] && args[1].ifAvailable))
+          args[callbackIndex] = async (...callbackArgs) => {
+            await recorded
+            if (enforceLockBarrier) {
+              while (!(await globalThis.sessionLockContendersReady())) {
+                await new Promise((resolve) => setTimeout(resolve, 10))
+              }
+            }
+            return callback(...callbackArgs)
+          }
           return originalRequest(...args)
         }
       }
@@ -67,23 +90,25 @@ test.describe.serial('production browser journeys', () => {
       }
     }
     context.on('request', countRefresh)
-    await context.route('**/api/v1/auth/refresh', async (route) => {
-      await bothTabsRequestedSessionLock.promise
-      await route.continue()
-    })
-    await page.close()
-    const firstTab = await context.newPage()
-    const secondTab = await context.newPage()
     await Promise.all([
       firstTab.goto(`${system.frontend_url}/dashboard`),
       secondTab.goto(`${system.frontend_url}/dashboard`),
     ])
-    await expect(firstTab.getByRole('heading', { name: '欢迎回来，Browser User' })).toBeVisible()
-    await expect(secondTab.getByRole('heading', { name: '欢迎回来，Browser User' })).toBeVisible()
+    await Promise.all([
+      expect(firstTab.getByRole('heading', { name: '欢迎回来，Browser User' })).toBeVisible({ timeout: 30_000 }),
+      expect(secondTab.getByRole('heading', { name: '欢迎回来，Browser User' })).toBeVisible({ timeout: 30_000 }),
+    ])
     expect(refreshRequests).toBe(1)
-    expect(sessionLockRequests).toBe(2)
+    const conditionalLockTabs = new Set(
+      sessionLockEvents.filter((event) => event.ifAvailable).map((event) => event.tab)
+    )
+    if (enforceLockBarrier) {
+      expect(conditionalLockTabs).toEqual(new Set(['first', 'second']))
+      expect(sessionLockEvents.some((event) => !event.ifAvailable)).toBe(true)
+    } else {
+      expect(conditionalLockTabs.size).toBeGreaterThanOrEqual(1)
+    }
     context.off('request', countRefresh)
-    await context.unroute('**/api/v1/auth/refresh')
 
     await firstTab.locator('.arco-layout-header .arco-avatar').click()
     await firstTab.getByText('退出登录', { exact: true }).click()

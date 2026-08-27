@@ -54,6 +54,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { IconCheckCircleFill, IconCloseCircleFill, IconRefresh } from '@arco-design/web-vue/es/icon'
 import { useAuthStore } from '@/stores/auth'
+import { isSafeInternalPath } from '@/utils/navigation'
 import type { OAuthCallbackRequest } from '@paigram/shared-components'
 
 const route = useRoute()
@@ -82,7 +83,7 @@ const handleCallback = async (): Promise<void> => {
     return
   }
 
-  const { code, state, error: errorParam, error_description: errorDescription, redirect_to: redirectTo } = route.query
+  const { code, state, error: errorParam, error_description: errorDescription } = route.query
 
   if (errorParam) {
     error.value = (errorDescription as string) || `授权失败：${errorParam}`
@@ -112,10 +113,12 @@ const handleCallback = async (): Promise<void> => {
     }
 
     const fallbackPath = await authStore.handleOAuthCallback(provider, callbackData)
-    const redirect = typeof redirectTo === 'string' ? redirectTo : ''
+    const returnKey = `oauth-admin-return:${provider}`
+    const redirect = sessionStorage.getItem(returnKey) || ''
+    sessionStorage.removeItem(returnKey)
 
     setTimeout(() => {
-      router.replace(redirect || fallbackPath)
+      router.replace(isSafeInternalPath(redirect) ? redirect : fallbackPath)
     }, 1000)
   } catch (err) {
     console.error('OAuth callback error:', err)

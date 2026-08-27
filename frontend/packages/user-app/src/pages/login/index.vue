@@ -91,7 +91,7 @@
             <span class="text-sm text-gray-500 dark:text-gray-400">或使用其他方式登录</span>
           </a-divider>
 
-          <div v-if="!showTwoFactorStep" class="grid grid-cols-2 gap-4">
+          <div v-if="!showTwoFactorStep" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <a-button
               v-for="provider in oauthProviders"
               :key="provider.name"
@@ -105,13 +105,6 @@
               {{ provider.label }}
             </a-button>
           </div>
-
-          <div
-            v-if="!showTwoFactorStep"
-            class="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
-          >
-            Telegram 登录入口暂未开放，当前请使用邮箱密码或 Google / GitHub 登录。
-          </div>
         </div>
       </div>
     </div>
@@ -122,7 +115,7 @@
 import { nextTick, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
-import { IconGithub, IconGoogle, IconEmail, IconLock } from '@arco-design/web-vue/es/icon'
+import { IconGithub, IconGoogle, IconSend, IconEmail, IconLock } from '@arco-design/web-vue/es/icon'
 import { AuthTwoFactorStep, TurnstileWidget } from '@paigram/shared-components'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginEmailRequest } from '@paigram/shared-components'
@@ -163,6 +156,7 @@ const rules = {
 const oauthProviders = [
   { name: 'google', label: 'Google', icon: IconGoogle },
   { name: 'github', label: 'GitHub', icon: IconGithub },
+  { name: 'telegram', label: 'Telegram', icon: IconSend },
 ]
 
 const handleSubmit = async (values: LoginEmailRequest): Promise<void> => {

@@ -27,6 +27,10 @@ func TestMigrationsApplyToFreshPostgreSQL(t *testing.T) {
 	requireTableExists(t, stack.SQLDB, stack.Schema, "user_devices")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "bot_identities")
 	requireTableExists(t, stack.SQLDB, stack.Schema, "bots")
+	requireTableExists(t, stack.SQLDB, stack.Schema, "bot_routes")
+	requireTableExists(t, stack.SQLDB, stack.Schema, "bot_route_audit")
+	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "user_oauth_states", "metadata")
+	requireColumnAbsent(t, stack.SQLDB, stack.Schema, "user_oauth_states", "consumed_at")
 	// Service credentials replace the retired machine identity, signing key,
 	// machine token, and opaque bot token stores.
 	requireTableExists(t, stack.SQLDB, stack.Schema, "service_credentials")
@@ -136,7 +140,8 @@ func TestUnifiedUserPlatformSchemaConstraints(t *testing.T) {
 func TestIdentityCredentialUniqueIndexesExist(t *testing.T) {
 	stack := newIntegrationStack(t)
 
-	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_provider_account")
+	requireColumnExists(t, stack.SQLDB, stack.Schema, "user_credentials", "issuer")
+	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_issuer_subject")
 	requireIndexExists(t, stack.SQLDB, stack.Schema, "user_credentials", "uniq_user_provider")
 }
 

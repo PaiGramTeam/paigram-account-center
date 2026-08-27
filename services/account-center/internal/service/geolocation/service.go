@@ -3,13 +3,15 @@ package geolocation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 )
+
+var ErrProviderNotConfigured = errors.New("geolocation provider not configured")
 
 // Location represents geographic location information
 type Location struct {
@@ -43,33 +45,15 @@ type Service struct {
 	apiBaseURL string
 }
 
-// ipAPIWarningOnce guarantees the V19 plain-HTTP warning is logged
-// once per process, no matter how many times NewService is invoked
-// (the constructor may be invoked from multiple call sites at startup).
-var ipAPIWarningOnce sync.Once
-
 // NewService creates a new geolocation service.
-//
-// V19 — known limitation: the free ip-api.com tier is HTTP-only. Each
-// call leaks the queried IP to any on-path observer, and an active
-// MITM can tamper with the response, e.g. to mislabel a login as
-// originating from a trusted location. For this pre-production cut we
-// keep ip-api.com (option c from the V19 review) and emit a one-shot
-// startup warning so operators can plan a provider migration. Replace
-// the upstream URL via SetAPIBaseURL/SetHTTPClient when wiring up
-// configurable providers.
+// Public-IP lookup is disabled by default so login metadata never sends a
+// client address to a third party without an explicit trusted provider.
 func NewService() *Service {
-	ipAPIWarningOnce.Do(func() {
-		log.Printf("[security] WARNING: ip-api.com is queried over plain HTTP; " +
-			"geolocation results can be tampered with by MITM. " +
-			"Configure a TLS-supporting provider when available (V19).")
-	})
 	return &Service{
 		cache: make(map[string]*Location),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		apiBaseURL: "http://ip-api.com",
 	}
 }
 
@@ -105,6 +89,9 @@ func (s *Service) Lookup(ip string) (*Location, error) {
 			Country: "Private Network",
 		}, nil
 	}
+	if s.apiBaseURL == "" {
+		return nil, ErrProviderNotConfigured
+	}
 
 	s.cacheMutex.RLock()
 	if loc, exists := s.cache[ip]; exists {
@@ -125,14 +112,7 @@ func (s *Service) Lookup(ip string) (*Location, error) {
 	return loc, nil
 }
 
-// fetchFromAPI queries the IP-API.com free service.
-//
-// SECURITY (V19): the free tier of ip-api.com only supports plain HTTP.
-// HTTPS requires a paid pro.ip-api.com plan. The MITM risk is bounded:
-// the queried IP is already known to the service, and tampered
-// responses degrade only the geolocation-based audit signal — auth and
-// session decisions are not gated on this output. See NewService for
-// the loud startup warning.
+// fetchFromAPI queries the explicitly configured provider.
 func (s *Service) fetchFromAPI(ip string) (*Location, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

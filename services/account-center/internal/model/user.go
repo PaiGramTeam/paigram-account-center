@@ -2,12 +2,13 @@ package model
 
 import (
 	"database/sql"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"paigram/internal/crypto"
 
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -20,6 +21,15 @@ const (
 	UserStatusSuspended UserStatus = "suspended"
 	UserStatusDeleted   UserStatus = "deleted"
 )
+
+const (
+	LocalEmailIdentityIssuer = "urn:paigram:identity:email"
+	GoogleIdentityIssuer     = "https://accounts.google.com"
+	GitHubIdentityIssuer     = "https://github.com"
+	TelegramIdentityIssuer   = "https://oauth.telegram.org"
+)
+
+var ErrCredentialIssuerRequired = errors.New("external user credential issuer is required")
 
 // LoginType enumerates supported login mechanisms.
 type LoginType string
@@ -85,8 +95,9 @@ type UserProfile struct {
 type UserCredential struct {
 	ID                    uint64       `gorm:"primaryKey"`
 	UserID                uint64       `gorm:"index;not null;uniqueIndex:uniq_user_provider,priority:1"`
-	Provider              string       `gorm:"size:64;not null;uniqueIndex:uniq_user_provider,priority:2;uniqueIndex:uniq_provider_account,priority:1"`
-	ProviderAccountID     string       `gorm:"size:255;not null;uniqueIndex:uniq_provider_account,priority:2"`
+	Provider              string       `gorm:"size:64;not null;uniqueIndex:uniq_user_provider,priority:2"`
+	Issuer                string       `gorm:"size:255;not null;uniqueIndex:uniq_issuer_subject,priority:1"`
+	ProviderAccountID     string       `gorm:"size:255;not null;uniqueIndex:uniq_issuer_subject,priority:2"`
 	PasswordHash          string       `gorm:"size:255"`
 	AccessToken           string       `gorm:"type:text"` // AES-256-GCM encrypted OAuth access token
 	RefreshToken          string       `gorm:"type:text"` // AES-256-GCM encrypted OAuth refresh token
@@ -98,6 +109,25 @@ type UserCredential struct {
 	Metadata              string       `gorm:"type:text"`
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+}
+
+func (credential *UserCredential) BeforeCreate(_ *gorm.DB) error {
+	credential.Provider = strings.ToLower(strings.TrimSpace(credential.Provider))
+	credential.Issuer = strings.TrimSpace(credential.Issuer)
+	switch credential.Provider {
+	case string(LoginTypeEmail):
+		credential.Issuer = LocalEmailIdentityIssuer
+	case string(LoginTypeGoogle):
+		credential.Issuer = GoogleIdentityIssuer
+	case string(LoginTypeGithub):
+		credential.Issuer = GitHubIdentityIssuer
+	case string(LoginTypeTelegram):
+		credential.Issuer = TelegramIdentityIssuer
+	}
+	if credential.Issuer == "" {
+		return ErrCredentialIssuerRequired
+	}
+	return nil
 }
 
 // UserEmail keeps track of user email addresses and verification state.
@@ -133,17 +163,9 @@ type UserOAuthState struct {
 	ClientIP string `gorm:"size:64;not null;default:''"`
 	// UserAgent is the User-Agent header captured at state creation, truncated
 	// to the column size. Strict equality is enforced on consumption.
-	UserAgent string `gorm:"size:255;not null;default:''"`
-	// Metadata is a purpose-specific JSON blob. For purpose='telegram_oidc' it
-	// stores {"bot_id": "<botID>"}. Nullable so existing OAuth purposes that
-	// do not need this extension continue to work.
-	Metadata  datatypes.JSON `gorm:"type:jsonb;column:metadata"`
-	ExpiresAt time.Time      `gorm:"index"`
-	// ConsumedAt marks single-use OAuth states as redeemed. NULL means
-	// available; non-NULL means already consumed and must not be redeemed
-	// again. Enforced by Consume() under SELECT FOR UPDATE.
-	ConsumedAt sql.NullTime `gorm:"column:consumed_at;default:null"`
-	CreatedAt  time.Time
+	UserAgent string    `gorm:"size:255;not null;default:''"`
+	ExpiresAt time.Time `gorm:"index"`
+	CreatedAt time.Time
 }
 
 // UserSession represents an access/refresh token pair for a user.

@@ -35,6 +35,7 @@ CREATE TABLE user_credentials (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     provider VARCHAR(64) NOT NULL,
+    issuer VARCHAR(255) NOT NULL,
     provider_account_id VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255),
     access_token TEXT,
@@ -45,7 +46,8 @@ CREATE TABLE user_credentials (
     metadata TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uniq_provider_account UNIQUE (provider, provider_account_id),
+    CONSTRAINT chk_user_credentials_issuer_nonempty CHECK (btrim(issuer) <> ''),
+    CONSTRAINT uniq_issuer_subject UNIQUE (issuer, provider_account_id),
     CONSTRAINT uniq_user_provider UNIQUE (user_id, provider),
     CONSTRAINT fk_user_credentials_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -499,6 +501,31 @@ CREATE UNIQUE INDEX uk_bot_identities_ref ON bot_identities (entry_identity_ref)
 CREATE UNIQUE INDEX uk_bot_identities_issuer_subject_active ON bot_identities (issuer, external_user_id) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX uk_bot_identities_user_issuer_active ON bot_identities (user_id, issuer) WHERE deleted_at IS NULL;
 CREATE INDEX idx_bot_identities_deleted_at ON bot_identities (deleted_at);
+
+CREATE TABLE bot_routes (
+    id BIGSERIAL PRIMARY KEY,
+    bot_id VARCHAR(64) NOT NULL,
+    platform VARCHAR(32) NOT NULL,
+    service_id VARCHAR(64) NOT NULL,
+    endpoint VARCHAR(255) NOT NULL,
+    handlers_json JSONB NOT NULL,
+    version VARCHAR(32) NOT NULL,
+    last_heartbeat_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_bot_routes_bot_platform UNIQUE (bot_id, platform)
+);
+
+CREATE TABLE bot_route_audit (
+    id BIGSERIAL PRIMARY KEY,
+    bot_id VARCHAR(64) NOT NULL,
+    platform VARCHAR(32) NOT NULL,
+    action VARCHAR(16) NOT NULL,
+    payload JSONB NOT NULL,
+    actor VARCHAR(64) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_bot_route_audit_bot ON bot_route_audit (bot_id, created_at);
 
 CREATE TABLE service_credentials (
     client_id VARCHAR(96) PRIMARY KEY,

@@ -55,6 +55,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, provide } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../../stores/app'
 import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
@@ -86,22 +87,24 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const appStore = useAppStore()
+const { t } = useI18n()
 
 const collapsed = computed(() => appStore.collapsed)
 const cachedRoutes = ref<string[]>([])
-const breadcrumbItems = ref<{ path: string; title: string }[]>([])
-
-watch(
-  () => route.path,
-  () => {
-    // TODO: Generate breadcrumbs from the active route.
-    breadcrumbItems.value = [
-      { path: '/', title: '首页' },
-      { path: route.path, title: (route.meta?.title as string) || '页面' },
-    ]
-  },
-  { immediate: true }
-)
+const breadcrumbItems = computed<{ path: string; title: string }[]>(() => {
+  const items = [{ path: '/', title: t('common.home') }]
+  for (const record of route.matched) {
+    const title =
+      typeof record.meta.locale === 'string'
+        ? t(record.meta.locale)
+        : typeof record.meta.title === 'string'
+          ? record.meta.title
+          : ''
+    if (!title || record.path === '/' || items.some((item) => item.path === record.path)) continue
+    items.push({ path: record.path, title })
+  }
+  return items
+})
 
 watch(
   () => route.name,

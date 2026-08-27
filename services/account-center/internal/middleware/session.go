@@ -76,17 +76,6 @@ func SessionValidation() gin.HandlerFunc {
 	}
 }
 
-// RefreshSessionActivity updates the last active time for the session
-// This middleware should be used after AuthMiddleware
-// TODO: Requires MiddlewareService.UpdateSessionLastActivity to work - currently non-functional
-func RefreshSessionActivity() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// TODO: Need MiddlewareService.UpdateSessionLastActivity(sessionID, time) to update activity
-		// Skipping session activity update for now
-		c.Next()
-	}
-}
-
 // GetSessionID retrieves the session ID from context
 func GetSessionID(c *gin.Context) (uint64, bool) {
 	sessionIDVal, exists := c.Get("session_id")

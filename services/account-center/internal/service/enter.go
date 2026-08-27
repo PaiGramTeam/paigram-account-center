@@ -1,6 +1,8 @@
 package service
 
 import (
+	"crypto/rand"
+
 	serviceAudit "paigram/internal/service/audit"
 	"paigram/internal/service/authority"
 	"paigram/internal/service/botroute"
@@ -39,29 +41,20 @@ type ServiceGroup struct {
 
 // NewServiceGroup creates the global service group with all dependencies.
 //
-// The credentials TokenService is constructed with a fixed 32-byte
-// placeholder signing key here because main-line server initialisation
-// passes the configured SHARED_TICKET_KEY via the handler-side
-// InitializeApiGroups path. This constructor exists only for tests
-// that need a bare ServiceGroup; in production server startup
-// (cmd/paigram/cmd/serve.go) the configured key is plumbed through the
-// handler-side initialiser instead. The placeholder key must still
-// satisfy credentials.NewTokenService's ≥32-byte minimum.
+// This constructor exists for tests that need a bare ServiceGroup. Production
+// startup replaces the credentials group through the handler initializer.
 func NewServiceGroup(db *gorm.DB) *ServiceGroup {
 	casbinGroup := casbin.NewServiceGroup(db)
 	platformGroup := platform.NewServiceGroup(db)
-	// 32 bytes of low-entropy ASCII — sufficient only for the constructor
-	// guard; production wiring replaces this group via InitializeApiGroups.
-	placeholderSigningKey := []byte("placeholder-32byte-test-key-xxxx")
+	testSigningKey := make([]byte, 32)
+	if _, err := rand.Read(testSigningKey); err != nil {
+		panic("service.NewServiceGroup: generate test signing key: " + err.Error())
+	}
 	credentialsGroup, err := credentials.NewServiceGroup(db, credentials.TokenServiceConfig{
-		SigningKey: placeholderSigningKey,
+		SigningKey: testSigningKey,
 	})
 	if err != nil {
-		// Programmer error: the placeholder above is statically known to
-		// satisfy the 32-byte minimum. Panic rather than propagating
-		// because this constructor has no error return and callers (tests)
-		// would not handle one usefully.
-		panic("service.NewServiceGroup: placeholder signing key rejected: " + err.Error())
+		panic("service.NewServiceGroup: test signing key rejected: " + err.Error())
 	}
 	return &ServiceGroup{
 		UserServiceGroup:        *user.NewServiceGroup(db),

@@ -14,7 +14,6 @@ import (
 	"go.uber.org/zap"
 
 	"paigram/internal/logging"
-	telegramoidcsvc "paigram/internal/service/telegramoidc"
 )
 
 // Config aggregates application configuration sections.
@@ -31,44 +30,6 @@ type Config struct {
 	Email           EmailConfig           `mapstructure:"email"`
 	Security        SecurityConfig        `mapstructure:"security"`
 	Sentry          SentryConfig          `mapstructure:"sentry"`
-	TelegramOIDC    TelegramOIDCConfig    `mapstructure:"telegram_oidc"`
-}
-
-// TelegramOIDCConfig holds the Telegram OIDC client credentials consumed
-// by handler/telegramoidc + service/telegramoidc (Phase 5 Sub-project 1).
-//
-// All three fields are required when the feature is enabled. Leaving all
-// three empty disables the /auth/telegram/* routes at boot — the handler
-// ApiGroup simply is not constructed (see handler.InitializeApiGroups).
-// Mixed empty/non-empty values are rejected by Config.Validate so a
-// half-configured deployment fails fast at startup rather than 500-ing
-// at request time.
-//
-// Spec: docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.5
-type TelegramOIDCConfig struct {
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
-	// RedirectURI must be the externally-reachable https URL of
-	// GET /api/v1/auth/telegram/callback. The OIDC provider rejects
-	// any deviation from the registered value.
-	RedirectURI string `mapstructure:"redirect_uri"`
-
-	// AuthorizeEndpoint, TokenEndpoint, JWKSEndpoint, and ExpectedIssuer
-	// are a test-only seam (Phase 5 Sub-project 1 A7): they let the
-	// integration suite point the OIDC client at a httptest.Server
-	// mocking oauth.telegram.org. Production deployments MUST leave all
-	// four empty so the underlying telegramoidcsvc.Config falls back to
-	// the real oauth.telegram.org URLs via applyDefaults. The viper
-	// mapstructure tags are intentionally absent — these fields are
-	// populated only by in-process test code constructing a
-	// *config.Config literal (see integration/telegram_oidc_test.go),
-	// never by config files or env vars, and validateTelegramOIDCConfig
-	// does NOT inspect them so a misconfigured production deployment
-	// cannot accidentally override the real endpoints.
-	AuthorizeEndpoint string `mapstructure:"-"`
-	TokenEndpoint     string `mapstructure:"-"`
-	JWKSEndpoint      string `mapstructure:"-"`
-	ExpectedIssuer    string `mapstructure:"-"`
 }
 
 // FrontendConfig holds settings describing the user-facing frontend that
@@ -186,16 +147,15 @@ type TurnstileConfig struct {
 
 // OAuthProviderConfig models third-party provider credentials.
 //
-// Issuer and JWKSURL are required for OIDC providers (Google, etc.) so that
-// id_tokens can be cryptographically verified. They are intentionally not
-// inferred from the AuthURL — providers do not consistently expose a
-// discoverable OIDC config and we never want to fall back to an unverified
-// path. If a deployment forgets to configure these for a non-Telegram
-// provider, OIDC verification will fail closed at runtime.
+// Issuer and JWKSURL establish the verification boundary for OIDC providers.
+// Known providers use pinned defaults when these values are omitted; custom
+// providers must configure both explicitly. No provider falls back to an
+// unverified ID token path.
 type OAuthProviderConfig struct {
 	ClientID     string   `mapstructure:"client_id"`
 	ClientSecret string   `mapstructure:"client_secret"`
 	RedirectURL  string   `mapstructure:"redirect_url"`
+	RedirectURLs []string `mapstructure:"allowed_redirect_urls"`
 	AuthURL      string   `mapstructure:"auth_url"`
 	TokenURL     string   `mapstructure:"token_url"`
 	UserInfoURL  string   `mapstructure:"user_info_url"`
@@ -348,10 +308,6 @@ func Load(paths ...string) (*Config, error) {
 			return
 		}
 		if validateErr := validateServiceTicketConfig(localCfg); validateErr != nil {
-			err = validateErr
-			return
-		}
-		if validateErr := validateTelegramOIDCConfig(localCfg); validateErr != nil {
 			err = validateErr
 			return
 		}
@@ -509,41 +465,6 @@ func validateBrowserSessionConfig(cfg *Config) error {
 	frontendURL, err := url.Parse(strings.TrimSpace(cfg.Frontend.BaseURL))
 	if err != nil || frontendURL.Scheme != "https" || frontendURL.Host == "" {
 		return fmt.Errorf("frontend.base_url must be an absolute HTTPS URL in release mode")
-	}
-	return nil
-}
-
-// validateTelegramOIDCConfig enforces the all-or-nothing rule on
-// telegram_oidc.{client_id, client_secret, redirect_uri}: leaving the
-// whole block unset disables the feature (no error); setting any one
-// of the three fields requires setting all three to a valid value.
-//
-// When set, the fields are passed through the service-layer
-// telegramoidcsvc.Config.Validate (added in A2) so a single source of
-// truth — telegramoidc/config.go — owns the actual rules (ClientID +
-// ClientSecret non-empty, RedirectURI https).
-//
-// Spec: docs/superpowers/specs/2026-06-06-phase5-sub1-telegram-oidc-bot-link.md §5.5
-func validateTelegramOIDCConfig(cfg *Config) error {
-	if cfg == nil {
-		return fmt.Errorf("configuration not loaded")
-	}
-	t := cfg.TelegramOIDC
-	allEmpty := strings.TrimSpace(t.ClientID) == "" &&
-		strings.TrimSpace(t.ClientSecret) == "" &&
-		strings.TrimSpace(t.RedirectURI) == ""
-	if allEmpty {
-		// Feature disabled — handler.InitializeApiGroups skips OIDC
-		// client construction and /auth/telegram/* routes 404 cleanly.
-		return nil
-	}
-	svcCfg := &telegramoidcsvc.Config{
-		ClientID:     t.ClientID,
-		ClientSecret: t.ClientSecret,
-		RedirectURI:  t.RedirectURI,
-	}
-	if err := svcCfg.Validate(); err != nil {
-		return fmt.Errorf("config: telegram_oidc: %w", err)
 	}
 	return nil
 }
@@ -720,18 +641,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("sentry.traces_sample_rate", 0.0)
 	v.SetDefault("sentry.flush_timeout", 2)
 
-	// Phase 5 Sub-project 1: Telegram OIDC credentials. Defaults are
-	// empty strings — leaving the block unset disables the feature
-	// (validateTelegramOIDCConfig short-circuits). When operators DO
-	// opt in, the typical path is the PAI_TELEGRAM_OIDC_* env vars
-	// (mapped automatically by SetEnvPrefix("PAI") + the dot->underscore
-	// key replacer above). The SetDefault calls below are required so
-	// viper actually consults the env vars even when no config.yaml key
-	// is present — without an explicit default, viper.AutomaticEnv
-	// silently ignores keys it doesn't already know about.
-	v.SetDefault("telegram_oidc.client_id", "")
-	v.SetDefault("telegram_oidc.client_secret", "")
-	v.SetDefault("telegram_oidc.redirect_uri", "")
 }
 
 // GetBcryptCost returns the bcrypt cost with validation

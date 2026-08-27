@@ -53,7 +53,7 @@ func TestStartBindLoginMethodPersistsBindPurposeAndUserID(t *testing.T) {
 		h.StartBindLoginMethod(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/login-methods/telegram", bytes.NewBufferString(`{"redirect_to":"https://app.example.com/settings/login-methods"}`))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/me/login-methods/telegram", bytes.NewBufferString(`{"redirect_to":"https://app.example.com/auth/callback"}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -99,7 +99,7 @@ func TestHandleOAuthCallbackReturnsConflictWhenBindingProviderAlreadyBelongsToAn
 	state := model.UserOAuthState{
 		Provider:     "telegram",
 		State:        "bind-conflict-state",
-		RedirectTo:   "https://app.example.com/settings/login-methods",
+		RedirectTo:   "https://app.example.com/auth/callback",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
 		ClientIP:     testHTTPRequestClientIP,
@@ -110,15 +110,6 @@ func TestHandleOAuthCallbackReturnsConflictWhenBindingProviderAlreadyBelongsToAn
 	require.NoError(t, db.Exec("UPDATE user_oauth_states SET purpose = ?, user_id = ? WHERE id = ?", "bind_login_method", binder.ID, state.ID).Error)
 
 	provider := newTelegramOAuthTestProvider(t, "expected-nonce")
-	originalJWKSURL := telegramOIDCJWKSURL
-	originalIssuer := telegramOIDCIssuer
-	telegramOIDCJWKSURL = provider.jwksURL
-	telegramOIDCIssuer = provider.issuer
-	t.Cleanup(func() {
-		telegramOIDCJWKSURL = originalJWKSURL
-		telegramOIDCIssuer = originalIssuer
-	})
-
 	h.cfg.AllowedOAuthProviders = []string{"telegram"}
 	h.cfg.OAuthProviders = map[string]config.OAuthProviderConfig{
 		"telegram": {
@@ -127,6 +118,8 @@ func TestHandleOAuthCallbackReturnsConflictWhenBindingProviderAlreadyBelongsToAn
 			RedirectURL:  "https://app.example.com/auth/callback",
 			AuthURL:      "https://oauth.telegram.test/auth",
 			TokenURL:     provider.tokenURL,
+			Issuer:       provider.issuer,
+			JWKSURL:      provider.jwksURL,
 		},
 	}
 
@@ -168,7 +161,7 @@ func TestHandleOAuthCallbackReturnsConflictWhenBindingProviderWouldReplaceExisti
 	state := model.UserOAuthState{
 		Provider:     "telegram",
 		State:        "bind-same-user-provider-conflict",
-		RedirectTo:   "https://app.example.com/settings/login-methods",
+		RedirectTo:   "https://app.example.com/auth/callback",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
 		ClientIP:     testHTTPRequestClientIP,
@@ -213,7 +206,7 @@ func TestHandleOAuthCallbackRequiresAuthenticatedSessionForBindPurpose(t *testin
 		State:        "bind-no-auth-state",
 		Purpose:      string(model.OAuthPurposeBindLoginMethod),
 		UserID:       sql.NullInt64{Int64: int64(binder.ID), Valid: true},
-		RedirectTo:   "https://app.example.com/settings/login-methods",
+		RedirectTo:   "https://app.example.com/auth/callback",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
 		ClientIP:     testHTTPRequestClientIP,
@@ -252,7 +245,7 @@ func TestHandleOAuthCallbackRejectsBindPurposeForDifferentAuthenticatedUser(t *t
 		State:        "bind-mismatch-state",
 		Purpose:      string(model.OAuthPurposeBindLoginMethod),
 		UserID:       sql.NullInt64{Int64: int64(binder.ID), Valid: true},
-		RedirectTo:   "https://app.example.com/settings/login-methods",
+		RedirectTo:   "https://app.example.com/auth/callback",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
 		ClientIP:     testHTTPRequestClientIP,
@@ -291,7 +284,7 @@ func TestHandleOAuthCallbackDoesNotConsumeStateWhenBindCallbackIsUnauthorized(t 
 		State:        "bind-preserve-state",
 		Purpose:      string(model.OAuthPurposeBindLoginMethod),
 		UserID:       sql.NullInt64{Int64: int64(binder.ID), Valid: true},
-		RedirectTo:   "https://app.example.com/settings/login-methods",
+		RedirectTo:   "https://app.example.com/auth/callback",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
 		ClientIP:     testHTTPRequestClientIP,
@@ -355,7 +348,7 @@ func TestHandleOAuthCallbackBindAuthMissingTakesPrecedenceOverUserAgentMismatch(
 		State:        "bind-ua-mismatch-no-auth",
 		Purpose:      string(model.OAuthPurposeBindLoginMethod),
 		UserID:       sql.NullInt64{Int64: int64(binder.ID), Valid: true},
-		RedirectTo:   "https://app.example.com/settings/login-methods",
+		RedirectTo:   "https://app.example.com/auth/callback",
 		Nonce:        "expected-nonce",
 		CodeVerifier: "expected-verifier",
 		ClientIP:     testHTTPRequestClientIP,         // matches httptest default
@@ -396,9 +389,7 @@ func ensureUserOAuthStatesTable(t *testing.T, db *gorm.DB) {
 			code_verifier VARCHAR(255) NULL,
 			client_ip VARCHAR(64) NOT NULL DEFAULT '',
 			user_agent VARCHAR(255) NOT NULL DEFAULT '',
-			metadata JSONB NULL,
 			expires_at TIMESTAMPTZ NOT NULL,
-			consumed_at TIMESTAMPTZ NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			CONSTRAINT uniq_state UNIQUE (state)
 		);
@@ -434,15 +425,6 @@ func configureTelegramOAuthProviderForTest(t *testing.T, h *Handler, nonce strin
 	t.Helper()
 
 	provider := newTelegramOAuthTestProvider(t, nonce)
-	originalJWKSURL := telegramOIDCJWKSURL
-	originalIssuer := telegramOIDCIssuer
-	telegramOIDCJWKSURL = provider.jwksURL
-	telegramOIDCIssuer = provider.issuer
-	t.Cleanup(func() {
-		telegramOIDCJWKSURL = originalJWKSURL
-		telegramOIDCIssuer = originalIssuer
-	})
-
 	h.cfg.AllowedOAuthProviders = []string{"telegram"}
 	h.cfg.OAuthProviders = map[string]config.OAuthProviderConfig{
 		"telegram": {
@@ -451,6 +433,8 @@ func configureTelegramOAuthProviderForTest(t *testing.T, h *Handler, nonce strin
 			RedirectURL:  "https://app.example.com/auth/callback",
 			AuthURL:      "https://oauth.telegram.test/auth",
 			TokenURL:     provider.tokenURL,
+			Issuer:       provider.issuer,
+			JWKSURL:      provider.jwksURL,
 		},
 	}
 
@@ -571,7 +555,7 @@ func TestExchangeCodeForTokenTelegramUsesBasicAuth(t *testing.T) {
 	defer server.Close()
 
 	h := &Handler{}
-	resp, err := h.exchangeCodeForToken(context.Background(), "telegram", "auth-code", "verifier", config.OAuthProviderConfig{
+	resp, err := h.exchangeCodeForToken(context.Background(), "telegram", "auth-code", "verifier", "https://example.com/callback", config.OAuthProviderConfig{
 		ClientID:     "123456789",
 		ClientSecret: "secret-value",
 		RedirectURL:  "https://example.com/callback",
@@ -583,19 +567,13 @@ func TestExchangeCodeForTokenTelegramUsesBasicAuth(t *testing.T) {
 	assert.Equal(t, "123456789", form.Get("client_id"))
 	assert.Equal(t, "auth-code", form.Get("code"))
 	assert.Equal(t, "verifier", form.Get("code_verifier"))
+	assert.Equal(t, "https://example.com/callback", form.Get("redirect_uri"))
 	assert.Empty(t, form.Get("client_secret"))
 }
 
 func TestVerifyIDTokenTelegramValidatesSignatureAndClaims(t *testing.T) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-
-	originalJWKSURL := telegramOIDCJWKSURL
-	originalIssuer := telegramOIDCIssuer
-	t.Cleanup(func() {
-		telegramOIDCJWKSURL = originalJWKSURL
-		telegramOIDCIssuer = originalIssuer
-	})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		payload := map[string]any{
@@ -610,13 +588,12 @@ func TestVerifyIDTokenTelegramValidatesSignatureAndClaims(t *testing.T) {
 	}))
 	defer server.Close()
 
-	telegramOIDCJWKSURL = server.URL
-	telegramOIDCIssuer = "https://issuer.example"
+	issuer := model.TelegramIdentityIssuer
 
 	now := time.Now()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, oidcIDTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    telegramOIDCIssuer,
+			Issuer:    issuer,
 			Subject:   "telegram-user-123",
 			Audience:  jwt.ClaimStrings{"123456789"},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
@@ -632,7 +609,11 @@ func TestVerifyIDTokenTelegramValidatesSignatureAndClaims(t *testing.T) {
 	require.NoError(t, err)
 
 	h := &Handler{oidcVerifiers: newOIDCVerifierCache()}
-	claims, err := h.verifyIDToken(context.Background(), "telegram", idToken, config.OAuthProviderConfig{ClientID: "123456789"}, "expected-nonce")
+	claims, err := h.verifyIDToken(context.Background(), "telegram", idToken, config.OAuthProviderConfig{
+		ClientID: "123456789",
+		Issuer:   issuer,
+		JWKSURL:  server.URL,
+	}, "expected-nonce")
 	require.NoError(t, err)
 	require.NotNil(t, claims)
 	assert.Equal(t, "telegram-user-123", claims.Subject)

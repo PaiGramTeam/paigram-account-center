@@ -42,6 +42,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { MenuItem } from '../../types'
 
 interface Props {
@@ -59,6 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const computedMenuItems = computed(() => {
   if (props.useRouteMenu && !props.menuItems) {
@@ -72,13 +74,11 @@ const openKeys = ref<string[]>([])
 
 const getMenuTitle = (item: MenuItem): string => {
   if (item.meta?.locale) {
-    return item.meta.locale
+    return t(item.meta.locale)
   }
   return item.meta?.title || item.name || ''
 }
 
-/**
- */
 const getMenuItemKey = (item: MenuItem, parentName?: string): string => {
   if (item.name) {
     return item.name
@@ -127,15 +127,11 @@ watch(
 )
 
 const handleMenuClick = (key: string) => {
-  console.log('菜单点击:', key)
-
   const routeExists = router.getRoutes().find((r) => r.name === key)
   if (routeExists) {
-    console.log('找到路由，使用名称导航:', key)
-    router.push({ name: key })
+    void router.push({ name: key })
   } else {
-    console.log('路由名称未找到，使用路径导航:', key)
-    router.push(key)
+    void router.push(key)
   }
 }
 

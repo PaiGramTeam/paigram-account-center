@@ -16,7 +16,6 @@ import (
 	"paigram/internal/model"
 	"paigram/internal/response"
 	"paigram/internal/service"
-	"paigram/internal/service/session"
 	"paigram/internal/sessioncache"
 	"paigram/internal/utils/secsubtle"
 )
@@ -36,43 +35,26 @@ func hashToken(token string) string {
 // It also implements automatic session refresh when updateAge threshold is reached.
 func AuthMiddleware(sessionCache sessioncache.Store, authCfg config.AuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Extract the access token from EITHER the Authorization header
-		// OR the session cookie. The Authorization header takes precedence
-		// so that Bearer-only API clients keep their existing behavior;
-		// the cookie path is the fallback for OIDC-authenticated browser
-		// sessions issued by service/session.Service.Issue (spec §6.1).
-		//
-		// Bearer-format validation errors (INVALID_TOKEN_FORMAT,
-		// EMPTY_TOKEN) only fire when an Authorization header IS present
-		// but malformed. Cookie-only callers never see those codes; if
-		// no header and no cookie are present, the caller sees the
-		// MISSING_TOKEN code below.
-		var accessToken string
+		// Browser clients keep the access token in memory and send it through
+		// the same Bearer contract as non-browser API clients. Refresh material
+		// remains confined to the HttpOnly refresh cookie.
 		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
-			// Check if it's a Bearer token
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				response.UnauthorizedWithCode(c, "INVALID_TOKEN_FORMAT", "authorization header must be Bearer token", nil)
-				c.Abort()
-				return
-			}
-			accessToken = parts[1]
-			if accessToken == "" {
-				response.UnauthorizedWithCode(c, "EMPTY_TOKEN", "access token cannot be empty", nil)
-				c.Abort()
-				return
-			}
-		} else {
-			// Fallback: HttpOnly session cookie issued by
-			// service/session.Service.Issue on the OIDC redirect.
-			cookieVal, err := c.Cookie(session.SessionCookieName)
-			if err != nil || cookieVal == "" {
-				response.UnauthorizedWithCode(c, "MISSING_TOKEN", "authorization header or session cookie required", nil)
-				c.Abort()
-				return
-			}
-			accessToken = cookieVal
+		if authHeader == "" {
+			response.UnauthorizedWithCode(c, "MISSING_TOKEN", "authorization header required", nil)
+			c.Abort()
+			return
+		}
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			response.UnauthorizedWithCode(c, "INVALID_TOKEN_FORMAT", "authorization header must be Bearer token", nil)
+			c.Abort()
+			return
+		}
+		accessToken := parts[1]
+		if accessToken == "" {
+			response.UnauthorizedWithCode(c, "EMPTY_TOKEN", "access token cannot be empty", nil)
+			c.Abort()
+			return
 		}
 
 		ctx := context.Background()
@@ -89,10 +71,6 @@ func AuthMiddleware(sessionCache sessioncache.Store, authCfg config.AuthConfig) 
 		}
 
 		// Try to get complete session data from cache first (fast path - no DB query!)
-		// Note: this local is named userSession (not session) because the outer
-		// function imports the paigram/internal/service/session package for
-		// SessionCookieName; reusing the package selector as a local would
-		// shadow the import for the rest of the function block.
 		var userSession model.UserSession
 		var userID uint64
 		var needDBLookup = true

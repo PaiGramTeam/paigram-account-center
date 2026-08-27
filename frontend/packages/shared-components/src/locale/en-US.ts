@@ -7,6 +7,10 @@ export default {
   'menu.account.info': 'Account Info',
   'menu.account.security': 'Security',
   'menu.account.binding': 'Account Binding',
+  'menu.account.logs': 'Activity',
+  'menu.settings': 'Settings',
+  'menu.settings.general': 'General',
+  'menu.settings.security': 'Security',
   'menu.platformAccounts': 'Platform Accounts',
   'menu.apps': 'App Access',
   'menu.services': 'Service Registry',
@@ -20,6 +24,7 @@ export default {
   'menu.system.settings': 'Configuration',
 
   // Common
+  'common.home': 'Home',
   'common.login': 'Login',
   'common.logout': 'Logout',
   'common.username': 'Username',
