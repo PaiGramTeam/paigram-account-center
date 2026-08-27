@@ -134,17 +134,17 @@ redis:
   max_retries: 3
 
 platform_control:
-  root_ca_file: "/run/secrets/platform_control_ca.pem"
-  certificate_file: "/run/secrets/account_control_client_cert.pem"
-  private_key_file: "/run/secrets/account_control_client_key.pem"
-  server_name: "platform-control.internal"
+  root_ca_file: ""
+  certificate_file: ""
+  private_key_file: ""
+  server_name: ""
   dial_timeout: 5s
 
 grpc:
   enabled: true
   port: 50051
-  certificate_file: "/run/secrets/account_grpc_cert.pem"
-  private_key_file: "/run/secrets/account_grpc_key.pem"
+  certificate_file: ""
+  private_key_file: ""
   max_connection_idle: 300       # seconds
   max_connection_age: 3600       # seconds
   max_connection_age_grace: 30   # seconds

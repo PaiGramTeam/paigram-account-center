@@ -79,8 +79,9 @@ class PaiGramAccountClient:
             transport=http_transport,
         )
         self._tokens = _ClientCredentialsTokenProvider(self._http_client, client_id, client_secret, timeout)
-        self._account_channel = _create_secure_channel(
+        self._account_channel = _create_channel(
             account_grpc_target,
+            tls_enabled=account_root_certificates is not None or account_grpc_server_name is not None,
             root_certificates=account_root_certificates,
             server_name=account_grpc_server_name,
         )
@@ -489,11 +490,15 @@ class PaiGramAccountClient:
             if route.platform_service_key != service_key:
                 logger.error("Account Center returned a runtime route for the wrong platform service")
                 raise ServiceUnavailableError("platform runtime route does not match requested service")
-            if not _valid_grpc_target(route.runtime_endpoint) or not _valid_tls_server_name(route.runtime_server_name):
+            tls_enabled = service_key in self._platform_root_certificates
+            if not _valid_grpc_target(route.runtime_endpoint) or (
+                tls_enabled and not _valid_tls_server_name(route.runtime_server_name)
+            ):
                 logger.error("Account Center returned an invalid platform runtime route")
                 raise ServiceUnavailableError(f"invalid platform runtime route: {service_key}")
-            channel = _create_secure_channel(
+            channel = _create_channel(
                 route.runtime_endpoint,
+                tls_enabled=tls_enabled,
                 root_certificates=self._platform_root_certificates.get(service_key),
                 server_name=route.runtime_server_name,
             )
@@ -516,17 +521,20 @@ class PaiGramAccountClient:
         return resolved
 
 
-def _create_secure_channel(
+def _create_channel(
     target: str,
     *,
+    tls_enabled: bool,
     root_certificates: bytes | None,
     server_name: str | None,
 ) -> grpc.aio.Channel:
     if not target:
         logger.warning("PaiGram Account SDK rejected an empty gRPC target")
         raise InvalidRequestError("gRPC target is required")
-    credentials = grpc.ssl_channel_credentials(root_certificates=root_certificates)
     options: tuple[tuple[str, str | int], ...] = (("grpc.enable_http_proxy", 0),)
+    if not tls_enabled:
+        return grpc.aio.insecure_channel(target, options=options)
+    credentials = grpc.ssl_channel_credentials(root_certificates=root_certificates)
     if server_name is not None:
         options += (
             ("grpc.ssl_target_name_override", server_name),

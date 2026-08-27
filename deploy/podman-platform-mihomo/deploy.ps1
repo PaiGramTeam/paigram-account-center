@@ -26,6 +26,7 @@ function Get-EnvValue {
 $composeEnvironmentKeys = @(
     "PAI_PLATFORM_INSTANCE", "PAI_PLATFORM_NETWORK", "PAI_PLATFORM_IMAGE", "PAI_RUNTIME_BIND",
     "PAI_RUNTIME_PORT", "PAI_RUNTIME_SERVER_NAME", "PAI_MIHOMO_UPSTREAM_BASE_URL",
+    "PAI_PLATFORM_CONTROL_TLS", "PAI_PLATFORM_RUNTIME_TLS",
     "PAI_MIHOMO_UPSTREAM_PRIVATE_CA"
 )
 foreach ($name in $composeEnvironmentKeys) {
@@ -58,6 +59,24 @@ if ($privateUpstreamCA -notin @("", "false", "true")) {
     throw "PAI_MIHOMO_UPSTREAM_PRIVATE_CA must be true or false"
 }
 $composeArguments = [System.Collections.Generic.List[string]]@("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
+$controlTLS = (Get-EnvValue -Name "PAI_PLATFORM_CONTROL_TLS").Trim().ToLowerInvariant()
+$runtimeTLS = (Get-EnvValue -Name "PAI_PLATFORM_RUNTIME_TLS").Trim().ToLowerInvariant()
+foreach ($setting in @(
+    @{ Name = "PAI_PLATFORM_CONTROL_TLS"; Value = $controlTLS },
+    @{ Name = "PAI_PLATFORM_RUNTIME_TLS"; Value = $runtimeTLS }
+)) {
+    if ($setting.Value -notin @("", "false", "true")) {
+        throw "$($setting.Name) must be true or false"
+    }
+}
+if ($controlTLS -eq "true") {
+    $composeArguments.Add("-f")
+    $composeArguments.Add("compose.control-tls.yaml")
+}
+if ($runtimeTLS -eq "true") {
+    $composeArguments.Add("-f")
+    $composeArguments.Add("compose.runtime-tls.yaml")
+}
 if ($privateUpstreamCA -eq "true") {
     $composeArguments.Add("-f")
     $composeArguments.Add("compose.upstream-private-ca.yaml")

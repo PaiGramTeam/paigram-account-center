@@ -62,6 +62,15 @@ func TestGetPlatformRuntimeRoute(t *testing.T) {
 		assert.Equal(t, []string{"mihomo.status.read"}, route.SupportedActions)
 	})
 
+	t.Run("allows a runtime route without a TLS server name", func(t *testing.T) {
+		platform.RuntimeServerName = ""
+		route, routeErr := service.GetPlatformRuntimeRoute(authenticated, &pb.GetPlatformRuntimeRouteRequest{
+			PlatformServiceKey: "platform-mihomo-service",
+		})
+		require.NoError(t, routeErr)
+		assert.Empty(t, route.RuntimeServerName)
+	})
+
 	t.Run("hides disabled services", func(t *testing.T) {
 		platform.Enabled = false
 		_, routeErr := service.GetPlatformRuntimeRoute(authenticated, &pb.GetPlatformRuntimeRouteRequest{

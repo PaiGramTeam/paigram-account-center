@@ -191,10 +191,10 @@ func loadRuntimeSecretFiles(bc *conf.Bootstrap) error {
 }
 
 func validateBootstrap(bc *conf.Bootstrap) error {
-	if err := validateGRPCBootstrap("server.control", bc.GetServer().GetControl(), transporttls.MutualTLS); err != nil {
+	if err := validateGRPCBootstrap("server.control", bc.GetServer().GetControl()); err != nil {
 		return err
 	}
-	if err := validateGRPCBootstrap("server.runtime", bc.GetServer().GetRuntime(), transporttls.ServerAuthOnly); err != nil {
+	if err := validateGRPCBootstrap("server.runtime", bc.GetServer().GetRuntime()); err != nil {
 		return err
 	}
 	databaseConf := bc.GetData().GetDatabase()
@@ -235,7 +235,7 @@ func validateBootstrap(bc *conf.Bootstrap) error {
 	return nil
 }
 
-func validateGRPCBootstrap(name string, grpcConf *conf.Server_GRPC, mode transporttls.ServerMode) error {
+func validateGRPCBootstrap(name string, grpcConf *conf.Server_GRPC) error {
 	if grpcConf.GetNetwork() == "" {
 		return errors.New(name + ".network is required")
 	}
@@ -246,11 +246,11 @@ func validateGRPCBootstrap(name string, grpcConf *conf.Server_GRPC, mode transpo
 		return errors.New(name + ".timeout_seconds must be greater than zero")
 	}
 	tlsFiles := grpcConf.GetTls()
-	_, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+	_, err := transporttls.NewOptionalServerConfig(transporttls.ServerFiles{
 		CertificateFile: tlsFiles.GetCertificateFile(),
 		PrivateKeyFile:  tlsFiles.GetPrivateKeyFile(),
 		ClientCAFile:    tlsFiles.GetClientCaFile(),
-	}, mode)
+	})
 	return err
 }
 

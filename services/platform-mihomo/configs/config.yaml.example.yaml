@@ -3,17 +3,10 @@ server:
     network: tcp
     addr: "0.0.0.0:9000"
     timeout_seconds: 5
-    tls:
-      certificate_file: "/run/secrets/platform_control_cert.pem"
-      private_key_file: "/run/secrets/platform_control_key.pem"
-      client_ca_file: "/run/secrets/account_control_client_ca.pem"
   runtime:
     network: tcp
     addr: "0.0.0.0:9001"
     timeout_seconds: 5
-    tls:
-      certificate_file: "/run/secrets/platform_runtime_cert.pem"
-      private_key_file: "/run/secrets/platform_runtime_key.pem"
 data:
   database:
     dsn_file: "/run/secrets/platform_database_dsn"

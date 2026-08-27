@@ -1,0 +1,12 @@
+services:
+  account-center:
+    environment:
+      PAI_GRPC_CERTIFICATE_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
+      PAI_GRPC_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-key"
+    secrets:
+      - "${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
+      - "${PAI_INSTANCE:-paigram-account-center}-grpc-key"
+
+secrets:
+  "${PAI_INSTANCE:-paigram-account-center}-grpc-cert": {external: true}
+  "${PAI_INSTANCE:-paigram-account-center}-grpc-key": {external: true}

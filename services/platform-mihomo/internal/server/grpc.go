@@ -43,46 +43,52 @@ func NewGRPCServersWithReadiness(
 	}
 	controlConf := bc.GetServer().GetControl()
 	runtimeConf := bc.GetServer().GetRuntime()
-	controlTLS, err := transporttls.NewServerConfig(serverTLSFiles(controlConf), transporttls.MutualTLS)
+	controlTLS, err := transporttls.NewOptionalServerConfig(serverTLSFiles(controlConf))
 	if err != nil {
 		return nil, err
 	}
-	runtimeTLS, err := transporttls.NewServerConfig(serverTLSFiles(runtimeConf), transporttls.ServerAuthOnly)
+	runtimeTLS, err := transporttls.NewOptionalServerConfig(serverTLSFiles(runtimeConf))
 	if err != nil {
 		return nil, err
 	}
 
-	controlServer := kratosgrpc.NewServer(
+	controlOptions := []kratosgrpc.ServerOption{
 		kratosgrpc.CustomHealth(),
 		kratosgrpc.Network(controlConf.GetNetwork()),
 		kratosgrpc.Address(controlConf.GetAddr()),
-		kratosgrpc.Timeout(time.Duration(controlConf.GetTimeoutSeconds())*time.Second),
-		kratosgrpc.TLSConfig(controlTLS),
+		kratosgrpc.Timeout(time.Duration(controlConf.GetTimeoutSeconds()) * time.Second),
 		kratosgrpc.Middleware(
 			observability.CorrelationMiddleware(),
 			observability.RequestLoggingMiddleware(slog.Default()),
 			observability.SanitizedRecoveryMiddleware(slog.Default()),
 			controlSvc.ServiceTicketMiddleware(),
 		),
-	)
+	}
+	if controlTLS != nil {
+		controlOptions = append(controlOptions, kratosgrpc.TLSConfig(controlTLS))
+	}
+	controlServer := kratosgrpc.NewServer(controlOptions...)
 	healthCoordinator := newGRPCHealthCoordinator(readiness, defaultHealthRefreshInterval)
 	_ = healthCoordinator.Refresh(context.Background())
 	registerHealthServer(controlServer, healthCoordinator.Server())
 	platformv2.RegisterPlatformControlServiceServer(controlServer, controlSvc)
 
-	runtimeServer := kratosgrpc.NewServer(
+	runtimeOptions := []kratosgrpc.ServerOption{
 		kratosgrpc.CustomHealth(),
 		kratosgrpc.Network(runtimeConf.GetNetwork()),
 		kratosgrpc.Address(runtimeConf.GetAddr()),
-		kratosgrpc.Timeout(time.Duration(runtimeConf.GetTimeoutSeconds())*time.Second),
-		kratosgrpc.TLSConfig(runtimeTLS),
+		kratosgrpc.Timeout(time.Duration(runtimeConf.GetTimeoutSeconds()) * time.Second),
 		kratosgrpc.Middleware(
 			observability.CorrelationMiddleware(),
 			observability.RequestLoggingMiddleware(slog.Default()),
 			observability.SanitizedRecoveryMiddleware(slog.Default()),
 			controlSvc.ServiceTicketMiddleware(),
 		),
-	)
+	}
+	if runtimeTLS != nil {
+		runtimeOptions = append(runtimeOptions, kratosgrpc.TLSConfig(runtimeTLS))
+	}
+	runtimeServer := kratosgrpc.NewServer(runtimeOptions...)
 	registerHealthServer(runtimeServer, healthCoordinator.Server())
 	mihomov2.RegisterMihomoRuntimeServiceServer(runtimeServer, runtimeSvc)
 

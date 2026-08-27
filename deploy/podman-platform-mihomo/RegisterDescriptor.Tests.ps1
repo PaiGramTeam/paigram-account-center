@@ -29,7 +29,6 @@ Describe "Platform registry descriptor registration" {
             -AccountCenterUrl "http://127.0.0.1:18080" `
             -AdminAccessTokenFile $tokenFile `
             -RuntimeEndpoint "127.0.0.1:19001" `
-            -RuntimeServerName "platform-runtime.internal" `
             -AllowLoopbackHTTP
 
         Test-Path -LiteralPath $tokenFile | Should Be $false

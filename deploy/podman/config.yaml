@@ -36,10 +36,6 @@ auth:
   oauth_signing_key_file: "/run/secrets/account_oauth_signing_key"
 
 platform_control:
-  root_ca_file: "/run/secrets/platform_control_ca.pem"
-  certificate_file: "/run/secrets/account_control_client_cert.pem"
-  private_key_file: "/run/secrets/account_control_client_key.pem"
-  server_name: "platform-control.internal"
   dial_timeout: 5s
 
 frontend:
@@ -56,8 +52,6 @@ redis:
 grpc:
   enabled: true
   port: 50051
-  certificate_file: "/run/secrets/account_grpc_cert.pem"
-  private_key_file: "/run/secrets/account_grpc_key.pem"
 
 email:
   enabled: false

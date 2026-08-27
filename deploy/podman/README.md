@@ -6,9 +6,9 @@ Run `init-env.ps1` to create only non-secret settings. It requires immutable Acc
 
 Install `podman-compose` as the secret-aware Compose provider before deployment; the entry point invokes it directly because `podman compose` is only a wrapper and prefers Docker Compose when both providers exist. Docker Compose over Podman's compatibility API cannot consume Podman external secrets. A reproducible installation is `uv tool install podman-compose==1.6.0`. The provider behavior follows Podman's [Compose wrapper documentation](https://docs.podman.io/en/v5.4.0/markdown/podman-compose.1.html).
 
-Provision every external secret named by `compose.yaml` with `podman secret create`; do not place database credentials, Redis credentials, signing/encryption keys, TLS private keys, or the bootstrap administrator password in `.env`, Compose environment entries, shell arguments, or logs. Names below use `<account-instance>`, whose default is `paigram-account-center`; replace it with the exact `PAI_INSTANCE` value for a custom instance.
+Provision every external secret named by `compose.yaml` with `podman secret create`; do not place database credentials, Redis credentials, signing/encryption keys, optional TLS private keys, or the bootstrap administrator password in `.env`, Compose environment entries, shell arguments, or logs. Names below use `<account-instance>`, whose default is `paigram-account-center`; replace it with the exact `PAI_INSTANCE` value for a custom instance.
 
-The Account Center control client trusts the CA mounted from `<account-instance>-platform-control-ca` and presents the certificate/key mounted from `<account-instance>-control-client-cert` and `<account-instance>-control-client-key` to `platform-mihomo:9000`. The certificate must be valid for client authentication. The Platform control certificate must contain `platform-control.internal`, which is the exact configured SNI name.
+Account gRPC and the Platform control client use plaintext by default. Set `PAI_ACCOUNT_GRPC_TLS=true` to add `compose.grpc-tls.yaml`. Set `PAI_PLATFORM_CONTROL_TLS=true` in both Account and Platform projects to add their matching control TLS overlays. The Account control client then trusts `<account-instance>-platform-control-ca` and presents `<account-instance>-control-client-cert` with its matching key. `PAI_PLATFORM_CONTROL_SERVER_NAME` must match the Platform control certificate SAN. TLS configuration is fail-closed and never falls back to plaintext after it has been enabled.
 
 ## Secret formats
 
@@ -37,9 +37,9 @@ The remaining Account secrets use these formats and pairings:
 | `<account-instance>-oauth-signing-key` | Raw random OAuth HMAC key of at least 32 bytes. |
 | `<account-instance>-encryption-key` | Exactly 32 raw ASCII bytes, or padded standard Base64 for exactly 32 random bytes. |
 | `<account-instance>-admin-password` | Raw bootstrap administrator password. |
-| `<account-instance>-platform-control-ca` | PEM CA bundle that validates the Platform control server certificate. |
-| `<account-instance>-control-client-cert` / `<account-instance>-control-client-key` | Matching PEM certificate and PKCS#8 private key; the certificate must have client-auth usage and chain to the CA trusted by Platform. |
-| `<account-instance>-grpc-cert` / `<account-instance>-grpc-key` | Matching PEM server certificate and PKCS#8 private key; the certificate must have server-auth usage and a SAN equal to the SDK-facing Account gRPC server name. |
+| `<account-instance>-platform-control-ca` | Optional PEM CA bundle used when `PAI_PLATFORM_CONTROL_TLS=true`. |
+| `<account-instance>-control-client-cert` / `<account-instance>-control-client-key` | Optional matching client identity used by the control mTLS overlay. |
+| `<account-instance>-grpc-cert` / `<account-instance>-grpc-key` | Optional matching server identity used when `PAI_ACCOUNT_GRPC_TLS=true`. |
 
 Encode reserved DSN password characters using PostgreSQL URI percent-encoding. Do not copy a percent-encoded DSN password into the raw PostgreSQL password secret.
 
@@ -55,7 +55,7 @@ cd deploy/podman
 
 Each deployment first stops the previous Compose project and verifies that no project container remains, then runs digest-pinned one-shot `migrate` and `seed` services. The Account Center service starts only after both jobs exit successfully. The seed job idempotently reconciles the managed permission and role catalog and creates the bootstrap administrator only when no active recovery administrator exists. The long-running service has automatic migration and seeding disabled, so multiple replicas never race to change the schema during startup. A failed teardown, migration, or seed keeps Account Center and the frontend stopped; preserve the failing `deploy.ps1` output before retrying because successful and failed one-shot containers are removed after execution.
 
-The frontend and Account Center Bot gRPC listener publish only their configured loopback ports. PostgreSQL, Redis, Account Center HTTP, and the Platform control listener remain private. Terminate public HTTPS and gRPC TLS routing at trusted ingress where required, and preserve the configured secure-cookie and trusted-proxy policy.
+The frontend and Account Center Bot gRPC listener publish only their configured loopback ports. PostgreSQL, Redis, Account Center HTTP, and the Platform control listener remain private. Enable application TLS through the optional overlays or terminate public HTTPS and gRPC TLS at trusted ingress where required. Preserve the configured secure-cookie and trusted-proxy policy.
 
 Account Center exposes Prometheus metrics only inside the container networks at `account-center:8080/metrics`; the frontend returns `404` for that path. See the [monitoring rules and scrape topology](../monitoring/README.md).
 
@@ -65,6 +65,6 @@ Nginx emits the same CSP, MIME-sniffing, clickjacking, and referrer protections 
 
 Podman injects secrets only when it creates a container. After every `podman secret create --replace`, recreate each consumer with `podman-compose up -d --force-recreate`; restarting an existing container does not load the replacement.
 
-Rotate service-ticket keys by adding the new public key and recreating Platform first, replacing the Account signing secret and recreating Account Center, waiting the ticket TTL plus clock skew, and only then retiring the old public key and recreating Platform again. For TLS CA rotation, first publish an old+new trust bundle and recreate every verifier; next replace leaf certificates and recreate servers and clients; finally remove the old CA and recreate verifiers. New handshakes reload mounted files without a plaintext fallback, but external-secret replacement still requires container recreation.
+Rotate service-ticket keys by adding the new public key and recreating Platform first, replacing the Account signing secret and recreating Account Center, waiting the ticket TTL plus clock skew, and only then retiring the old public key and recreating Platform again. When optional TLS is enabled, rotate its CA by first publishing an old+new trust bundle and recreating every verifier; next replace leaf certificates and recreate servers and clients; finally remove the old CA and recreate verifiers. New handshakes reload mounted files without a plaintext fallback, but external-secret replacement still requires container recreation.
 
 Run the checked-in [external-secret rotation rehearsal](../rotation/README.md) before approving a key or certificate rotation procedure for an environment.

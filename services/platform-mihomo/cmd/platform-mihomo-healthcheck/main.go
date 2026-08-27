@@ -12,6 +12,7 @@ import (
 	"github.com/PaiGramTeam/paigram-account-center/contracts/runtime/go/transporttls"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
@@ -39,29 +40,33 @@ func main() {
 }
 
 func checkRuntimeHealth(ctx context.Context, options healthcheckOptions) error {
-	if options.Target == "" || options.RootCAFile == "" || options.ServerName == "" {
-		return errors.New("target, root CA file, and server name are required")
+	if options.Target == "" {
+		return errors.New("target is required")
 	}
 	if options.Timeout <= 0 {
 		return errors.New("timeout must be greater than zero")
 	}
-	loader, err := transporttls.NewClientConfigLoader(transporttls.ClientFiles{
+	loader, err := transporttls.NewOptionalClientConfigLoader(transporttls.ClientFiles{
 		RootCAFile: options.RootCAFile,
 		ServerName: options.ServerName,
 	})
 	if err != nil {
 		return fmt.Errorf("load runtime TLS configuration: %w", err)
 	}
-	tlsConfig, err := loader.Load()
-	if err != nil {
-		return fmt.Errorf("load runtime TLS identity: %w", err)
+	transportCredentials := credentials.TransportCredentials(insecure.NewCredentials())
+	if loader != nil {
+		tlsConfig, loadErr := loader.Load()
+		if loadErr != nil {
+			return fmt.Errorf("load runtime TLS identity: %w", loadErr)
+		}
+		transportCredentials = credentials.NewTLS(tlsConfig)
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, options.Timeout)
 	defer cancel()
 	connection, err := grpc.DialContext(
 		checkCtx,
 		options.Target,
-		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+		grpc.WithTransportCredentials(transportCredentials),
 		grpc.WithBlock(),
 		grpc.WithReturnConnectionError(),
 	)

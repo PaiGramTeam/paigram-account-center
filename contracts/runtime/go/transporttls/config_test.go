@@ -9,6 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestOptionalTLSConfigurationDefaultsToPlaintext(t *testing.T) {
+	serverConfig, err := NewOptionalServerConfig(ServerFiles{})
+	require.NoError(t, err)
+	require.Nil(t, serverConfig)
+
+	clientLoader, err := NewOptionalClientConfigLoader(ClientFiles{})
+	require.NoError(t, err)
+	require.Nil(t, clientLoader)
+}
+
+func TestOptionalTLSConfigurationRejectsPartialIdentity(t *testing.T) {
+	_, err := NewOptionalServerConfig(ServerFiles{CertificateFile: "server.pem"})
+	require.ErrorIs(t, err, ErrInvalidTLSFiles)
+
+	_, err = NewOptionalClientConfigLoader(ClientFiles{RootCAFile: "ca.pem"})
+	require.ErrorIs(t, err, ErrInvalidTLSFiles)
+}
+
 func TestControlTLSRequiresTrustedClientCertificate(t *testing.T) {
 	now := time.Now().UTC()
 	authority := newTestAuthority(t, "control-ca", now)

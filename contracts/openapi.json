@@ -14378,7 +14378,6 @@
                   "discovery_type",
                   "control_endpoint",
                   "runtime_endpoint",
-                  "runtime_server_name",
                   "enabled",
                   "supported_actions",
                   "credential_schema"

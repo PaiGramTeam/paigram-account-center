@@ -29,7 +29,8 @@ function Get-EnvValue {
 $composeEnvironmentKeys = @(
     "PAI_INSTANCE", "PAI_PLATFORM_NETWORK", "PAI_ACCOUNT_IMAGE", "PAI_FRONTEND_IMAGE",
     "PAI_HTTP_BIND", "PAI_HTTP_PORT", "PAI_ACCOUNT_GRPC_BIND", "PAI_ACCOUNT_GRPC_PORT",
-    "PAI_FRONTEND_BASE_URL", "PAI_REQUIRE_EMAIL_VERIFICATION", "PAI_ADMIN_EMAIL", "PAI_ADMIN_NAME"
+    "PAI_FRONTEND_BASE_URL", "PAI_REQUIRE_EMAIL_VERIFICATION", "PAI_ADMIN_EMAIL", "PAI_ADMIN_NAME",
+    "PAI_ACCOUNT_GRPC_TLS", "PAI_PLATFORM_CONTROL_TLS", "PAI_PLATFORM_CONTROL_SERVER_NAME"
 )
 foreach ($name in $composeEnvironmentKeys) {
     [Environment]::SetEnvironmentVariable($name, (Get-EnvValue -Name $name), "Process")
@@ -66,10 +67,28 @@ if ($LASTEXITCODE -ne 0) {
     throw "Missing shared Platform network $platformNetwork; deploy Platform Mihomo first"
 }
 
-$composeArguments = @("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
+$accountGRPCTLS = (Get-EnvValue -Name "PAI_ACCOUNT_GRPC_TLS").Trim().ToLowerInvariant()
+$platformControlTLS = (Get-EnvValue -Name "PAI_PLATFORM_CONTROL_TLS").Trim().ToLowerInvariant()
+foreach ($setting in @(
+    @{ Name = "PAI_ACCOUNT_GRPC_TLS"; Value = $accountGRPCTLS },
+    @{ Name = "PAI_PLATFORM_CONTROL_TLS"; Value = $platformControlTLS }
+)) {
+    if ($setting.Value -notin @("", "false", "true")) {
+        throw "$($setting.Name) must be true or false"
+    }
+}
+$composeArguments = [System.Collections.Generic.List[string]]@("--env-file", ".env", "-p", $instance, "-f", "compose.yaml")
+if ($accountGRPCTLS -eq "true") {
+    $composeArguments.Add("-f")
+    $composeArguments.Add("compose.grpc-tls.yaml")
+}
+if ($platformControlTLS -eq "true") {
+    $composeArguments.Add("-f")
+    $composeArguments.Add("compose.platform-control-tls.yaml")
+}
 Invoke-ImmutableComposeDeployment `
     -PodmanCompose $podmanCompose `
-    -ComposeArguments $composeArguments `
+    -ComposeArguments $composeArguments.ToArray() `
     -FailureMessage "Podman Compose deployment failed" `
     -ProjectName $instance `
     -InfrastructureServices @("postgres", "redis") `
@@ -105,7 +124,7 @@ foreach ($privateContainer in @("$instance-postgres", "$instance-redis")) {
 
 $grpcPorts = & podman port $instance
 if ($LASTEXITCODE -ne 0 -or -not $grpcPorts) {
-    throw "Account Center does not publish its configured loopback TLS gRPC port"
+    throw "Account Center does not publish its configured loopback gRPC port"
 }
 
 $httpPort = Get-EnvValue -Name "PAI_HTTP_PORT"

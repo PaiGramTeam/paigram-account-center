@@ -375,18 +375,15 @@ func validatePlatformControlConfig(cfg *Config) error {
 		return fmt.Errorf("configuration not loaded")
 	}
 	platform := cfg.PlatformControl
-	if strings.TrimSpace(platform.ServerName) == "" {
-		return fmt.Errorf("platform_control.server_name must not be empty")
-	}
 	if platform.DialTimeout <= 0 {
 		return fmt.Errorf("platform_control.dial_timeout must be greater than zero")
 	}
-	if err := transporttls.ValidateClientFiles(transporttls.ClientFiles{
+	if _, err := transporttls.NewOptionalClientConfigLoader(transporttls.ClientFiles{
 		RootCAFile:      platform.RootCAFile,
 		CertificateFile: platform.CertificateFile,
 		PrivateKeyFile:  platform.PrivateKeyFile,
 		ServerName:      platform.ServerName,
-	}, true); err != nil {
+	}); err != nil {
 		return fmt.Errorf("platform_control TLS: %w", err)
 	}
 	return nil
@@ -399,10 +396,10 @@ func validateGRPCServerConfig(cfg *Config) error {
 	if !cfg.GRPC.Enabled {
 		return nil
 	}
-	_, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+	_, err := transporttls.NewOptionalServerConfig(transporttls.ServerFiles{
 		CertificateFile: cfg.GRPC.CertificateFile,
 		PrivateKeyFile:  cfg.GRPC.PrivateKeyFile,
-	}, transporttls.ServerAuthOnly)
+	})
 	if err != nil {
 		return fmt.Errorf("grpc TLS: %w", err)
 	}

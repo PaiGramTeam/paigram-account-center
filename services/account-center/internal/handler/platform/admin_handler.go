@@ -32,7 +32,7 @@ type CreatePlatformServiceRequest struct {
 	DiscoveryType     string         `json:"discovery_type"`
 	ControlEndpoint   string         `json:"control_endpoint"`
 	RuntimeEndpoint   string         `json:"runtime_endpoint"`
-	RuntimeServerName string         `json:"runtime_server_name"`
+	RuntimeServerName string         `json:"runtime_server_name,omitempty"`
 	Enabled           bool           `json:"enabled"`
 	SupportedActions  []string       `json:"supported_actions"`
 	CredentialSchema  map[string]any `json:"credential_schema"`

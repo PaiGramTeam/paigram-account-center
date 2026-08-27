@@ -27,8 +27,9 @@ func TestNewGRPCServerBuildsRegisteredServer(t *testing.T) {
 	require.Contains(t, grpcServer.server.GetServiceInfo(), healthpb.Health_ServiceDesc.ServiceName)
 }
 
-func TestNewGRPCServerRejectsMissingTLSIdentity(t *testing.T) {
+func TestNewGRPCServerDefaultsToPlaintextWithoutTLSIdentity(t *testing.T) {
 	authConfig, _ := testutil.NewAuthConfig(t)
-	_, err := NewGRPCServer(50051, nil, nil, &config.Config{Auth: authConfig})
-	require.Error(t, err)
+	grpcServer, err := NewGRPCServer(50051, nil, nil, &config.Config{Auth: authConfig})
+	require.NoError(t, err)
+	require.NotNil(t, grpcServer)
 }

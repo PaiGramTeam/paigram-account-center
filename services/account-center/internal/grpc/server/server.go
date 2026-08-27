@@ -81,17 +81,16 @@ func NewGRPCServerWithTicketSignerAndReadiness(port int, db *gorm.DB, redisClien
 	}
 
 	authInterceptor := interceptor.NewAuthInterceptor(tokenSvc)
-	tlsConfig, err := transporttls.NewServerConfig(transporttls.ServerFiles{
+	tlsConfig, err := transporttls.NewOptionalServerConfig(transporttls.ServerFiles{
 		CertificateFile: cfg.GRPC.CertificateFile,
 		PrivateKeyFile:  cfg.GRPC.PrivateKeyFile,
-	}, transporttls.ServerAuthOnly)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("init grpc TLS: %w", err)
 	}
 
 	// Create gRPC server with interceptors
 	opts := []grpc.ServerOption{
-		grpc.Creds(grpccredentials.NewTLS(tlsConfig)),
 		grpc.ChainUnaryInterceptor(
 			interceptor.UnaryCorrelationInterceptor(),
 			observability.UnaryServerInterceptor(),
@@ -102,6 +101,9 @@ func NewGRPCServerWithTicketSignerAndReadiness(port int, db *gorm.DB, redisClien
 			observability.StreamServerInterceptor(),
 			authInterceptor.Stream(),
 		),
+	}
+	if tlsConfig != nil {
+		opts = append(opts, grpc.Creds(grpccredentials.NewTLS(tlsConfig)))
 	}
 
 	server := grpc.NewServer(opts...)

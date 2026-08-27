@@ -92,7 +92,7 @@ func TestPlatformServiceCreatePlatformServiceTrimsPersistedFields(t *testing.T) 
 	require.Equal(t, "runtime.internal", persisted.RuntimeServerName)
 }
 
-func TestPlatformServiceRejectsSchemedRuntimeEndpointAndMissingSNI(t *testing.T) {
+func TestPlatformServiceRejectsSchemedRuntimeEndpointAndAllowsMissingSNI(t *testing.T) {
 	valid := &model.PlatformService{
 		PlatformKey: "mihomo", DisplayName: "Mihomo", ServiceKey: "platform-mihomo-service",
 		ServiceAudience: "platform-mihomo-service", DiscoveryType: "static",
@@ -102,7 +102,7 @@ func TestPlatformServiceRejectsSchemedRuntimeEndpointAndMissingSNI(t *testing.T)
 	require.ErrorIs(t, validatePlatformServiceRow(valid), ErrInvalidPlatformServiceConfig)
 	valid.RuntimeEndpoint = "runtime.internal:9001"
 	valid.RuntimeServerName = ""
-	require.ErrorIs(t, validatePlatformServiceRow(valid), ErrInvalidPlatformServiceConfig)
+	require.NoError(t, validatePlatformServiceRow(valid))
 }
 
 func TestPlatformServiceRejectsWhitespaceInsideEndpointAndSNI(t *testing.T) {

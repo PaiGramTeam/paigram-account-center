@@ -6649,7 +6649,7 @@ export interface operations {
                     enabled: boolean;
                     platform_key: string;
                     runtime_endpoint: string;
-                    runtime_server_name: string;
+                    runtime_server_name?: string;
                     service_audience: string;
                     service_key: string;
                     supported_actions: string[] | null;

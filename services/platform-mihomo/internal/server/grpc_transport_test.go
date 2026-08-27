@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 )
@@ -87,6 +88,16 @@ func dialTestTLS(t *testing.T, server endpointServer, bundle tlstest.Bundle, inc
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	connection, err := grpc.DialContext(ctx, endpointHost(t, server), grpc.WithTransportCredentials(credentials.NewTLS(config)), grpc.WithBlock(), grpc.WithReturnConnectionError())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = connection.Close() })
+	return connection
+}
+
+func dialTestPlaintext(t *testing.T, server endpointServer) *grpc.ClientConn {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	connection, err := grpc.DialContext(ctx, endpointHost(t, server), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = connection.Close() })
 	return connection

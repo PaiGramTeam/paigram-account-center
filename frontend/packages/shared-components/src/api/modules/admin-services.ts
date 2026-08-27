@@ -13,7 +13,7 @@ export interface PlatformServiceInput {
   discovery_type: string
   control_endpoint: string
   runtime_endpoint: string
-  runtime_server_name: string
+  runtime_server_name?: string
   enabled: boolean
   supported_actions: string[]
   credential_schema: Record<string, unknown>

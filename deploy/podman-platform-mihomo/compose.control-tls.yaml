@@ -1,0 +1,15 @@
+services:
+  platform-mihomo:
+    environment:
+      PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"
+      PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"
+      PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE: "/run/secrets/paigram-account-center-control-client-ca"
+    secrets:
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"
+      - paigram-account-center-control-client-ca
+
+secrets:
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key": {external: true}
+  paigram-account-center-control-client-ca: {external: true}

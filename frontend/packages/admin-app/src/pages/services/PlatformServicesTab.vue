@@ -10,7 +10,8 @@
     <template #endpoint="{ record }">
       <div class="max-w-80 truncate" :title="record.control_endpoint">控制：{{ record.control_endpoint }}</div>
       <div class="max-w-80 truncate text-xs text-gray-500" :title="record.runtime_endpoint">
-        运行：{{ record.runtime_endpoint }} · {{ record.runtime_server_name }}
+        运行：{{ record.runtime_endpoint
+        }}<template v-if="record.runtime_server_name"> · TLS 名称：{{ record.runtime_server_name }}</template>
       </div>
       <div class="text-xs text-gray-500">受众：{{ record.service_audience }}</div>
     </template>
@@ -70,13 +71,13 @@
       <a-form-item label="发现方式" required>
         <a-input v-model="form.discovery_type" placeholder="static" />
       </a-form-item>
-      <a-form-item label="控制端点（mTLS）" required>
+      <a-form-item label="控制端点" required>
         <a-input v-model="form.control_endpoint" placeholder="platform-mihomo:9000" />
       </a-form-item>
-      <a-form-item label="运行端点（TLS）" required>
+      <a-form-item label="运行端点" required>
         <a-input v-model="form.runtime_endpoint" placeholder="runtime.example.com:443" />
       </a-form-item>
-      <a-form-item label="运行端点 SNI" required>
+      <a-form-item label="TLS 服务器名称（可选）">
         <a-input v-model="form.runtime_server_name" placeholder="runtime.example.com" />
       </a-form-item>
       <a-form-item label="支持动作" required>
@@ -174,7 +175,6 @@ const toInput = (): PlatformServiceInput | null => {
     form.discovery_type,
     form.control_endpoint,
     form.runtime_endpoint,
-    form.runtime_server_name,
   ]
   if (required.some((value) => !value.trim())) {
     Message.warning('请填写所有必填字段')

@@ -47,7 +47,7 @@ async with PaiGramAccountClient(
 
 SDK 不公开刷新、删除或写入平台原始凭据的方法。消费者只能请求注册平台声明的读取/运行时动作，所有权操作必须走账号中心的用户端或管理端接口。
 
-平台 runtime endpoint、精确 TLS server name、audience 与 action catalog 由 SDK 使用机器令牌从 Account Center registry 获取，并与 Platform descriptor 交叉校验。私有 CA 部署可通过 `platform_root_certificates={"platform-mihomo-service": ca_pem}` 配置 operator trust；未提供时使用系统信任库。SDK 不提供明文 gRPC 开关，且内部服务连接不继承 HTTP 代理环境变量。
+平台 runtime endpoint、可选 TLS server name、audience 与 action catalog 由 SDK 使用机器令牌从 Account Center registry 获取，并与 Platform descriptor 交叉校验。Account 与 Platform gRPC 默认使用明文传输；传入 `account_root_certificates`（或 `account_grpc_server_name`）可为 Account 启用 TLS，`platform_root_certificates={"platform-mihomo-service": ca_pem}` 则只为映射中的平台启用 TLS。映射中的值可为 `None` 以使用系统信任库。显式 TLS 连接失败时不会回退明文，且内部服务连接不继承 HTTP 代理环境变量。
 
 本地验证：
 

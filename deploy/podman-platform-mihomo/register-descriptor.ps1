@@ -7,9 +7,8 @@ param(
     [Parameter(Mandatory)]
     [ValidatePattern('^[^\s/:?#]+:\d{1,5}$')]
     [string]$RuntimeEndpoint,
-    [Parameter(Mandatory)]
     [ValidatePattern('^[^\s/:?#]+$')]
-    [string]$RuntimeServerName,
+    [string]$RuntimeServerName = "",
     [switch]$AllowLoopbackHTTP
 )
 

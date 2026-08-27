@@ -106,7 +106,9 @@ func TestSetDefaultsIncludesServiceTicketSettings(t *testing.T) {
 	require.Empty(t, v.GetString("auth.oauth_signing_key"))
 }
 
-func TestValidatePlatformControlConfigRequiresCompleteMutualTLSIdentity(t *testing.T) {
+func TestValidatePlatformControlConfigAllowsPlaintextAndOptionalClientIdentity(t *testing.T) {
+	require.NoError(t, validatePlatformControlConfig(&Config{PlatformControl: PlatformControlConfig{DialTimeout: time.Second}}))
+
 	bundle := tlstest.New(t, "control.internal")
 	valid := PlatformControlConfig{
 		RootCAFile:      bundle.CAFile,
@@ -117,6 +119,11 @@ func TestValidatePlatformControlConfigRequiresCompleteMutualTLSIdentity(t *testi
 	}
 	require.NoError(t, validatePlatformControlConfig(&Config{PlatformControl: valid}))
 
+	serverAuthenticationOnly := valid
+	serverAuthenticationOnly.CertificateFile = ""
+	serverAuthenticationOnly.PrivateKeyFile = ""
+	require.NoError(t, validatePlatformControlConfig(&Config{PlatformControl: serverAuthenticationOnly}))
+
 	missingCertificate := valid
 	missingCertificate.CertificateFile = ""
 	require.Error(t, validatePlatformControlConfig(&Config{PlatformControl: missingCertificate}))
@@ -126,8 +133,8 @@ func TestValidatePlatformControlConfigRequiresCompleteMutualTLSIdentity(t *testi
 	require.Error(t, validatePlatformControlConfig(&Config{PlatformControl: missingServerName}))
 }
 
-func TestValidateGRPCServerConfigRequiresTLSWhenEnabled(t *testing.T) {
-	require.Error(t, validateGRPCServerConfig(&Config{GRPC: GRPCConfig{Enabled: true}}))
+func TestValidateGRPCServerConfigAllowsPlaintextWhenEnabled(t *testing.T) {
+	require.NoError(t, validateGRPCServerConfig(&Config{GRPC: GRPCConfig{Enabled: true}}))
 	bundle := tlstest.New(t, "account.internal")
 	require.NoError(t, validateGRPCServerConfig(&Config{GRPC: GRPCConfig{
 		Enabled: true, CertificateFile: bundle.ServerCertFile, PrivateKeyFile: bundle.ServerKeyFile,

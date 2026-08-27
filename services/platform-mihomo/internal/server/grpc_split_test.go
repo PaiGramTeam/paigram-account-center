@@ -26,6 +26,27 @@ func TestGRPCServersSeparateControlAndRuntimeSurfaces(t *testing.T) {
 	require.NotContains(t, runtimeServices, "paigram.platform.v2.PlatformControlService")
 }
 
+func TestGRPCServersDefaultToPlaintext(t *testing.T) {
+	controlService, runtimeService := testV2Services()
+	bootstrap := &conf.Bootstrap{Server: &conf.Server{
+		Control: plaintextGRPCConfig(),
+		Runtime: plaintextGRPCConfig(),
+	}}
+	servers, err := NewGRPCServersWithReadiness(bootstrap, controlService, runtimeService, testReadyChecker())
+	require.NoError(t, err)
+	startTestGRPCServer(t, servers.Control)
+	startTestGRPCServer(t, servers.Runtime)
+
+	controlConnection := dialTestPlaintext(t, servers.Control)
+	runtimeConnection := dialTestPlaintext(t, servers.Runtime)
+	assertServing(t, controlConnection)
+	assertServing(t, runtimeConnection)
+}
+
+func plaintextGRPCConfig() *conf.Server_GRPC {
+	return &conf.Server_GRPC{Network: "tcp", Addr: "127.0.0.1:0", TimeoutSeconds: 5}
+}
+
 func testSecureBootstrap(t *testing.T) *conf.Bootstrap {
 	t.Helper()
 	bootstrap, _, _ := newSecureBootstrapFixture(t)

@@ -162,7 +162,7 @@ func (s *BotAccessService) GetPlatformRuntimeRoute(ctx context.Context, req *pb.
 		}
 		return nil, status.Error(codes.Internal, "resolve platform runtime route")
 	}
-	if strings.TrimSpace(platform.RuntimeEndpoint) == "" || strings.TrimSpace(platform.RuntimeServerName) == "" || strings.TrimSpace(platform.ServiceAudience) == "" {
+	if strings.TrimSpace(platform.RuntimeEndpoint) == "" || strings.TrimSpace(platform.ServiceAudience) == "" {
 		return nil, status.Error(codes.FailedPrecondition, "platform runtime route is incomplete")
 	}
 	supportedActions := []string{}

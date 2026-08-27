@@ -1,0 +1,16 @@
+services:
+  platform-mihomo:
+    environment:
+      PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
+      PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
+    secrets:
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
+      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/platform-mihomo-healthcheck", "-target", "127.0.0.1:9001", "-root-ca", "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca", "-server-name", "${PAI_RUNTIME_SERVER_NAME:?set PAI_RUNTIME_SERVER_NAME to the runtime certificate SAN}"]
+
+secrets:
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key": {external: true}
+  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca": {external: true}

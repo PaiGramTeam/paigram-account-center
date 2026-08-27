@@ -39,6 +39,17 @@ type ClientConfigLoader struct {
 	files ClientFiles
 }
 
+func NewOptionalServerConfig(files ServerFiles) (*tls.Config, error) {
+	if serverFilesEmpty(files) {
+		return nil, nil
+	}
+	mode := ServerAuthOnly
+	if strings.TrimSpace(files.ClientCAFile) != "" {
+		mode = MutualTLS
+	}
+	return NewServerConfig(files, mode)
+}
+
 func NewServerConfig(files ServerFiles, mode ServerMode) (*tls.Config, error) {
 	if err := ValidateServerFiles(files, mode); err != nil {
 		return nil, err
@@ -62,6 +73,13 @@ func NewClientConfigLoader(files ClientFiles) (*ClientConfigLoader, error) {
 	}
 	loader := &ClientConfigLoader{files: files}
 	return loader, nil
+}
+
+func NewOptionalClientConfigLoader(files ClientFiles) (*ClientConfigLoader, error) {
+	if clientFilesEmpty(files) {
+		return nil, nil
+	}
+	return NewClientConfigLoader(files)
 }
 
 func ValidateClientFiles(files ClientFiles, requireCertificate bool) error {
@@ -224,4 +242,17 @@ func supportsUsage(certificate *x509.Certificate, expected x509.ExtKeyUsage) boo
 		}
 	}
 	return false
+}
+
+func serverFilesEmpty(files ServerFiles) bool {
+	return strings.TrimSpace(files.CertificateFile) == "" &&
+		strings.TrimSpace(files.PrivateKeyFile) == "" &&
+		strings.TrimSpace(files.ClientCAFile) == ""
+}
+
+func clientFilesEmpty(files ClientFiles) bool {
+	return strings.TrimSpace(files.RootCAFile) == "" &&
+		strings.TrimSpace(files.CertificateFile) == "" &&
+		strings.TrimSpace(files.PrivateKeyFile) == "" &&
+		strings.TrimSpace(files.ServerName) == ""
 }

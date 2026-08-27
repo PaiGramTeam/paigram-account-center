@@ -40,6 +40,14 @@ func TestValidateBootstrap(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts plaintext grpc listeners", func(t *testing.T) {
+		bc := validMainTestBootstrap(t)
+		bc.Server.Control.Tls = nil
+		bc.Server.Runtime.Tls = nil
+
+		require.NoError(t, validateBootstrap(bc))
+	})
+
 	t.Run("rejects missing PostgreSQL database DSN", func(t *testing.T) {
 		bc := validMainTestBootstrap(t)
 		bc.Data.Database.Dsn = ""
@@ -193,6 +201,43 @@ upstream:
 	require.Equal(t, values["PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE"], bootstrap.GetServer().GetRuntime().GetTls().GetPrivateKeyFile())
 	require.Equal(t, values["PAI_UPSTREAM_BEARER_TOKEN_FILE"], bootstrap.GetUpstream().GetBearerTokenFile())
 	require.Equal(t, values["PAI_UPSTREAM_ROOT_CA_FILE"], bootstrap.GetUpstream().GetRootCaFile())
+}
+
+func TestProductionConfigMakesPlatformTLSOptIn(t *testing.T) {
+	configPath := filepath.Join("..", "..", "..", "..", "deploy", "podman", "platform-mihomo.config.yaml")
+	tlsEnvironment := map[string]string{
+		"PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE": "/run/secrets/platform-control-cert",
+		"PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE": "/run/secrets/platform-control-key",
+		"PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE":   "/run/secrets/account-client-ca",
+		"PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE": "/run/secrets/platform-runtime-cert",
+		"PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE": "/run/secrets/platform-runtime-key",
+	}
+	for name := range tlsEnvironment {
+		t.Setenv(name, "")
+	}
+
+	load := func() *conf.Bootstrap {
+		loaded := kratosconfig.New(kratosconfig.WithSource(file.NewSource(configPath), env.NewSource("PAI_")))
+		t.Cleanup(func() { require.NoError(t, loaded.Close()) })
+		require.NoError(t, loaded.Load())
+		var bootstrap conf.Bootstrap
+		require.NoError(t, loaded.Scan(&bootstrap))
+		return &bootstrap
+	}
+
+	plaintext := load()
+	require.Empty(t, plaintext.GetServer().GetControl().GetTls().GetCertificateFile())
+	require.Empty(t, plaintext.GetServer().GetRuntime().GetTls().GetCertificateFile())
+
+	for name, value := range tlsEnvironment {
+		t.Setenv(name, value)
+	}
+	tlsBootstrap := load()
+	require.Equal(t, tlsEnvironment["PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE"], tlsBootstrap.GetServer().GetControl().GetTls().GetCertificateFile())
+	require.Equal(t, tlsEnvironment["PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE"], tlsBootstrap.GetServer().GetControl().GetTls().GetPrivateKeyFile())
+	require.Equal(t, tlsEnvironment["PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE"], tlsBootstrap.GetServer().GetControl().GetTls().GetClientCaFile())
+	require.Equal(t, tlsEnvironment["PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE"], tlsBootstrap.GetServer().GetRuntime().GetTls().GetCertificateFile())
+	require.Equal(t, tlsEnvironment["PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE"], tlsBootstrap.GetServer().GetRuntime().GetTls().GetPrivateKeyFile())
 }
 
 func validMainTestBootstrap(t *testing.T) *conf.Bootstrap {

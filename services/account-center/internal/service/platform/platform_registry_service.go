@@ -216,13 +216,14 @@ func validatePlatformServiceRow(row *model.PlatformService) error {
 	if row == nil {
 		return ErrInvalidPlatformServiceConfig
 	}
-	if strings.TrimSpace(row.PlatformKey) == "" || strings.TrimSpace(row.DisplayName) == "" || strings.TrimSpace(row.ServiceKey) == "" || strings.TrimSpace(row.ServiceAudience) == "" || strings.TrimSpace(row.ControlEndpoint) == "" || strings.TrimSpace(row.RuntimeEndpoint) == "" || strings.TrimSpace(row.RuntimeServerName) == "" {
+	if strings.TrimSpace(row.PlatformKey) == "" || strings.TrimSpace(row.DisplayName) == "" || strings.TrimSpace(row.ServiceKey) == "" || strings.TrimSpace(row.ServiceAudience) == "" || strings.TrimSpace(row.ControlEndpoint) == "" || strings.TrimSpace(row.RuntimeEndpoint) == "" {
 		return ErrInvalidPlatformServiceConfig
 	}
 	if row.DiscoveryType != staticPlatformDiscoveryType {
 		return ErrInvalidPlatformServiceConfig
 	}
-	if !validGRPCEndpoint(row.ControlEndpoint) || !validGRPCEndpoint(row.RuntimeEndpoint) || !validTLSServerName(row.RuntimeServerName) {
+	if !validGRPCEndpoint(row.ControlEndpoint) || !validGRPCEndpoint(row.RuntimeEndpoint) ||
+		(row.RuntimeServerName != "" && !validTLSServerName(row.RuntimeServerName)) {
 		return ErrInvalidPlatformServiceConfig
 	}
 

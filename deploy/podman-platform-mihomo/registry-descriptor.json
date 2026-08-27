@@ -5,8 +5,8 @@
   "service_audience": "platform-mihomo-service",
   "discovery_type": "static",
   "control_endpoint": "platform-mihomo:9000",
-  "runtime_endpoint": "runtime.example.com:443",
-  "runtime_server_name": "runtime.example.com",
+  "runtime_endpoint": "127.0.0.1:19001",
+  "runtime_server_name": "",
   "enabled": true,
   "supported_actions": [
     "mihomo.binding.read",

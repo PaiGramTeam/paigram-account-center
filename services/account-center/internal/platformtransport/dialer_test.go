@@ -35,11 +35,26 @@ func TestControlDialerUsesMutualTLS(t *testing.T) {
 	require.Equal(t, healthpb.HealthCheckResponse_SERVING, response.GetStatus())
 }
 
+func TestControlDialerDefaultsToPlaintext(t *testing.T) {
+	endpoint := startPlaintextServer(t)
+	dial, err := NewControlDialer(ControlConfig{Timeout: 2 * time.Second})
+	require.NoError(t, err)
+
+	connection, err := dial(context.Background(), endpoint)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = connection.Close() })
+	response, err := healthpb.NewHealthClient(connection).Check(context.Background(), &healthpb.HealthCheckRequest{})
+	require.NoError(t, err)
+	require.Equal(t, healthpb.HealthCheckResponse_SERVING, response.GetStatus())
+}
+
 func TestControlDialerFailsClosedForMissingOrWrongIdentity(t *testing.T) {
 	bundle := tlstest.New(t, "control.internal")
 	endpoint := startMutualTLSServer(t, bundle)
 
-	_, err := NewControlDialer(ControlConfig{RootCAFile: bundle.CAFile, ServerName: bundle.ServerName, Timeout: time.Second})
+	missingClientCertificate, err := NewControlDialer(ControlConfig{RootCAFile: bundle.CAFile, ServerName: bundle.ServerName, Timeout: time.Second})
+	require.NoError(t, err)
+	_, err = missingClientCertificate(context.Background(), endpoint)
 	require.Error(t, err)
 
 	wrongNameDialer, err := NewControlDialer(ControlConfig{
@@ -75,6 +90,25 @@ func TestControlDialerFailsClosedForMissingOrWrongIdentity(t *testing.T) {
 	require.NoError(t, err)
 	_, err = validDialer(context.Background(), "https://"+endpoint)
 	require.Error(t, err)
+}
+
+func startPlaintextServer(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	server := grpc.NewServer()
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(server, healthServer)
+	serveError := make(chan error, 1)
+	go func() { serveError <- server.Serve(listener) }()
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+		err := <-serveError
+		require.True(t, err == nil || err == grpc.ErrServerStopped, "serve error: %v", err)
+	})
+	return listener.Addr().String()
 }
 
 func startMutualTLSServer(t *testing.T, bundle tlstest.Bundle) string {

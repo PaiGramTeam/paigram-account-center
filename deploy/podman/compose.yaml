@@ -92,22 +92,12 @@ services:
       PAI_AUTH_SERVICE_TICKET_SIGNING_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"
       PAI_AUTH_OAUTH_SIGNING_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"
       PAI_SECURITY_ENCRYPTION_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-encryption-key"
-      PAI_PLATFORM_CONTROL_ROOT_CA_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"
-      PAI_PLATFORM_CONTROL_CERTIFICATE_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-control-client-cert"
-      PAI_PLATFORM_CONTROL_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-control-client-key"
-      PAI_GRPC_CERTIFICATE_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
-      PAI_GRPC_PRIVATE_KEY_FILE: "/run/secrets/${PAI_INSTANCE:-paigram-account-center}-grpc-key"
     secrets:
       - "${PAI_INSTANCE:-paigram-account-center}-database-dsn"
       - "${PAI_INSTANCE:-paigram-account-center}-redis-password"
       - "${PAI_INSTANCE:-paigram-account-center}-service-ticket-signing-key"
       - "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key"
       - "${PAI_INSTANCE:-paigram-account-center}-encryption-key"
-      - "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca"
-      - "${PAI_INSTANCE:-paigram-account-center}-control-client-cert"
-      - "${PAI_INSTANCE:-paigram-account-center}-control-client-key"
-      - "${PAI_INSTANCE:-paigram-account-center}-grpc-cert"
-      - "${PAI_INSTANCE:-paigram-account-center}-grpc-key"
     ports:
       - "${PAI_ACCOUNT_GRPC_BIND:-127.0.0.1}:${PAI_ACCOUNT_GRPC_PORT:-15051}:50051"
     healthcheck:
@@ -173,8 +163,3 @@ secrets:
   "${PAI_INSTANCE:-paigram-account-center}-oauth-signing-key": {external: true}
   "${PAI_INSTANCE:-paigram-account-center}-encryption-key": {external: true}
   "${PAI_INSTANCE:-paigram-account-center}-admin-password": {external: true}
-  "${PAI_INSTANCE:-paigram-account-center}-platform-control-ca": {external: true}
-  "${PAI_INSTANCE:-paigram-account-center}-control-client-cert": {external: true}
-  "${PAI_INSTANCE:-paigram-account-center}-control-client-key": {external: true}
-  "${PAI_INSTANCE:-paigram-account-center}-grpc-cert": {external: true}
-  "${PAI_INSTANCE:-paigram-account-center}-grpc-key": {external: true}

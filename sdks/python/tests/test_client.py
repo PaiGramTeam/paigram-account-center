@@ -7,7 +7,6 @@ import grpc
 import httpx
 import pytest
 
-import paigram_account_sdk.client as client_module
 from paigram_account_sdk import (
     AuthenticationError,
     CredentialError,
@@ -308,19 +307,50 @@ async def test_start_entry_identity_link_returns_public_domain_model() -> None:
     assert requested_scopes == ["bot.access.link_identity"]
 
 
-@pytest.fixture(autouse=True)
-def use_insecure_unit_test_channels(monkeypatch: pytest.MonkeyPatch) -> None:
-    def create_channel(target: str, *, root_certificates: bytes | None, server_name: str | None) -> grpc.aio.Channel:
-        del root_certificates, server_name
-        return grpc.aio.insecure_channel(target)
+@pytest.mark.asyncio
+async def test_platform_route_allows_missing_server_name_for_plaintext() -> None:
+    async with (
+        platform_server() as platform_target,
+        account_server(platform_target, runtime_server_name="") as account_target,
+        client_for(account_target) as client,
+    ):
+        descriptor = await client.describe_platform("platform-mihomo-service", request_id="request-123")
 
-    monkeypatch.setattr(client_module, "_create_secure_channel", create_channel)
+    assert descriptor.platform_key == "mihomo"
 
 
 @pytest.mark.asyncio
-async def test_platform_route_rejects_missing_server_name() -> None:
-    async with account_server(runtime_server_name="") as account_target, client_for(account_target) as client:
+async def test_platform_route_requires_server_name_when_tls_is_configured() -> None:
+    async with (
+        account_server(runtime_server_name="") as account_target,
+        PaiGramAccountClient(
+            account_http_url="https://account.example.test",
+            account_grpc_target=account_target,
+            client_id="paigram",
+            client_secret="secret",
+            platform_root_certificates={"platform-mihomo-service": b"invalid-ca"},
+            http_transport=token_transport(),
+        ) as client,
+    ):
         with pytest.raises(ServiceUnavailableError, match="invalid platform runtime route"):
+            await client.describe_platform("platform-mihomo-service", request_id="request-123")
+
+
+@pytest.mark.asyncio
+async def test_platform_tls_configuration_does_not_fall_back_to_plaintext() -> None:
+    async with (
+        platform_server() as platform_target,
+        account_server(platform_target) as account_target,
+        PaiGramAccountClient(
+            account_http_url="https://account.example.test",
+            account_grpc_target=account_target,
+            client_id="paigram",
+            client_secret="secret",
+            platform_root_certificates={"platform-mihomo-service": b"invalid-ca"},
+            http_transport=token_transport(),
+        ) as client,
+    ):
+        with pytest.raises(ServiceUnavailableError):
             await client.describe_platform("platform-mihomo-service", request_id="request-123")
 
 

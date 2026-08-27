@@ -69,11 +69,6 @@ services:
       PAI_DATA_REDIS_PASSWORD_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"
       PAI_SECURITY_CREDENTIAL_ENCRYPTION_KEYRING_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring"
       PAI_SECURITY_SERVICE_TICKET_PUBLIC_KEYRING_FILE: "/run/secrets/paigram-account-center-service-ticket-public-keyring"
-      PAI_SERVER_CONTROL_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"
-      PAI_SERVER_CONTROL_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"
-      PAI_SERVER_CONTROL_TLS_CLIENT_CA_FILE: "/run/secrets/paigram-account-center-control-client-ca"
-      PAI_SERVER_RUNTIME_TLS_CERTIFICATE_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
-      PAI_SERVER_RUNTIME_TLS_PRIVATE_KEY_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
       PAI_UPSTREAM_BEARER_TOKEN_FILE: "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"
       PAI_METRICS_ADDR: "0.0.0.0:9090"
     secrets:
@@ -81,17 +76,11 @@ services:
       - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-redis-password"
       - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring"
       - paigram-account-center-service-ticket-public-keyring
-      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert"
-      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key"
-      - paigram-account-center-control-client-ca
-      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert"
-      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key"
-      - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca"
       - "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token"
     ports:
       - "${PAI_RUNTIME_BIND:-127.0.0.1}:${PAI_RUNTIME_PORT:-19001}:9001"
     healthcheck:
-      test: ["CMD", "/usr/local/bin/platform-mihomo-healthcheck", "-target", "127.0.0.1:9001", "-root-ca", "/run/secrets/${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca", "-server-name", "${PAI_RUNTIME_SERVER_NAME:?set PAI_RUNTIME_SERVER_NAME to the runtime certificate SAN}"]
+      test: ["CMD", "/usr/local/bin/platform-mihomo-healthcheck", "-target", "127.0.0.1:9001"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -123,10 +112,4 @@ secrets:
   "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-database-dsn": {external: true}
   "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-encryption-keyring": {external: true}
   paigram-account-center-service-ticket-public-keyring: {external: true}
-  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-cert": {external: true}
-  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-control-key": {external: true}
-  paigram-account-center-control-client-ca: {external: true}
-  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-cert": {external: true}
-  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-key": {external: true}
-  "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-runtime-ca": {external: true}
   "${PAI_PLATFORM_INSTANCE:-paigram-platform-mihomo}-upstream-token": {external: true}
