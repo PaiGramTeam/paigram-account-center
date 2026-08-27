@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	defaultPostgresImage = "public.ecr.aws/docker/library/postgres:16-alpine"
-	defaultRedisImage    = "public.ecr.aws/docker/library/redis:7-alpine"
+	defaultPostgresImage = "postgres:16-alpine"
+	defaultRedisImage    = "redis:7-alpine"
 	postgresUser         = "paigram_it"
 	postgresPass         = "paigram_it_password"
 	baselineDBName       = "paigram_it_baseline"

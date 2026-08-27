@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	defaultPostgresImage = "public.ecr.aws/docker/library/postgres:16-alpine"
-	defaultRedisImage    = "public.ecr.aws/docker/library/redis:7-alpine"
+	defaultPostgresImage = "postgres:16-alpine"
+	defaultRedisImage    = "redis:7-alpine"
 	postgresUser         = "platform_mihomo_it"
 	postgresPass         = "platform_mihomo_it_password"
 	baselineDBName       = "platform_mihomo_it_baseline"

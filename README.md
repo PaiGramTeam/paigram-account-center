@@ -28,17 +28,17 @@ Raw platform credentials must never be stored by Account Center, the SDK, or bot
 
 ## Local verification
 
-Required local tools are Go, Buf, Bun, uv, GitHub CLI, `protoc-gen-go`, and `protoc-gen-go-grpc`. Docker is not required by the repository verification flow.
+Files under `scripts/` are CI-only entry points. During local development, determine the affected component and run its underlying formatter, linter, build, or test command directly from that component's directory.
 
-Run the complete local verification suite from the repository root:
+Typical targeted checks include:
 
-```powershell
-pwsh ./scripts/verify.ps1
+```bash
+go test ./...
+uv run pytest -q
+bun test tests/unit
 ```
 
-The default verification checks the pinned current PaiGram `main` baseline and requires a clean worktree. During development, `-AllowDirty` permits intentional local edits and `-SkipPaiGramCompatibility` permits an offline run.
-
-The command does not run the container-backed PostgreSQL/Redis integration suites; run each module's integration-tagged tests separately as a production-cutover gate.
+Database-backed Go tests require `PAI_TEST_DATABASE_DSN` (or `PAI_DATABASE_DSN`). Integration-tagged tests additionally require Docker or Podman.
 
 The repository intentionally does not copy build or deployment systems from the source repositories.
 
@@ -48,6 +48,6 @@ The complete Account Center stack can be built and run with Podman. A single Ngi
 
 Regenerate Go and Python contract bindings directly when a `.proto` file changes:
 
-```powershell
-pwsh ./contracts/generate.ps1
+```bash
+bash ./contracts/generate.sh
 ```
