@@ -377,10 +377,13 @@ func TestRuntimeSummaryServiceRepairProjectionPersistsSummaryAndProfiles(t *test
 	}).Error)
 
 	platformSvc := &fakeRuntimeSummaryPlatformService{summary: map[string]any{
-		"platform_account_id": "cn:repair-me",
-		"status":              "active",
-		"last_validated_at":   "2026-04-20T12:34:56Z",
-		"last_refreshed_at":   "2026-04-20T12:35:56Z",
+		"platform_account_id":       "cn:repair-me",
+		"status":                    "active",
+		"last_validated_at":         "2026-04-20T12:34:56Z",
+		"last_refreshed_at":         "2026-04-20T12:35:56Z",
+		"profile_snapshot_complete": true,
+		"profile_revision":          uint64(1),
+		"profile_observed_revision": uint64(1),
 		"profiles": []map[string]any{{
 			"id":         uint64(42),
 			"game_biz":   "hk4e_cn",

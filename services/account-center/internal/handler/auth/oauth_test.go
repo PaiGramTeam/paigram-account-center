@@ -487,7 +487,7 @@ func newTelegramOAuthTestProvider(t *testing.T, nonce string) *telegramOAuthTest
 	provider := &telegramOAuthTestProvider{
 		clientID:     "123456789",
 		clientSecret: "telegram-test-secret",
-		issuer:       "https://oauth.telegram.test",
+		issuer:       model.TelegramIdentityIssuer,
 		privateKey:   privateKey,
 		nonce:        nonce,
 	}

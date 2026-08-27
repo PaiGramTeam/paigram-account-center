@@ -104,6 +104,7 @@ func TestBotAccessServiceAuthenticatedFlow(t *testing.T) {
 		&model.PlatformAccountBinding{},
 		&model.PlatformAccountProfile{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
 		&model.AuditEvent{},
 	)
 
@@ -201,6 +202,7 @@ func TestBotAccessServiceRejectsRequestedActionOutsideGrantedSet(t *testing.T) {
 		&model.PlatformAccountBinding{},
 		&model.PlatformAccountProfile{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
 		&model.AuditEvent{},
 	)
 
@@ -245,6 +247,8 @@ func TestBotAccessServiceRejectsRevokedConsumerGrantOnTicketIssue(t *testing.T) 
 		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
+		&model.AuditEvent{},
 	)
 
 	signingKey := botAccessTestSigningKey(t)
@@ -280,6 +284,8 @@ func TestBotAccessServiceRejectsMissingAuthorization(t *testing.T) {
 		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
+		&model.AuditEvent{},
 	)
 
 	signingKey := botAccessTestSigningKey(t)
@@ -305,6 +311,8 @@ func TestBotAccessServiceRejectsTokenMissingIssueTicketScope(t *testing.T) {
 		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
+		&model.AuditEvent{},
 	)
 
 	signingKey := botAccessTestSigningKey(t)
@@ -335,6 +343,8 @@ func TestBotAccessServiceRejectsCallerWithoutGrant(t *testing.T) {
 		&model.PlatformService{},
 		&model.PlatformAccountBinding{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
+		&model.AuditEvent{},
 	)
 
 	signingKey := botAccessTestSigningKey(t)
@@ -419,6 +429,7 @@ func seedBotAccessGRPCTestData(t *testing.T, db *gorm.DB) (model.Bot, model.User
 
 	ref := model.PlatformAccountBinding{
 		OwnerUserID:        identityUser.ID,
+		Generation:         1,
 		Platform:           "hoyoverse",
 		ExternalAccountKey: sql.NullString{String: "hoyo-account-001", Valid: true},
 		PlatformServiceKey: "platform-hoyoverse-service",

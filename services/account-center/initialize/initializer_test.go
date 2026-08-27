@@ -1,6 +1,7 @@
 package initialize
 
 import (
+	"os"
 	"strconv"
 	"testing"
 
@@ -16,16 +17,11 @@ import (
 
 func setupInitializerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	return testutil.OpenPostgreSQLTestDB(t, "initializer",
-		&model.Permission{},
-		&model.Role{},
-		&model.RolePermission{},
-		&model.User{},
-		&model.UserRole{},
-		&model.UserProfile{},
-		&model.UserEmail{},
-		&model.UserCredential{},
-	)
+	db := testutil.OpenPostgreSQLTestDB(t, "initializer")
+	migration, err := os.ReadFile("migrate/sql/000001_init_schema.up.sql")
+	require.NoError(t, err)
+	require.NoError(t, db.Exec(string(migration)).Error)
+	return db
 }
 
 func TestInitializerRunAutoSeedCreatesAdminAndCasbinPolicies(t *testing.T) {

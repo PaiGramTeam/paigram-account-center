@@ -151,5 +151,6 @@ func TestCreateAuthorityWritesUnifiedAuditEvent(t *testing.T) {
 	assert.Equal(t, int64(99), event.ActorUserID.Int64)
 	assert.Equal(t, "role", event.TargetType)
 	assert.Equal(t, "success", event.Result)
-	assert.Equal(t, "req-role-create", event.RequestID)
+	assert.Regexp(t, `^[0-9a-f]{32}$`, event.RequestID)
+	assert.NotEqual(t, "req-role-create", event.RequestID)
 }

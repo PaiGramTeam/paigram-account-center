@@ -24,6 +24,7 @@ func setupBotAccessServiceTestDB(t *testing.T) *gorm.DB {
 		&model.PlatformAccountBinding{},
 		&model.PlatformAccountProfile{},
 		&model.ConsumerGrant{},
+		&model.ConsumerGrantAction{},
 	)
 }
 

@@ -357,6 +357,8 @@ func TestPlatformServiceListPlatformViews(t *testing.T) {
 		ServiceAudience:      "platform-mihomo-service",
 		DiscoveryType:        "static",
 		ControlEndpoint:      "127.0.0.1:9000",
+		RuntimeEndpoint:      "runtime.internal:9001",
+		RuntimeServerName:    "runtime.internal",
 		Enabled:              true,
 		SupportedActionsJSON: `["bind_credential","delete_credential"]`,
 		CredentialSchemaJSON: `{"type":"object"}`,

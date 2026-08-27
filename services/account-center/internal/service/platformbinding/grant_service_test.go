@@ -230,9 +230,9 @@ func TestGrantServiceRevokeGrantIsIdempotentWhenGrantDoesNotExist(t *testing.T) 
 	assert.Equal(t, model.ConsumerGrantStatusRevoked, grant.Status)
 	assert.Equal(t, uint64(1), grant.TicketVersion)
 	assert.True(t, grant.RevokedAt.Valid)
-	assert.True(t, grant.RevokedAt.Time.Equal(revokedAt))
+	assert.WithinDuration(t, revokedAt, grant.RevokedAt.Time, time.Microsecond)
 	assert.True(t, grant.LastInvalidatedAt.Valid)
-	assert.True(t, grant.LastInvalidatedAt.Time.Equal(revokedAt))
+	assert.WithinDuration(t, revokedAt, grant.LastInvalidatedAt.Time, time.Microsecond)
 
 	var count int64
 	require.NoError(t, db.Model(&model.ConsumerGrant{}).Where("binding_id = ? AND consumer = ?", binding.ID, ConsumerPaiGramBot).Count(&count).Error)
@@ -477,6 +477,7 @@ func TestGrantServiceRevokeGrantCallsInvalidatorWithExpectedInput(t *testing.T) 
 	assert.Same(t, ctx, invalidator.ctx)
 	assert.Equal(t, GrantInvalidationInput{
 		BindingID:           binding.ID,
+		BindingRef:          binding.BindingRef,
 		OwnerUserID:         binding.OwnerUserID,
 		Platform:            "mihomo",
 		PlatformServiceKey:  "mihomo",

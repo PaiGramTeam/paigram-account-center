@@ -25,9 +25,14 @@ func (s *GrantService) completeGrantInvalidation(grant *model.ConsumerGrant, min
 		if err := tx.Preload("Actions").Where("id = ?", grant.ID).First(&current).Error; err != nil {
 			return err
 		}
-		if update.RowsAffected == 0 &&
-			(current.TicketVersion != minimumVersion || current.PendingEntryEpoch != 0 || !current.LastInvalidatedAt.Valid) {
-			return ErrGrantPropagationPending
+		if update.RowsAffected == 0 {
+			if current.TicketVersion > minimumVersion && IsGrantActive(current) &&
+				current.PendingEntryEpoch == 0 && current.LastInvalidatedAt.Valid {
+				return nil
+			}
+			if current.TicketVersion != minimumVersion || current.PendingEntryEpoch != 0 || !current.LastInvalidatedAt.Valid {
+				return ErrGrantPropagationPending
+			}
 		}
 		if minimumEntryEpoch == 0 {
 			return nil
