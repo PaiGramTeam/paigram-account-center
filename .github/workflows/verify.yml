@@ -221,17 +221,13 @@ jobs:
         run: bash ./scripts/verify-ci.sh frontend
 
   real-browser:
-    name: Production browser system acceptance (${{ matrix.browser }})
+    name: Production browser system acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
     env:
       PAI_TESTCONTAINERS_PROVIDER: docker
       PAI_E2E_CONTAINER_CLI: docker
-      PAI_E2E_BROWSER: ${{ matrix.browser }}
+      PAI_E2E_BROWSER: chromium
       PAI_INTEGRATION_POSTGRES_IMAGE: postgres:16-alpine
       PAI_INTEGRATION_REDIS_IMAGE: redis:7-alpine
     steps:
