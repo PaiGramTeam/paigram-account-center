@@ -25,25 +25,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: |
             contracts/gen/go/go.sum
             contracts/runtime/go/go.sum
             services/account-center/go.sum
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: 1.4.0
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           version: 0.12.6
-      - uses: bufbuild/buf-setup-action@v1
+      - uses: bufbuild/buf-setup-action@v1.50.0
         with:
           github_token: ${{ github.token }}
       - name: Install Protobuf generators
@@ -75,10 +75,10 @@ jobs:
       PAI_REQUIRE_DATABASE_TESTS: "true"
       PAI_TEST_DATABASE_DSN: postgres://paigram_test:paigram_test_password@127.0.0.1:5432/postgres?sslmode=disable
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: services/account-center/go.sum
@@ -90,10 +90,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: services/platform-mihomo/go.sum
@@ -109,10 +109,10 @@ jobs:
       PAI_INTEGRATION_POSTGRES_IMAGE: postgres:16-alpine
       PAI_INTEGRATION_REDIS_IMAGE: redis:7-alpine
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: |
@@ -132,10 +132,10 @@ jobs:
       PAI_INTEGRATION_POSTGRES_IMAGE: postgres:16-alpine
       PAI_INTEGRATION_REDIS_IMAGE: redis:7-alpine
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: |
@@ -154,10 +154,10 @@ jobs:
       PAI_INTEGRATION_POSTGRES_IMAGE: postgres:16-alpine
       PAI_INTEGRATION_REDIS_IMAGE: redis:7-alpine
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: |
@@ -165,7 +165,7 @@ jobs:
             contracts/runtime/go/go.sum
             services/account-center/go.sum
             services/platform-mihomo/go.sum
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           version: 0.12.6
@@ -177,10 +177,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           version: 0.12.6
@@ -192,10 +192,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           version: 0.12.6
@@ -207,13 +207,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: 1.4.0
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           version: 0.12.6
@@ -235,10 +235,10 @@ jobs:
       PAI_INTEGRATION_POSTGRES_IMAGE: postgres:16-alpine
       PAI_INTEGRATION_REDIS_IMAGE: redis:7-alpine
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.work
           cache-dependency-path: |
@@ -246,10 +246,10 @@ jobs:
             contracts/runtime/go/go.sum
             services/account-center/go.sum
             services/platform-mihomo/go.sum
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: 1.4.0
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
           version: 0.12.6
